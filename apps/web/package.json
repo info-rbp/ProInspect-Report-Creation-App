@@ -1,0 +1,22 @@
+{
+  "name": "@pcr/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@google/genai": "^1.32.0",
+    "firebase": "^12.6.0",
+    "heic2any": "^0.0.4",
+    "idb": "8.0.0",
+    "lucide-react": "^0.556.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-router-dom": "^7.17.0"
+  }
+}

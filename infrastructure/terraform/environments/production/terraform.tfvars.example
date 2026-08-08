@@ -1,0 +1,15 @@
+project_id         = "pcr-production-example"
+billing_account_id = "000000-000000-000000"
+monthly_budget_aud = 2000
+
+identity_authorized_domains = [
+  "app.example.com",
+  "pcr-production-example.web.app",
+]
+
+notification_emails = [
+  "platform-alerts@example.com",
+  "finance-alerts@example.com",
+]
+
+report_retention_days = 365

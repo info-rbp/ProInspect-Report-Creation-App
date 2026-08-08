@@ -1,0 +1,47 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function activeAgency(agency) { return signedIn() && request.auth.token.agencyId == agency; }
+    function internalRole() { return request.auth.token.role in ['proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer']; }
+
+    // Original evidence is uploaded only through API-issued resumable sessions.
+    // Browser SDK writes are denied so an existing generation cannot be silently replaced.
+    match /inspection-originals/agencies/{agency}/{path=**} {
+      allow read: if activeAgency(agency) && internalRole();
+      allow write: if false;
+    }
+
+    match /inspection-derived/agencies/{agency}/{path=**} {
+      allow read: if activeAgency(agency) && internalRole();
+      allow write: if false;
+    }
+
+    match /temporary-uploads/agencies/{agency}/{path=**} {
+      allow read, write: if false;
+    }
+
+    match /final-report-assets/agencies/{agency}/{path=**} {
+      allow read: if activeAgency(agency) && (internalRole() || request.auth.token.role in ['tenant', 'landlord']);
+      allow write: if false;
+    }
+
+    match /final-report-archives/agencies/{agency}/{path=**} {
+      allow read: if activeAgency(agency) && request.auth.token.role in ['proinspect_admin', 'operations'];
+      allow write: if false;
+    }
+
+    // Legacy paths remain readable during migration, but are permanently read-only.
+    match /agencies/{agency}/reports/{reportId}/evidence/{fileName} {
+      allow read: if activeAgency(agency) && internalRole();
+      allow write: if false;
+    }
+
+    match /agencies/{agency}/final-reports/{reportId}/{fileName} {
+      allow read: if activeAgency(agency) && (internalRole() || request.auth.token.role in ['tenant', 'landlord']);
+      allow write: if false;
+    }
+
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,98 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Build shared packages
+        run: npm run build:packages
+      - name: Type check web
+        id: web_typecheck
+        run: npm run typecheck --workspace @pcr/web 2>&1 | tee web-typecheck.log
+      - name: Upload web typecheck diagnostics
+        if: failure() && steps.web_typecheck.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-typecheck-diagnostics
+          path: web-typecheck.log
+          if-no-files-found: error
+          retention-days: 1
+      - name: Type check API
+        id: api_typecheck
+        run: npm run typecheck --workspace @pcr/api 2>&1 | tee api-typecheck.log
+      - name: Upload API typecheck diagnostics
+        if: failure() && steps.api_typecheck.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-typecheck-diagnostics
+          path: api-typecheck.log
+          if-no-files-found: error
+          retention-days: 1
+      - name: Type check AI worker
+        run: npm run typecheck --workspace @pcr/ai-worker
+      - name: Type check PDF worker
+        run: npm run typecheck --workspace @pcr/pdf-worker
+      - name: Type check shared packages
+        run: npm run typecheck --workspace @pcr/domain && npm run typecheck --workspace @pcr/config && npm run typecheck --workspace @pcr/validation && npm run typecheck --workspace @pcr/templates && npm run typecheck --workspace @pcr/testing && npm run typecheck --workspace @pcr/ui
+      - name: Formatting
+        run: npm run format:check
+      - name: Lint
+        id: lint
+        run: npm run lint 2>&1 | tee lint.log
+      - name: Upload lint diagnostics
+        if: failure() && steps.lint.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-diagnostics
+          path: lint.log
+          if-no-files-found: error
+          retention-days: 1
+      - name: Unit and rules tests
+        run: npm run test:run
+      - name: Build applications
+        id: build_apps
+        run: npm run build:apps 2>&1 | tee build-apps.log
+      - name: Upload application build diagnostics
+        if: failure() && steps.build_apps.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-apps-diagnostics
+          path: build-apps.log
+          if-no-files-found: error
+          retention-days: 1
+      - name: Verify built artifacts
+        id: verify_dist
+        run: npm run verify:dist 2>&1 | tee verify-dist.log
+      - name: Upload built artifact diagnostics
+        if: failure() && steps.verify_dist.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-dist-diagnostics
+          path: verify-dist.log
+          if-no-files-found: error
+          retention-days: 1
+      - name: Firebase emulator tests
+        run: npm run test:emulator
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

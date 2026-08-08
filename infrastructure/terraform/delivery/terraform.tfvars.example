@@ -1,0 +1,27 @@
+control_project_id = "pcr-production-example"
+
+region = "australia-southeast1"
+
+target_projects = {
+  development = "pcr-development-example"
+  staging     = "pcr-staging-example"
+  production  = "pcr-production-example"
+}
+
+runtime_service_accounts = {
+  development = {
+    api        = "api@pcr-development-example.iam.gserviceaccount.com"
+    ai_worker  = "ai-worker@pcr-development-example.iam.gserviceaccount.com"
+    pdf_worker = "pdf-worker@pcr-development-example.iam.gserviceaccount.com"
+  }
+  staging = {
+    api        = "api@pcr-staging-example.iam.gserviceaccount.com"
+    ai_worker  = "ai-worker@pcr-staging-example.iam.gserviceaccount.com"
+    pdf_worker = "pdf-worker@pcr-staging-example.iam.gserviceaccount.com"
+  }
+  production = {
+    api        = "api@pcr-production-example.iam.gserviceaccount.com"
+    ai_worker  = "ai-worker@pcr-production-example.iam.gserviceaccount.com"
+    pdf_worker = "pdf-worker@pcr-production-example.iam.gserviceaccount.com"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    {"path": "apps/web"},
+    {"path": "apps/api"},
+    {"path": "apps/ai-worker"},
+    {"path": "apps/pdf-worker"},
+    {"path": "packages/domain"},
+    {"path": "packages/validation"},
+    {"path": "packages/config"},
+    {"path": "packages/templates"},
+    {"path": "packages/testing"},
+    {"path": "packages/ui"}
+  ]
+}

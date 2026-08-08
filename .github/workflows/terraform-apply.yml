@@ -1,0 +1,77 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: "Terraform stack to apply"
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+          - delivery
+      confirmation:
+        description: "Type APPLY to execute the reviewed plan"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-apply-${{ inputs.stack }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: inputs.confirmation == 'APPLY'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stack == 'delivery' && 'production' || inputs.stack }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+
+      - name: Select Terraform root
+        id: root
+        shell: bash
+        run: |
+          if [[ "${{ inputs.stack }}" == "delivery" ]]; then
+            echo "path=infrastructure/terraform/delivery" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=infrastructure/terraform/environments/${{ inputs.stack }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write protected variables
+        shell: bash
+        env:
+          TFVARS_JSON: ${{ secrets.TERRAFORM_TFVARS_JSON }}
+          ROOT_PATH: ${{ steps.root.outputs.path }}
+        run: |
+          test -n "$TFVARS_JSON"
+          printf '%s' "$TFVARS_JSON" > "$ROOT_PATH/terraform.auto.tfvars.json"
+
+      - name: Initialise remote state
+        run: >-
+          terraform -chdir=${{ steps.root.outputs.path }} init
+          -input=false
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="prefix=${{ inputs.stack }}"
+
+      - name: Plan
+        run: terraform -chdir=${{ steps.root.outputs.path }} plan -input=false -out=terraform.tfplan
+
+      - name: Apply
+        run: terraform -chdir=${{ steps.root.outputs.path }} apply -input=false -auto-approve terraform.tfplan

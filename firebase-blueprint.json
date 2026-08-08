@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "userProfiles": {
+      "title": "User Profile",
+      "description": "User profiles for agency accounts",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "agencyId": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "reports": {
+      "title": "Inspection Report Index",
+      "description": "Stored property condition inspection reports",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string" },
+        "reportType": { "type": "string" },
+        "propertyAddress": { "type": "string" },
+        "lifecycleStatus": { "type": "string" },
+        "agencyId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["reportId", "lifecycleStatus"]
+    }
+  }
+}

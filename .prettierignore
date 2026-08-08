@@ -1,0 +1,4 @@
+node_modules
+dist
+.firebase-emulator-data
+package-lock.json

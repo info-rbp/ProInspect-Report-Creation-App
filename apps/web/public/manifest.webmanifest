@@ -1,0 +1,10 @@
+{
+  "name": "Property Condition Reports",
+  "short_name": "PCR",
+  "description": "Offline-capable property inspection workspace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#111827",
+  "icons": []
+}

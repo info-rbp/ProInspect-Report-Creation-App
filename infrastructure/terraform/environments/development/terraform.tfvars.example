@@ -1,0 +1,10 @@
+project_id         = "pcr-development-example"
+billing_account_id = "000000-000000-000000"
+monthly_budget_aud = 250
+
+identity_authorized_domains = [
+  "localhost",
+  "pcr-development-example.web.app",
+]
+
+notification_emails = ["platform-alerts@example.com"]

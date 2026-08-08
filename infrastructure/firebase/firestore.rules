@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function agencyId() { return request.auth.token.agencyId; }
+    function role() { return request.auth.token.role; }
+    function activeMembership(agency) {
+      return signedIn() && agencyId() == agency &&
+        exists(/databases/$(database)/documents/agencies/$(agency)/memberships/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/agencies/$(agency)/memberships/$(request.auth.uid)).data.status == 'active';
+    }
+    function internalRole() { return role() in ['proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer']; }
+    function privilegedRole() { return role() in ['proinspect_admin', 'reviewer']; }
+    function immutableStatus(status) { return status in ['reviewer_approved', 'ready_to_issue', 'issued_to_tenant', 'tenant_viewed', 'tenant_submitted', 'finalisation_ready', 'finalised', 'archived']; }
+    function sameAgencyExisting() { return resource.data.agencyId == agencyId() && activeMembership(agencyId()); }
+    function reportReadable(agency, reportId) {
+      let path = /databases/$(database)/documents/agencies/$(agency)/reports/$(reportId);
+      return activeMembership(agency) && exists(path) &&
+        get(path).data.agencyId == agency && (
+          internalRole() ||
+          (role() == 'tenant' && get(path).data.tenantUid == request.auth.uid && immutableStatus(get(path).data.lifecycleStatus))
+        );
+    }
+
+    match /agencies/{agency}/memberships/{uid} {
+      allow read: if activeMembership(agency) && (request.auth.uid == uid || role() == 'proinspect_admin');
+      allow write: if false;
+    }
+
+    match /agencies/{agency}/auditEvents/{eventId} {
+      allow read: if activeMembership(agency) && privilegedRole();
+      allow create, update, delete: if false;
+    }
+
+    match /agencies/{agency}/reports/{reportId} {
+      allow read: if reportReadable(agency, reportId);
+      allow create, update, delete: if false;
+
+      match /areas/{areaId} {
+        allow read: if reportReadable(agency, reportId);
+        allow create, update, delete: if false;
+
+        match /components/{componentId} {
+          allow read: if reportReadable(agency, reportId);
+          allow create, update, delete: if false;
+        }
+      }
+
+      match /versions/{versionId} {
+        allow read: if reportReadable(agency, reportId);
+        allow create, update, delete: if false;
+
+        match /areas/{areaId} {
+          allow read: if reportReadable(agency, reportId);
+          allow create, update, delete: if false;
+          match /components/{componentId} {
+            allow read: if reportReadable(agency, reportId);
+            allow create, update, delete: if false;
+          }
+        }
+      }
+
+      match /reviewComments/{commentId} {
+        allow read: if reportReadable(agency, reportId);
+        allow create, update, delete: if false;
+      }
+
+      match /tenantResponses/{responseId} {
+        allow read: if reportReadable(agency, reportId);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /properties/{id} {
+      allow read: if sameAgencyExisting() && internalRole();
+      allow create, update, delete: if false;
+    }
+    match /clients/{id} {
+      allow read: if sameAgencyExisting() && role() in ['proinspect_admin', 'operations'];
+      allow create, update, delete: if false;
+    }
+    match /tenancies/{id} {
+      allow read: if sameAgencyExisting() && internalRole();
+      allow create, update, delete: if false;
+    }
+    match /inspectionJobs/{id} {
+      allow read: if sameAgencyExisting() && (
+        role() in ['proinspect_admin', 'operations'] ||
+        resource.data.assignedInspectorId == request.auth.uid ||
+        resource.data.assignedAnalystId == request.auth.uid ||
+        resource.data.assignedReviewerId == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+    match /reportIndexes/{id} {
+      allow read: if sameAgencyExisting() && (
+        internalRole() ||
+        (role() == 'tenant' && resource.data.tenantUid == request.auth.uid && resource.data.lifecycleStatus in ['issued_to_tenant', 'tenant_viewed', 'tenant_response_in_progress', 'tenant_submitted', 'finalised', 'archived'])
+      );
+      allow create, update, delete: if false;
+    }
+
+    // Legacy top-level reports remain read-only during the controlled migration window.
+    match /reports/{id} {
+      allow read: if sameAgencyExisting() && (
+        internalRole() ||
+        (role() == 'tenant' && resource.data.tenantUid == request.auth.uid && immutableStatus(resource.data.lifecycleStatus))
+      );
+      allow create, update, delete: if false;
+    }
+    match /templates/{id} {
+      allow read: if sameAgencyExisting() && internalRole();
+      allow create, update, delete: if false;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
