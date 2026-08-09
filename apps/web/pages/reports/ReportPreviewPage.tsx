@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { CheckCircle2, Edit2, FileCheck2, Loader2, Printer } from 'lucide-react';
+import { CheckCircle2, Edit2, FileCheck2, Loader2, Printer, TriangleAlert } from 'lucide-react';
 import PDFPreview from '../../components/PDFPreview';
 import type { ReportData } from '../../types';
 import { loadReportFromDB } from '../../services/storageService';
-import { queueFinalPdf, type PdfJobRecord } from '../../services/platform/pdfJobService';
+import {
+  getPdfJob,
+  queueFinalPdf,
+  type PdfJobRecord,
+} from '../../services/platform/pdfJobService';
 
 interface PreviewLocationState {
   report?: ReportData;
@@ -37,6 +41,35 @@ const ReportPreviewPage: React.FC = () => {
 
     void loadReport();
   }, [reportId, state?.report]);
+
+  useEffect(() => {
+    if (!pdfJob || !report?.agencyId || !['queued', 'running'].includes(pdfJob.status)) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const latest = await getPdfJob(report.agencyId!, pdfJob.id);
+        if (cancelled) return;
+        setPdfJob(latest);
+        if (latest.status === 'failed') {
+          setPdfError(latest.errorMessage || 'Final PDF generation failed.');
+        } else if (latest.status === 'superseded') {
+          setPdfError('This PDF job was superseded by a newer immutable report version. Queue a new final PDF.');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPdfError(error instanceof Error ? error.message : 'Final PDF status could not be refreshed.');
+        }
+      }
+    };
+
+    const interval = window.setInterval(() => void poll(), 2_000);
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pdfJob?.id, pdfJob?.status, report?.agencyId]);
 
   const handleGenerateFinalPdf = async () => {
     if (!report) return;
@@ -84,6 +117,22 @@ const ReportPreviewPage: React.FC = () => {
     : report.lifecycleStatus !== 'finalisation_ready'
       ? 'Resolve the issue/tenant response workflow and move the report to finalisation ready first.'
       : undefined;
+  const pdfActive = pdfJob?.status === 'queued' || pdfJob?.status === 'running';
+  const pdfCompleted = pdfJob?.status === 'completed';
+  const pdfFailed = pdfJob?.status === 'failed' || pdfJob?.status === 'superseded';
+  const generateDisabled = isQueueingPdf || !finalPdfReady || pdfActive || pdfCompleted;
+
+  const buttonLabel = isQueueingPdf
+    ? 'Queueing Final PDF...'
+    : pdfJob?.status === 'queued'
+      ? 'Final PDF Queued'
+      : pdfJob?.status === 'running'
+        ? 'Generating Final PDF...'
+        : pdfCompleted
+          ? 'Final PDF Generated'
+          : pdfFailed
+            ? 'Retry Final PDF'
+            : 'Generate Final PDF';
 
   return (
     <div className="min-h-screen bg-gray-600 py-8 print:bg-white print:p-0 print:m-0 print:h-auto print:w-full">
@@ -96,18 +145,20 @@ const ReportPreviewPage: React.FC = () => {
         </button>
         <button
           onClick={handleGenerateFinalPdf}
-          disabled={isQueueingPdf || !finalPdfReady || Boolean(pdfJob)}
+          disabled={generateDisabled}
           title={finalPdfTitle}
           className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800/70 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium"
         >
-          {isQueueingPdf ? (
+          {isQueueingPdf || pdfActive ? (
             <Loader2 size={20} className="animate-spin" />
-          ) : pdfJob ? (
+          ) : pdfCompleted ? (
             <CheckCircle2 size={20} />
+          ) : pdfFailed ? (
+            <TriangleAlert size={20} />
           ) : (
             <FileCheck2 size={20} />
           )}
-          {isQueueingPdf ? 'Queueing Final PDF...' : pdfJob ? 'Final PDF Queued' : 'Generate Final PDF'}
+          {buttonLabel}
         </button>
         <Link
           to={`/app/admin/reports/${report.id}/edit`}
@@ -118,12 +169,14 @@ const ReportPreviewPage: React.FC = () => {
         {(pdfJob || pdfError) && (
           <div
             className={`w-full max-w-xl rounded-lg px-3 py-2 text-xs shadow-lg ${
-              pdfError ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
+              pdfError || pdfFailed ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
             }`}
           >
             {pdfError
               ? pdfError
-              : `Final PDF job ${pdfJob?.id} has been queued from immutable version ${report.currentVersionId}. The linked inspection job will become eligible for finalisation after the worker records the stored PDF artifact.`}
+              : pdfCompleted
+                ? `Final PDF generated from immutable version ${pdfJob?.reportVersionId || report.currentVersionId}. SHA-256: ${pdfJob?.pdfSha256}. The workflow can now be finalised.`
+                : `Final PDF job ${pdfJob?.id} is ${pdfJob?.status}. The workflow remains blocked from finalisation until the immutable PDF and render manifest are stored and verified.`}
           </div>
         )}
       </div>
