@@ -1,6 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { DomainErrorShape, SecurityCapability } from '@pcr/domain';
+import {
+  calculateWorkflowGateContext,
+  INSPECTION_TRANSITION_MATRIX,
+  REPORT_TRANSITION_MATRIX,
+  transitionInspectionJob,
+  WorkflowError,
+  type DomainErrorShape,
+  type InspectionJobStatus,
+  type ReportLifecycleStatus,
+  type SecurityCapability,
+  type UserRole,
+} from '@pcr/domain';
 import {
   resourceWriteSchema,
   taskCreationSchema,
@@ -27,6 +38,45 @@ export interface ApiResponse {
   status: number;
   body: unknown;
   headers?: Record<string, string>;
+}
+
+const PROTECTED_WORKFLOW_FIELDS = new Set([
+  'status',
+  'lifecycleStatus',
+  'finalisedAt',
+  'issuedAt',
+  'archivedAt',
+  'reviewStatus',
+]);
+
+function mapJobStatusToReportStatus(status: InspectionJobStatus): ReportLifecycleStatus | undefined {
+  const map: Partial<Record<InspectionJobStatus, ReportLifecycleStatus>> = {
+    draft: 'draft',
+    booked: 'draft',
+    assigned: 'draft',
+    inspection_started: 'draft',
+    photos_uploading: 'draft',
+    photos_uploaded: 'photos_uploaded',
+    inspection_submitted: 'internal_review',
+    analysis_queued: 'analysis_queued',
+    analysis_running: 'analysis_running',
+    analysis_complete: 'analysis_complete',
+    analyst_review_in_progress: 'internal_review',
+    review_required: 'review_required',
+    reviewer_review_in_progress: 'internal_review',
+    changes_requested: 'changes_requested',
+    reviewer_approved: 'approved_for_issue',
+    ready_to_issue: 'approved_for_issue',
+    issued_to_tenant: 'issued_to_tenant',
+    tenant_response_in_progress: 'tenant_response_in_progress',
+    tenant_submitted: 'tenant_submitted',
+    agent_response_required: 'agent_response_required',
+    finalisation_ready: 'finalisation_ready',
+    finalised: 'finalised',
+    archived: 'archived',
+    cancelled: 'cancelled',
+  };
+  return map[status];
 }
 
 function agencyHeader(req: IncomingMessage): string {
@@ -76,12 +126,25 @@ function expectedVersion(body: Record<string, unknown>): number {
   return value;
 }
 
-function writeBody(body: Record<string, unknown>): Record<string, unknown> {
+function writeBody(body: Record<string, unknown>, resourceName?: string): Record<string, unknown> {
   const data = { ...validation(resourceWriteSchema.parse(body)) };
   delete data.id;
   delete data.agencyId;
   delete data.version;
   delete data.expectedVersion;
+
+  if (resourceName === 'inspection-jobs' || resourceName === 'reports') {
+    const suppliedProtected = Object.keys(data).filter((field) => PROTECTED_WORKFLOW_FIELDS.has(field));
+    if (suppliedProtected.length > 0) {
+      throw new ApiError(
+        400,
+        'WORKFLOW_FIELD_PROTECTED',
+        `Protected workflow fields (${suppliedProtected.join(', ')}) cannot be modified via generic update APIs. Use the transitions endpoint.`,
+        { fields: suppliedProtected },
+      );
+    }
+  }
+
   return data;
 }
 
@@ -155,6 +218,66 @@ export async function routeApiRequest(
   const targetBody = { ...body, agencyId };
 
   if (req.method === 'GET') {
+    if (id && command === 'workflow') {
+      const existing = await dependencies.repository.get(policy.collection, agencyId, id);
+      if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
+      const principal = await authenticateAndAuthorise(req, dependencies, policy.readCapability, policy.target({ ...existing, agencyId }, id), correlationId);
+
+      const linkedReportId = typeof existing.reportId === 'string' ? existing.reportId : resourceName === 'reports' ? id : undefined;
+      const linkedReport = linkedReportId ? await dependencies.reports.load(agencyId, linkedReportId) : null;
+
+      const gateEval = calculateWorkflowGateContext(linkedReport, existing);
+      const currentStatus = (resourceName === 'reports' ? existing.lifecycleStatus : existing.status) as string;
+
+      const matrix = resourceName === 'reports' ? REPORT_TRANSITION_MATRIX : INSPECTION_TRANSITION_MATRIX;
+      const possibleTargets = (matrix as Record<string, readonly string[]>)[currentStatus] ?? [];
+
+      const availableActions: Array<{ action: string; targetStatus: string; label: string; reasonRequired: boolean }> = [];
+      const blockedActions: Array<{ action: string; targetStatus: string; label: string; missingGates: string[]; blockers: typeof gateEval.blockers }> = [];
+
+      const reasonRequiredSet = new Set(['changes_requested', 'on_hold', 'cancelled', 'draft']);
+
+      for (const targetStatus of possibleTargets) {
+        const missingGates = resourceName === 'reports'
+          ? (gateEval.context.requiredEvidenceComplete ? [] : ['requiredEvidenceComplete'])
+          : (gateEval.context.requiredEvidenceComplete ? [] : ['requiredEvidenceComplete']);
+
+        const targetBlockers = gateEval.blockers.filter((b) => missingGates.includes(b.gate));
+
+        if (missingGates.length === 0) {
+          availableActions.push({
+            action: targetStatus,
+            targetStatus,
+            label: targetStatus.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+            reasonRequired: reasonRequiredSet.has(targetStatus),
+          });
+        } else {
+          blockedActions.push({
+            action: targetStatus,
+            targetStatus,
+            label: targetStatus.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+            missingGates,
+            blockers: targetBlockers,
+          });
+        }
+      }
+
+      return {
+        status: 200,
+        body: {
+          data: {
+            entityId: id,
+            currentStatus,
+            version: existing.version,
+            availableActions,
+            blockedActions,
+            gateContext: gateEval.context,
+          },
+          meta: { correlationId, actor: principal.uid },
+        },
+      };
+    }
+
     if (id) {
       const record = await dependencies.repository.get(policy.collection, agencyId, id);
       if (!record) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
@@ -176,19 +299,115 @@ export async function routeApiRequest(
     const existing = await dependencies.repository.get(policy.collection, agencyId, id);
     if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
     const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...existing, agencyId }, id), correlationId);
-    return idempotent(dependencies, req, agencyId, `${resourceName}:${id}:transition`, body, async () => {
-      const field = resourceName === 'reports' ? 'lifecycleStatus' : 'status';
-      const updated = await dependencies.repository.update(
-        policy.collection,
-        agencyId,
-        id,
-        { [field]: transition.status, ...(transition.reason ? { transitionReason: transition.reason } : {}) },
-        transition.expectedVersion,
-        principal.uid,
+
+    const linkedReportId = typeof existing.reportId === 'string' ? existing.reportId : resourceName === 'reports' ? id : undefined;
+    const linkedReport = linkedReportId ? await dependencies.reports.load(agencyId, linkedReportId) : null;
+
+    const gateEval = calculateWorkflowGateContext(linkedReport, existing);
+
+    // Separation of Duties check
+    if (
+      (transition.status === 'reviewer_approved' || transition.status === 'ready_to_issue' || transition.status === 'approved_for_issue') &&
+      (existing.assignedInspectorId === principal.uid || existing.assignedAnalystId === principal.uid)
+    ) {
+      throw new ApiError(
+        403,
+        'SEPARATION_OF_DUTIES_VIOLATION',
+        'An assigned inspector or analyst cannot perform reviewer approval on their own inspection.',
       );
-      await appendMaterialAudit(dependencies, principal, writeCapability, `${resourceName}.transition`, correlationId, updated);
-      return { status: 200, body: { data: updated, meta: { correlationId } } };
-    });
+    }
+
+    if (resourceName === 'inspection-jobs') {
+      let transitionEvent;
+      try {
+        transitionEvent = transitionInspectionJob({
+          entityId: id,
+          current: existing.status as InspectionJobStatus,
+          requested: transition.status as InspectionJobStatus,
+          currentVersion: existing.version as number,
+          expectedVersion: transition.expectedVersion,
+          actorId: principal.uid,
+          actorRole: principal.role as UserRole,
+          correlationId,
+          context: gateEval.context,
+          reason: transition.reason,
+        });
+      } catch (err) {
+        if (err instanceof WorkflowError) {
+          if (err.code === 'GATE_NOT_MET') {
+            throw new ApiError(422, 'WORKFLOW_GATES_NOT_MET', err.message, { blockers: gateEval.blockers });
+          }
+          if (err.code === 'INVALID_TRANSITION') {
+            throw new ApiError(400, 'INVALID_TRANSITION', err.message);
+          }
+          if (err.code === 'REASON_REQUIRED') {
+            throw new ApiError(400, 'REASON_REQUIRED', err.message);
+          }
+          if (err.code === 'VERSION_CONFLICT') {
+            throw new ApiError(409, 'VERSION_CONFLICT', err.message);
+          }
+        }
+        throw err;
+      }
+
+      return idempotent(dependencies, req, agencyId, `${resourceName}:${id}:transition`, body, async () => {
+        const updated = await dependencies.repository.update(
+          policy.collection,
+          agencyId,
+          id,
+          {
+            status: transitionEvent.to,
+            ...(transitionEvent.reason ? { transitionReason: transitionEvent.reason } : {}),
+            ...(transition.assignedUserId ? { assignedUserId: transition.assignedUserId } : {}),
+            updatedAt: transitionEvent.occurredAt,
+          },
+          transition.expectedVersion,
+          principal.uid,
+        );
+
+        // Synchronise linked report lifecycle status if report exists
+        if (linkedReportId && linkedReport) {
+          try {
+            const matchingReportStatus = mapJobStatusToReportStatus(transitionEvent.to);
+            if (matchingReportStatus && linkedReport.report.lifecycleStatus !== matchingReportStatus) {
+              await dependencies.reports.transition(agencyId, {
+                agencyId,
+                reportId: linkedReportId,
+                status: matchingReportStatus,
+                expectedVersion: linkedReport.report.version ?? 1,
+                actorId: principal.uid,
+                actorRole: principal.role,
+                correlationId,
+                ...(transitionEvent.reason ? { reason: transitionEvent.reason } : {}),
+              });
+            }
+          } catch (syncErr) {
+            console.warn('Report status synchronisation warning:', syncErr);
+          }
+        }
+
+        await appendMaterialAudit(dependencies, principal, writeCapability, `${resourceName}.transition`, correlationId, updated);
+        return { status: 200, body: { data: updated, meta: { correlationId } } };
+      });
+    }
+
+    if (resourceName === 'reports') {
+      return idempotent(dependencies, req, agencyId, `reports:${id}:transition`, body, async () => {
+        const stored = await dependencies.reports.transition(agencyId, {
+          agencyId,
+          reportId: id,
+          status: transition.status as ReportLifecycleStatus,
+          expectedVersion: transition.expectedVersion,
+          actorId: principal.uid,
+          actorRole: principal.role,
+          correlationId,
+          ...(transition.reason ? { reason: transition.reason } : {}),
+          ...(transition.assignedUserId ? { assignedUserId: transition.assignedUserId } : {}),
+        });
+        await appendMaterialAudit(dependencies, principal, writeCapability, 'reports.transition', correlationId, stored);
+        return { status: 200, body: { data: stored, meta: { correlationId } } };
+      });
+    }
   }
 
   if (req.method === 'POST' && resourceName === 'uploads') {

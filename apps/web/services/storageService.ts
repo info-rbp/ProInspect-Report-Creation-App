@@ -9,9 +9,20 @@ import {
   type User,
 } from 'firebase/auth';
 import { openDB } from 'idb';
-import type { Photo, ReportData, Room } from '../types';
+import type {
+  ComponentConditionCategory,
+  ComponentCleanlinessCategory,
+  ComponentWorkingStatus,
+  ComponentTestStatus,
+  ComponentReviewStatus,
+  ComponentComparisonStatus,
+  ReportPhotoReference,
+} from '@pcr/domain';
+import type { InspectionItem, Photo, ReportData, Room } from '../types';
+import { generateId } from '../utils';
 import { apiRequest } from './apiClient';
 import { getResolvedFirebaseConfig, isFirebaseConfigured as isFirebaseConfigResolved } from './configService';
+import { createSeededItem, isOperationalItem } from './platform/propertySeedingService';
 
 export let db: ReturnType<typeof getFirestore> | undefined;
 export let storage: ReturnType<typeof getStorage> | undefined;
@@ -52,16 +63,22 @@ const resolvedPhotoUrls = new Map<string, Promise<string>>();
 interface AggregateComponent {
   id: string;
   component: string;
-  conditionCategory: string;
-  cleanlinessCategory: string;
-  workingStatus: string;
-  testStatus: string;
+  subComponent?: string;
+  material?: string;
+  colour?: string;
+  type?: string;
+  quantity?: number;
+  conditionCategory: ComponentConditionCategory;
+  cleanlinessCategory: ComponentCleanlinessCategory;
+  workingStatus: ComponentWorkingStatus;
+  testStatus: ComponentTestStatus;
   defects: string[];
   maintenanceRequired: boolean;
   commentary: string;
-  photoReferences: Array<{ photoId: string; objectPath: string; thumbnailObjectPath?: string }>;
-  reviewStatus: string;
-  comparisonStatus: string;
+  photoReferences: ReportPhotoReference[];
+  aiConfidence?: number;
+  reviewStatus: ComponentReviewStatus;
+  comparisonStatus: ComponentComparisonStatus;
 }
 
 interface AggregateArea {
@@ -84,7 +101,72 @@ const initLocalDB = async () => openDB(LOCAL_DB_NAME, 1, {
   },
 });
 
-function photoReference(photo: Photo) {
+export function normalizeItem(rawItem: any): InspectionItem {
+  if (!rawItem) {
+    return createSeededItem('Component');
+  }
+
+  // If already structured
+  if (rawItem.conditionCategory && rawItem.cleanlinessCategory) {
+    const operational = isOperationalItem(rawItem.name || rawItem.component || '');
+    return {
+      id: rawItem.id || generateId(),
+      name: rawItem.name || rawItem.component || 'Component',
+      subComponent: rawItem.subComponent,
+      material: rawItem.material,
+      colour: rawItem.colour,
+      type: rawItem.type,
+      quantity: rawItem.quantity,
+      conditionCategory: rawItem.conditionCategory,
+      cleanlinessCategory: rawItem.cleanlinessCategory,
+      workingStatus: rawItem.workingStatus || (operational ? 'untested' : 'not_applicable'),
+      testStatus: rawItem.testStatus || (operational ? 'untested' : 'not_applicable'),
+      defects: Array.isArray(rawItem.defects) ? rawItem.defects : [],
+      maintenanceRequired: Boolean(rawItem.maintenanceRequired),
+      comment: rawItem.comment ?? rawItem.commentary ?? '',
+      photoReferences: Array.isArray(rawItem.photoReferences) ? rawItem.photoReferences : [],
+      aiConfidence: rawItem.aiConfidence,
+      reviewStatus: rawItem.reviewStatus || 'draft',
+      comparisonStatus: rawItem.comparisonStatus || 'not_compared',
+    };
+  }
+
+  // Legacy normalization mapping (from old boolean-only objects)
+  const operational = isOperationalItem(rawItem.name || rawItem.component || '');
+  const isUndamaged = rawItem.isUndamaged !== false;
+  const isClean = rawItem.isClean !== false;
+
+  // Crucial: legacy isWorking: true does NOT mean operation_confirmed! It means untested unless explicit test recorded.
+  let workingStatus: ComponentWorkingStatus = operational ? 'untested' : 'not_applicable';
+  let testStatus: ComponentTestStatus = operational ? 'untested' : 'not_applicable';
+
+  if (rawItem.isWorking === false && operational) {
+    workingStatus = 'not_working';
+    testStatus = 'tested_failed';
+  } else if (rawItem.workingStatus) {
+    workingStatus = rawItem.workingStatus;
+    testStatus = rawItem.testStatus || 'untested';
+  }
+
+  const commentText = rawItem.comment ?? rawItem.commentary ?? '';
+
+  return {
+    id: rawItem.id || generateId(),
+    name: rawItem.name || rawItem.component || 'Component',
+    conditionCategory: isUndamaged ? 'intact' : 'repair_required',
+    cleanlinessCategory: isClean ? 'clean' : 'requires_cleaning',
+    workingStatus,
+    testStatus,
+    defects: !isUndamaged && commentText ? [commentText] : (Array.isArray(rawItem.defects) ? rawItem.defects : []),
+    maintenanceRequired: Boolean(rawItem.maintenanceRequired || !isUndamaged || workingStatus === 'not_working'),
+    comment: commentText,
+    photoReferences: Array.isArray(rawItem.photoReferences) ? rawItem.photoReferences : [],
+    reviewStatus: 'draft',
+    comparisonStatus: 'not_compared',
+  };
+}
+
+function photoReference(photo: Photo): ReportPhotoReference | undefined {
   const objectPath = photo.objectPath ?? photo.downloadUrl;
   return objectPath ? {
     photoId: photo.id,
@@ -133,27 +215,37 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
         name: room.name,
         sequence: areaIndex + 1,
         ...(room.overallComment ? { overallCommentary: room.overallComment } : {}),
-        components: (room.items || []).map((item) => ({
-          id: item.id,
-          component: item.name,
-          conditionCategory: item.isUndamaged ? 'intact' : 'repair_required',
-          cleanlinessCategory: item.isClean ? 'clean' : 'requires_cleaning',
-          workingStatus: item.isWorking ? 'operation_confirmed' : 'not_working',
-          testStatus: item.isWorking ? 'tested_passed' : 'tested_failed',
-          defects: item.isUndamaged ? [] : [item.comment || 'Condition issue recorded.'],
-          maintenanceRequired: !item.isUndamaged || !item.isWorking,
-          commentary: item.comment || `${item.name} assessed during inspection.`,
-          photoReferences: references,
-          reviewStatus: room.status === 'complete' ? 'reviewer_approved' : room.status === 'analyzed' ? 'ai_generated' : 'draft',
-          comparisonStatus: 'not_compared',
-        })),
+        ...(references.length > 0 ? { photoReferences: references } : {}),
+        components: (room.items || []).map((item) => {
+          const norm = normalizeItem(item);
+          return {
+            id: norm.id,
+            component: norm.name,
+            subComponent: norm.subComponent,
+            material: norm.material,
+            colour: norm.colour,
+            type: norm.type,
+            quantity: norm.quantity,
+            conditionCategory: norm.conditionCategory,
+            cleanlinessCategory: norm.cleanlinessCategory,
+            workingStatus: norm.workingStatus,
+            testStatus: norm.testStatus,
+            defects: norm.defects || [],
+            maintenanceRequired: norm.maintenanceRequired || false,
+            commentary: norm.comment || '',
+            photoReferences: norm.photoReferences || [],
+            aiConfidence: norm.aiConfidence,
+            reviewStatus: norm.reviewStatus || (room.status === 'complete' ? 'reviewer_approved' : room.status === 'analyzed' ? 'ai_generated' : 'draft'),
+            comparisonStatus: norm.comparisonStatus || 'not_compared',
+          };
+        }),
       };
     }),
     ...(report.version ? { expectedVersion: report.version } : {}),
   };
 }
 
-async function resolvedPhoto(reference: AggregateComponent['photoReferences'][number]): Promise<Photo> {
+async function resolvedPhoto(reference: ReportPhotoReference): Promise<Photo> {
   const objectPath = reference.thumbnailObjectPath ?? reference.objectPath;
   let urlPromise = resolvedPhotoUrls.get(objectPath);
   if (!urlPromise) {
@@ -207,20 +299,36 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
 
 async function fromAggregate(aggregate: ReportAggregatePayload): Promise<ReportData> {
   const rooms = await Promise.all(aggregate.areas.map(async (area): Promise<Room> => {
-    const references = new Map<string, AggregateComponent['photoReferences'][number]>();
-    for (const component of area.components) for (const reference of component.photoReferences) references.set(reference.photoId, reference);
+    const references = new Map<string, ReportPhotoReference>();
+    for (const component of area.components) {
+      if (Array.isArray(component.photoReferences)) {
+        for (const reference of component.photoReferences) references.set(reference.photoId, reference);
+      }
+    }
     const photos = await Promise.all([...references.values()].map(resolvedPhoto));
     return {
       id: area.id,
       name: area.name,
       status: area.components.every((component) => component.reviewStatus === 'reviewer_approved') ? 'complete' : 'draft',
-      items: area.components.map((component) => ({
+      items: area.components.map((component) => normalizeItem({
         id: component.id,
         name: component.component,
-        isClean: component.cleanlinessCategory === 'clean',
-        isUndamaged: !['repair_required', 'replacement_recommended'].includes(component.conditionCategory),
-        isWorking: component.workingStatus === 'operation_confirmed',
-        comment: component.commentary,
+        subComponent: component.subComponent,
+        material: component.material,
+        colour: component.colour,
+        type: component.type,
+        quantity: component.quantity,
+        conditionCategory: component.conditionCategory,
+        cleanlinessCategory: component.cleanlinessCategory,
+        workingStatus: component.workingStatus,
+        testStatus: component.testStatus,
+        defects: component.defects || [],
+        maintenanceRequired: component.maintenanceRequired || false,
+        commentary: component.commentary,
+        photoReferences: component.photoReferences || [],
+        aiConfidence: component.aiConfidence,
+        reviewStatus: component.reviewStatus,
+        comparisonStatus: component.comparisonStatus,
       })),
       photos,
       overallComment: area.overallCommentary ?? '',
@@ -253,9 +361,20 @@ export const saveReportToDB = async (report: ReportData): Promise<ReportData> =>
 
 const normalizeReport = (report: ReportData | undefined): ReportData | undefined => {
   if (!report) return undefined;
+  const roomsRaw = report.rooms || (report as any).areas || [];
+  const normalizedRooms: Room[] = roomsRaw.map((room: any) => ({
+    ...room,
+    id: room.id || generateId(),
+    name: room.name || 'Room',
+    status: room.status || 'draft',
+    overallComment: room.overallComment ?? room.overallCommentary ?? '',
+    photos: room.photos || [],
+    items: (room.items || room.components || []).map(normalizeItem),
+  }));
+
   return {
     ...report,
-    rooms: report.rooms || (report as any).areas || [],
+    rooms: normalizedRooms,
     agentName: report.agentName || (report as any).inspectorName || 'Admin Team',
     agentCompany: report.agentCompany || 'ProInspect',
     clientName: report.clientName || (report as any).landlordName || '',

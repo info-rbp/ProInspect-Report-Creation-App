@@ -29,16 +29,43 @@ export const getReportFooterLabel = (reportType: string): string => {
 export const getAggregateRoomStatus = (items: InspectionItem[]) => {
   if (!items || items.length === 0) {
     return {
+      allClean: false,
+      allIntact: false,
+      issuesCount: 0,
+      maintenanceCount: 0,
+      untestedCount: 0,
       isClean: null,
       isUndamaged: null,
       isWorking: null,
     };
   }
 
+  const issuesCount = items.filter(
+    (i) =>
+      ['repair_required', 'replacement_recommended'].includes(i.conditionCategory) ||
+      ['requires_cleaning', 'heavy_soiling'].includes(i.cleanlinessCategory) ||
+      i.workingStatus === 'not_working' ||
+      i.maintenanceRequired ||
+      (i.defects && i.defects.length > 0)
+  ).length;
+
+  const maintenanceCount = items.filter((i) => i.maintenanceRequired).length;
+  const untestedCount = items.filter(
+    (i) => i.workingStatus === 'untested' || i.testStatus === 'untested' || i.conditionCategory === 'unable_to_confirm'
+  ).length;
+
+  const allClean = items.every((i) => i.cleanlinessCategory === 'clean');
+  const allIntact = items.every((i) => ['intact', 'minor_wear'].includes(i.conditionCategory));
+
   return {
-    isClean: items.every((item) => item.isClean),
-    isUndamaged: items.every((item) => item.isUndamaged),
-    isWorking: items.every((item) => item.isWorking),
+    allClean,
+    allIntact,
+    issuesCount,
+    maintenanceCount,
+    untestedCount,
+    isClean: allClean,
+    isUndamaged: allIntact,
+    isWorking: items.every((i) => i.workingStatus === 'operation_confirmed' || i.workingStatus === 'not_applicable'),
   };
 };
 

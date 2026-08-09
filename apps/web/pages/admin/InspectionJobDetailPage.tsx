@@ -11,16 +11,22 @@ import {
   ExternalLink,
   FileText,
   Folder,
+  Lock,
   RefreshCw,
+  ShieldAlert,
   ShoppingBag,
   Trash2,
+  X,
 } from 'lucide-react';
 import type { AuditEvent, InspectionJob, InspectionJobStatus, PropertyRecord } from '../../types/platform';
 import {
   deleteInspectionJob,
   getInspectionJob,
+  getInspectionJobWorkflow,
   updateInspectionJob,
   updateInspectionJobStatus,
+  type InspectionJobWorkflowInfo,
+  type WorkflowAction,
 } from '../../services/platform/inspectionJobService';
 import { getProperty } from '../../services/platform/propertyService';
 import { listAuditEventsForEntity } from '../../services/platform/auditService';
@@ -46,12 +52,19 @@ export const InspectionJobDetailPage: React.FC = () => {
   const [job, setJob] = useState<InspectionJob | null>(null);
   const [property, setProperty] = useState<PropertyRecord | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [workflowInfo, setWorkflowInfo] = useState<InspectionJobWorkflowInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesText, setNotesText] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [propertiesList, setPropertiesList] = useState<PropertyRecord[]>([]);
+
+  // Modal for reason-prompt transitions
+  const [pendingAction, setPendingAction] = useState<WorkflowAction | null>(null);
+  const [transitionReason, setTransitionReason] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadJobData = async () => {
     if (!jobId) return;
@@ -65,8 +78,12 @@ export const InspectionJobDetailPage: React.FC = () => {
         setProperty(prop || null);
         setPropertiesList(prop ? [prop] : []);
 
-        const events = await listAuditEventsForEntity('inspection_job', jobId);
+        const [events, wf] = await Promise.all([
+          listAuditEventsForEntity('inspection_job', jobId),
+          getInspectionJobWorkflow(jobId),
+        ]);
         setAuditEvents(events);
+        if (wf) setWorkflowInfo(wf);
       } else {
         setJob(null);
       }
@@ -110,14 +127,34 @@ export const InspectionJobDetailPage: React.FC = () => {
     );
   }
 
-  const handleStatusChange = async (newStatus: InspectionJobStatus) => {
+  const handleExecuteTransition = async (targetStatus: string, reason?: string) => {
     if (!job) return;
+    setTransitioning(true);
+    setErrorMessage(null);
     try {
-      const updated = await updateInspectionJobStatus(job.id, newStatus);
+      const updated = await updateInspectionJobStatus(job.id, targetStatus as InspectionJobStatus, reason);
       setJob(updated);
+      setPendingAction(null);
+      setTransitionReason('');
       await loadJobData();
-    } catch (err) {
-      console.error('Failed to update status:', err);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string; details?: { blockers?: Array<{ message: string }> } };
+      let msg = apiErr.message || 'Workflow transition failed.';
+      if (apiErr.details?.blockers && apiErr.details.blockers.length > 0) {
+        msg += ` Blockers: ${apiErr.details.blockers.map((b) => b.message).join(' ')}`;
+      }
+      setErrorMessage(msg);
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
+  const handleActionClick = (action: WorkflowAction) => {
+    if (action.reasonRequired) {
+      setPendingAction(action);
+      setTransitionReason('');
+    } else {
+      handleExecuteTransition(action.targetStatus);
     }
   };
 
@@ -293,32 +330,79 @@ export const InspectionJobDetailPage: React.FC = () => {
           })}
         </div>
 
-        {/* Quick Transition Controls */}
-        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <span className="text-xs font-semibold text-slate-500 mr-2">Transition Job Status:</span>
-          {[
-            { status: 'booked', label: 'Mark Booked' },
-            { status: 'assigned', label: 'Assign Inspector' },
-            { status: 'inspection_started', label: 'Start Inspection' },
-            { status: 'photos_uploaded', label: 'Photos Uploaded' },
-            { status: 'review_required', label: 'Submit for Review' },
-            { status: 'reviewer_approved', label: 'Approve Job' },
-            { status: 'finalised', label: 'Finalise Job' },
-            { status: 'on_hold', label: 'Put On Hold' },
-          ].map((item) => (
-            <button
-              key={item.status}
-              onClick={() => handleStatusChange(item.status as InspectionJobStatus)}
-              disabled={job.status === item.status}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-                job.status === item.status
-                  ? 'bg-slate-900 text-white dark:bg-blue-600'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              {item.label}
+        {/* Error Banner */}
+        {errorMessage && (
+          <div className="mt-4 flex items-start justify-between rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-200">
+            <div className="flex items-start gap-2.5">
+              <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+              <div>
+                <span className="font-bold">Transition Blocked:</span> {errorMessage}
+              </div>
+            </div>
+            <button onClick={() => setErrorMessage(null)} className="text-rose-600 hover:text-rose-800 dark:text-rose-400">
+              <X className="h-4 w-4" />
             </button>
-          ))}
+          </div>
+        )}
+
+        {/* Permitted Authoritative Transition Actions */}
+        <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800 space-y-4">
+          <div>
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
+              Permitted Workflow Transitions (Server-Authoritative):
+            </span>
+            {workflowInfo && workflowInfo.availableActions.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {workflowInfo.availableActions.map((action) => (
+                  <button
+                    key={action.targetStatus}
+                    onClick={() => handleActionClick(action)}
+                    disabled={transitioning}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {transitioning ? <RefreshCw className="h-3 w-3 animate-spin" /> : null}
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 italic">
+                {workflowInfo ? 'No additional permitted transitions available for your current role and gate status.' : 'Loading workflow permissions...'}
+              </p>
+            )}
+          </div>
+
+          {/* Blocked Transitions & Gates */}
+          {workflowInfo && workflowInfo.blockedActions.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
+              <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-300 mb-2">
+                <Lock className="h-3.5 w-3.5" />
+                <span>Gated or Restricted Workflow Actions ({workflowInfo.blockedActions.length})</span>
+              </div>
+              <div className="space-y-2.5">
+                {workflowInfo.blockedActions.map((blocked) => (
+                  <div key={blocked.targetStatus} className="rounded-lg bg-white p-2.5 border border-amber-200/80 shadow-2xs dark:bg-slate-900 dark:border-slate-800">
+                    <div className="flex items-center justify-between font-semibold text-slate-900 dark:text-white">
+                      <span>Target State: {blocked.label}</span>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                        {blocked.missingGates.length} Gate(s) Pending
+                      </span>
+                    </div>
+                    {blocked.blockers.length > 0 && (
+                      <ul className="mt-1.5 space-y-1 text-[11px] text-amber-800 dark:text-amber-400">
+                        {blocked.blockers.map((b, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <span className="text-amber-600 dark:text-amber-500">•</span>
+                            <span>{b.message}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -535,6 +619,52 @@ export const InspectionJobDetailPage: React.FC = () => {
         properties={propertiesList}
         initialJob={job}
       />
+
+      {/* Reason Modal for Required-Reason Transitions */}
+      {pendingAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Reason Required: {pendingAction.label}
+              </h3>
+              <button
+                onClick={() => setPendingAction(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
+              Please provide an explanation or reason for transitioning this inspection job to{' '}
+              <strong className="text-slate-900 dark:text-white">{pendingAction.label}</strong>.
+            </p>
+            <textarea
+              rows={3}
+              value={transitionReason}
+              onChange={(e) => setTransitionReason(e.target.value)}
+              placeholder="Enter mandatory transition reason..."
+              className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+            />
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                onClick={() => setPendingAction(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleExecuteTransition(pendingAction.targetStatus, transitionReason)}
+                disabled={!transitionReason.trim() || transitioning}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {transitioning ? <RefreshCw className="h-3 w-3 animate-spin" /> : null}
+                <span>Confirm Transition</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {isDeleting && (

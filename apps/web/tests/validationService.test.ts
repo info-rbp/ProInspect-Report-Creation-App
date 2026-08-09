@@ -28,7 +28,7 @@ const buildReport = (): ReportData => ({
       overallComment: '  Needs review.  ',
       photos: [],
       items: [
-        { id: 'item-1', name: ' Walls ', isClean: true, isUndamaged: true, isWorking: true, comment: '  Clean. ' },
+        { id: 'item-1', name: ' Walls ', cleanlinessCategory: 'clean', conditionCategory: 'intact', workingStatus: 'operation_confirmed', testStatus: 'not_applicable', defects: [], maintenanceRequired: false, comment: '  Clean. ' },
       ],
     },
   ],

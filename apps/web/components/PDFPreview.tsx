@@ -140,9 +140,9 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
                   {(room.items || []).map((item) => (
                     <tr key={item.id} className="border-b border-black hover:bg-gray-50">
                       <td className="border-r border-black p-2 align-top text-black">{item.name}</td>
-                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(item.isClean)}</td>
-                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(item.isUndamaged)}</td>
-                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(item.isWorking)}</td>
+                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(item.cleanlinessCategory === 'clean')}</td>
+                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(['intact', 'minor_wear'].includes(item.conditionCategory))}</td>
+                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(['operation_confirmed', 'appears_operational'].includes(item.workingStatus))}</td>
                       <td className="p-2 align-top text-black">{item.comment || 'Refer to overall commentary.'}</td>
                     </tr>
                   ))}

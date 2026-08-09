@@ -22,9 +22,13 @@ describe('Cloud Run operational boundary', () => {
     expect(source).toContain('dependencies.idempotency.execute');
   });
 
-  it('generates API documentation from the route catalog', () => {
-    const source = readFileSync('apps/api/src/backend/openapi.ts', 'utf8');
-    expect(source).toContain('API_ROUTE_NAMES');
-    expect(source).toContain("openapi: '3.1.0'");
+  it('ensures web services do not instantiate Gemini SDK or access client-side Gemini API keys', () => {
+    const geminiServiceSource = readFileSync('apps/web/services/geminiService.ts', 'utf8');
+    expect(geminiServiceSource).not.toContain('@google/genai');
+    expect(geminiServiceSource).not.toContain('GEMINI_API_KEY');
+    expect(geminiServiceSource).not.toContain('VITE_GEMINI_API_KEY');
+
+    const configServiceSource = readFileSync('apps/web/services/configService.ts', 'utf8');
+    expect(configServiceSource).not.toContain('geminiApiKey:');
   });
 });

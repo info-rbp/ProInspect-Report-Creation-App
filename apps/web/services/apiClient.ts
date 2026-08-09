@@ -44,7 +44,7 @@ function newIdempotencyKey(): string {
 export async function apiRequest<T>(
   agencyId: string | undefined,
   path: string,
-  init: { method?: 'GET' | 'POST' | 'PATCH' | 'PUT'; body?: unknown; idempotencyKey?: string } = {},
+  init: { method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown; idempotencyKey?: string } = {},
 ): Promise<T> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
   if (!baseUrl) throw new Error('VITE_API_BASE_URL is required for cloud operations.');

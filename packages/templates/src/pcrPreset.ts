@@ -1,4 +1,4 @@
-import type { InspectionTypeTemplate, TemplateArea } from './index.js';
+import type { InspectionTypeTemplate, TemplateArea, CommentaryEntry } from './index.js';
 
 const component = (id: string, name: string, required = false, photoRequired = false) => ({ id, name, required, photoRequired });
 
@@ -266,6 +266,81 @@ export const pcrStandardAreas: TemplateArea[] = [
   },
 ];
 
+export const DEFAULT_PCR_COMMENTARY_BANK: CommentaryEntry[] = [
+  {
+    id: 'pcr-entry-front-door-minor',
+    area: 'Entry',
+    component: 'Front Door',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'minor_wear',
+    text: 'Front Door - {{details}}, otherwise intact.',
+    active: true,
+  },
+  {
+    id: 'pcr-entry-front-door-intact',
+    area: 'Entry',
+    component: 'Front Door',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'clean_intact',
+    text: 'Front Door - {{details}}, clean and intact.',
+    active: true,
+  },
+  {
+    id: 'pcr-bathroom-shower-screen-cleaning',
+    area: 'Bathroom',
+    component: 'Shower / Screen / Taps',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'requires_cleaning',
+    text: 'Shower Screen - {{details}}, otherwise intact.',
+    active: true,
+  },
+  {
+    id: 'pcr-bathroom-shower-screen-intact',
+    area: 'Bathroom',
+    component: 'Shower / Screen / Taps',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'clean_intact',
+    text: 'Shower Screen - {{details}}, clean and intact.',
+    active: true,
+  },
+  {
+    id: 'pcr-kitchen-sink-intact',
+    area: 'Kitchen',
+    component: 'Sink / Taps / Spout',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'clean_intact',
+    text: 'Sink / Taps / Spout - {{details}}, clean and in working order.',
+    active: true,
+  },
+  {
+    id: 'pcr-bedroom-walls-repair',
+    area: 'Bedroom',
+    component: 'Walls',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'repair_required',
+    text: 'Walls - {{details}}.',
+    active: true,
+  },
+  {
+    id: 'pcr-bedroom-walls-minor',
+    area: 'Bedroom',
+    component: 'Walls',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'minor_wear',
+    text: 'Walls - {{details}}, otherwise intact.',
+    active: true,
+  },
+  {
+    id: 'pcr-kitchen-dishwasher-not-visible',
+    area: 'Kitchen',
+    component: 'Dishwasher',
+    inspectionTypes: ['entry', 'routine', 'exit'],
+    condition: 'unable_to_confirm',
+    text: 'Dishwasher - Not visible in photos, condition unable to be confirmed.',
+    active: true,
+  },
+];
+
 export const createInitialPcrTemplate = (createdAt = new Date().toISOString()): InspectionTypeTemplate => ({
   id: 'wa-residential-entry-pcr',
   version: 1,
@@ -273,6 +348,29 @@ export const createInitialPcrTemplate = (createdAt = new Date().toISOString()): 
   propertyType: 'residential',
   status: 'draft',
   areas: structuredClone(pcrStandardAreas),
-  commentaryBank: [],
+  commentaryBank: structuredClone(DEFAULT_PCR_COMMENTARY_BANK),
   createdAt,
 });
+
+export const createRoutineInspectionTemplate = (createdAt = new Date().toISOString()): InspectionTypeTemplate => ({
+  id: 'wa-residential-routine-inspection',
+  version: 1,
+  inspectionType: 'routine',
+  propertyType: 'residential',
+  status: 'draft',
+  areas: structuredClone(pcrStandardAreas),
+  commentaryBank: structuredClone(DEFAULT_PCR_COMMENTARY_BANK),
+  createdAt,
+});
+
+export const createExitInspectionTemplate = (createdAt = new Date().toISOString()): InspectionTypeTemplate => ({
+  id: 'wa-residential-exit-pcr',
+  version: 1,
+  inspectionType: 'exit',
+  propertyType: 'residential',
+  status: 'draft',
+  areas: structuredClone(pcrStandardAreas),
+  commentaryBank: structuredClone(DEFAULT_PCR_COMMENTARY_BANK),
+  createdAt,
+});
+

@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AuthorisationTarget, DomainErrorShape, SecurityCapability } from '@pcr/domain';
 import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
+import { routeAnalysisRequest } from './backend/analysisRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
@@ -120,6 +121,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
           send(res, reportResponse, correlationId);
           return;
         }
+      }
+
+      const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId);
+      if (analysisResponse) {
+        send(res, analysisResponse, correlationId);
+        return;
       }
 
       const routed = await routeApiRequest(req, res, dependencies, correlationId);

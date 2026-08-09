@@ -7,6 +7,8 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {"types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./dist/index.js"},
+    "./pcrPreset": {"types": "./dist/pcrPreset.d.ts", "import": "./dist/pcrPreset.js", "default": "./dist/pcrPreset.js"},
+    "./pcrPreset.js": {"types": "./dist/pcrPreset.d.ts", "import": "./dist/pcrPreset.js", "default": "./dist/pcrPreset.js"},
     "./pcr-preset": {"types": "./dist/pcrPreset.d.ts", "import": "./dist/pcrPreset.js", "default": "./dist/pcrPreset.js"},
     "./registry": {"types": "./dist/registry.d.ts", "import": "./dist/registry.js", "default": "./dist/registry.js"}
   },

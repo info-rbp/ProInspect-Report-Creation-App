@@ -1,3 +1,12 @@
+import type {
+  ComponentConditionCategory,
+  ComponentCleanlinessCategory,
+  ComponentWorkingStatus,
+  ComponentTestStatus,
+  ComponentReviewStatus,
+  ComponentComparisonStatus,
+  ReportPhotoReference,
+} from '@pcr/domain';
 import type { ReportLifecycleStatus } from './types/platform';
 
 export interface Photo {
@@ -21,10 +30,26 @@ export interface PreviousReportAttachment {
 export interface InspectionItem {
   id: string;
   name: string;
-  isClean: boolean;
-  isUndamaged: boolean;
-  isWorking: boolean;
+  subComponent?: string;
+  material?: string;
+  colour?: string;
+  type?: string;
+  quantity?: number;
+  conditionCategory: ComponentConditionCategory;
+  cleanlinessCategory: ComponentCleanlinessCategory;
+  workingStatus: ComponentWorkingStatus;
+  testStatus: ComponentTestStatus;
+  defects: string[];
+  maintenanceRequired: boolean;
   comment: string;
+  photoReferences?: ReportPhotoReference[];
+  aiConfidence?: number;
+  reviewStatus?: ComponentReviewStatus;
+  comparisonStatus?: ComponentComparisonStatus;
+  tenantResponseId?: string;
+  version?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type RoomStatus = 'draft' | 'photos_uploaded' | 'analyzed' | 'complete';

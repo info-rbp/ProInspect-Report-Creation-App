@@ -1,4 +1,5 @@
 import type { InspectionJobStatus, ReportLifecycleStatus, UserRole } from './platform.js';
+import type { ReportAggregate } from './reportModel.js';
 
 export interface WorkflowGateContext {
   requiredEvidenceComplete: boolean;
@@ -10,6 +11,249 @@ export interface WorkflowGateContext {
   tenantResponseResolved: boolean;
   finalPdfCreated: boolean;
   archiveCreated: boolean;
+}
+
+export interface GateBlocker {
+  gate: keyof WorkflowGateContext;
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export function calculateWorkflowGateContext(
+  reportAggregate?: ReportAggregate | null,
+  jobRecord?: Record<string, unknown> | null,
+): { context: WorkflowGateContext; blockers: GateBlocker[] } {
+  const blockers: GateBlocker[] = [];
+
+  // 1. requiredEvidenceComplete
+  let requiredEvidenceComplete = true;
+  if (!reportAggregate || !reportAggregate.areas || reportAggregate.areas.length === 0) {
+    requiredEvidenceComplete = false;
+    blockers.push({
+      gate: 'requiredEvidenceComplete',
+      code: 'NO_AREAS_OR_COMPONENTS',
+      message: 'Inspection report must contain areas and components.',
+    });
+  } else {
+    for (const area of reportAggregate.areas) {
+      if (!area.components || area.components.length === 0) {
+        requiredEvidenceComplete = false;
+        blockers.push({
+          gate: 'requiredEvidenceComplete',
+          code: 'AREA_EMPTY',
+          message: `Area "${area.name}" contains no inspection components.`,
+          field: area.id,
+        });
+        continue;
+      }
+      for (const comp of area.components) {
+        const hasPhotos = Array.isArray(comp.photoReferences) && comp.photoReferences.length > 0;
+        const requiresPhotos =
+          comp.maintenanceRequired ||
+          (Array.isArray(comp.defects) && comp.defects.length > 0) ||
+          comp.conditionCategory === 'repair_required' ||
+          comp.conditionCategory === 'replacement_recommended';
+
+        if (requiresPhotos && !hasPhotos) {
+          requiredEvidenceComplete = false;
+          blockers.push({
+            gate: 'requiredEvidenceComplete',
+            code: 'EVIDENCE_REQUIRED',
+            message: `Evidence photograph required for defect or maintenance on "${area.name} - ${comp.component}".`,
+            field: `${area.id}.${comp.id}`,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. requiredComponentsComplete
+  let requiredComponentsComplete = true;
+  if (!reportAggregate || !reportAggregate.areas || reportAggregate.areas.length === 0) {
+    requiredComponentsComplete = false;
+  } else {
+    for (const area of reportAggregate.areas) {
+      for (const comp of area.components) {
+        if (!comp.conditionCategory || !comp.cleanlinessCategory || !comp.workingStatus) {
+          requiredComponentsComplete = false;
+          blockers.push({
+            gate: 'requiredComponentsComplete',
+            code: 'COMPONENT_UNASSESSED',
+            message: `Component assessment incomplete for "${area.name} - ${comp.component}".`,
+            field: `${area.id}.${comp.id}`,
+          });
+        }
+      }
+    }
+  }
+
+  // 3. templateVersionAssigned
+  const templateVersionAssigned = Boolean(
+    reportAggregate?.report?.reportType && reportAggregate.report.reportType.trim().length > 0
+  );
+  if (!templateVersionAssigned) {
+    blockers.push({
+      gate: 'templateVersionAssigned',
+      code: 'TEMPLATE_UNASSIGNED',
+      message: 'Report type/template must be assigned.',
+    });
+  }
+
+  // 4. analysisComplete
+  const reportStatus = reportAggregate?.report?.lifecycleStatus;
+  const jobStatus = jobRecord?.status as string | undefined;
+
+  const analysisCompleteStatuses = [
+    'analysis_complete',
+    'analyst_review_in_progress',
+    'review_required',
+    'reviewer_review_in_progress',
+    'changes_requested',
+    'reviewer_approved',
+    'approved_for_issue',
+    'ready_to_issue',
+    'issued_to_tenant',
+    'tenant_viewed',
+    'tenant_response_in_progress',
+    'tenant_submitted',
+    'agent_response_required',
+    'finalisation_ready',
+    'finalised',
+    'archived',
+  ];
+
+  const analysisComplete = Boolean(
+    (reportStatus && analysisCompleteStatuses.includes(reportStatus)) ||
+    (jobStatus && analysisCompleteStatuses.includes(jobStatus)) ||
+    jobRecord?.analysisStatus === 'completed'
+  );
+  if (!analysisComplete) {
+    blockers.push({
+      gate: 'analysisComplete',
+      code: 'ANALYSIS_INCOMPLETE',
+      message: 'AI photo analysis must be completed.',
+    });
+  }
+
+  // 5. analystApproved
+  const analystApprovedStatuses = [
+    'review_required',
+    'reviewer_review_in_progress',
+    'reviewer_approved',
+    'approved_for_issue',
+    'ready_to_issue',
+    'issued_to_tenant',
+    'tenant_viewed',
+    'tenant_response_in_progress',
+    'tenant_submitted',
+    'agent_response_required',
+    'finalisation_ready',
+    'finalised',
+    'archived',
+  ];
+  const analystApproved = Boolean(
+    (reportStatus && analystApprovedStatuses.includes(reportStatus)) ||
+    (jobStatus && analystApprovedStatuses.includes(jobStatus)) ||
+    jobRecord?.analystApproved === true
+  );
+  if (!analystApproved) {
+    blockers.push({
+      gate: 'analystApproved',
+      code: 'ANALYST_APPROVAL_REQUIRED',
+      message: 'Analyst review and sign-off required.',
+    });
+  }
+
+  // 6. reviewerApproved
+  const reviewerApprovedStatuses = [
+    'approved_for_issue',
+    'reviewer_approved',
+    'ready_to_issue',
+    'issued_to_tenant',
+    'tenant_viewed',
+    'tenant_response_in_progress',
+    'tenant_submitted',
+    'agent_response_required',
+    'finalisation_ready',
+    'finalised',
+    'archived',
+  ];
+  const reviewerApproved = Boolean(
+    (reportStatus && reviewerApprovedStatuses.includes(reportStatus)) ||
+    (jobStatus && reviewerApprovedStatuses.includes(jobStatus)) ||
+    jobRecord?.reviewerApproved === true
+  );
+  if (!reviewerApproved) {
+    blockers.push({
+      gate: 'reviewerApproved',
+      code: 'REVIEWER_APPROVAL_REQUIRED',
+      message: 'Reviewer manager approval required.',
+    });
+  }
+
+  // 7. tenantResponseResolved
+  const tenantResolvedStatuses = [
+    'finalisation_ready',
+    'finalised',
+    'archived',
+  ];
+  const tenantResponseResolved = Boolean(
+    (reportStatus && tenantResolvedStatuses.includes(reportStatus)) ||
+    (jobStatus && tenantResolvedStatuses.includes(jobStatus)) ||
+    jobRecord?.tenantResponseStatus === 'resolved' ||
+    jobRecord?.tenantResponseStatus === 'not_required' ||
+    !jobRecord?.tenantResponseRequired
+  );
+  if (!tenantResponseResolved) {
+    blockers.push({
+      gate: 'tenantResponseResolved',
+      code: 'TENANT_RESPONSE_UNRESOLVED',
+      message: 'Tenant response must be resolved.',
+    });
+  }
+
+  // 8. finalPdfCreated
+  const finalPdfCreated = Boolean(
+    jobRecord?.finalPdfUrl ||
+    reportAggregate?.report?.finalisedAt ||
+    (reportStatus && ['finalised', 'archived'].includes(reportStatus)) ||
+    (jobStatus && ['finalised', 'archived'].includes(jobStatus))
+  );
+  if (!finalPdfCreated) {
+    blockers.push({
+      gate: 'finalPdfCreated',
+      code: 'PDF_NOT_GENERATED',
+      message: 'Final signed PDF report must be generated.',
+    });
+  }
+
+  // 9. archiveCreated
+  const archiveCreated = Boolean(
+    reportStatus === 'archived' || jobStatus === 'archived' || jobRecord?.archivedAt
+  );
+  if (!archiveCreated) {
+    blockers.push({
+      gate: 'archiveCreated',
+      code: 'ARCHIVE_NOT_CREATED',
+      message: 'Report archive record must be created.',
+    });
+  }
+
+  return {
+    context: {
+      requiredEvidenceComplete,
+      requiredComponentsComplete,
+      templateVersionAssigned,
+      analysisComplete,
+      analystApproved,
+      reviewerApproved,
+      tenantResponseResolved,
+      finalPdfCreated,
+      archiveCreated,
+    },
+    blockers,
+  };
 }
 
 export interface WorkflowTransitionEvent<TStatus extends string> {

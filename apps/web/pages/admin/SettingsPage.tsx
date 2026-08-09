@@ -1,16 +1,20 @@
-import React from 'react';
-import { isAiConfigured } from '../../services/configService';
+import React, { useEffect, useState } from 'react';
+import { isAiConfigured, checkAiStatus } from '../../services/configService';
 import { isFirebaseConfigured } from '../../services/storageService';
 
 const statusClass = (enabled: boolean) => enabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200';
 
 const SettingsPage: React.FC = () => {
   const firebaseConfigured = isFirebaseConfigured();
-  const aiConfigured = isAiConfigured();
+  const [aiConfigured, setAiConfigured] = useState<boolean>(isAiConfigured());
+
+  useEffect(() => {
+    checkAiStatus().then((available) => setAiConfigured(available));
+  }, []);
 
   const rows = [
     { label: 'Firebase', value: firebaseConfigured ? 'Configured from environment or local development fallback' : 'Not configured - local device storage only', enabled: firebaseConfigured },
-    { label: 'AI commentary', value: aiConfigured ? 'Gemini key available' : 'Gemini key missing', enabled: aiConfigured },
+    { label: 'AI Service', value: aiConfigured ? 'Server-side AI service active' : 'AI service unavailable', enabled: aiConfigured },
     { label: 'Environment', value: import.meta.env.DEV ? 'Local development' : 'Production build', enabled: true },
   ];
 

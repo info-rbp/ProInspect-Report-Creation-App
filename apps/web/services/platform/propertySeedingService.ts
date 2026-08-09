@@ -2,93 +2,129 @@ import type { PropertyRecord, RoomType, PropertyFeatures } from '../../types/pla
 import type { InspectionItem, ReportData, Room } from '../../types';
 import { generateId } from '../../utils';
 
+export function isOperationalItem(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    lower.includes('switch') ||
+    lower.includes('outlet') ||
+    lower.includes('power') ||
+    lower.includes('fan') ||
+    lower.includes('oven') ||
+    lower.includes('cooktop') ||
+    lower.includes('grill') ||
+    lower.includes('rangehood') ||
+    lower.includes('dishwasher') ||
+    lower.includes('air cond') ||
+    lower.includes('heating') ||
+    lower.includes('alarm') ||
+    lower.includes('remote') ||
+    lower.includes('reticulation') ||
+    lower.includes('appliance') ||
+    lower.includes('light fixture') ||
+    lower.includes('heat lamp') ||
+    lower.includes('exhaust') ||
+    lower.includes('intercom')
+  );
+}
+
+export function createSeededItem(name: string): InspectionItem {
+  const operational = isOperationalItem(name);
+  return {
+    id: generateId(),
+    name,
+    conditionCategory: 'unable_to_confirm',
+    cleanlinessCategory: 'unable_to_confirm',
+    workingStatus: operational ? 'untested' : 'not_applicable',
+    testStatus: operational ? 'untested' : 'not_applicable',
+    defects: [],
+    maintenanceRequired: false,
+    comment: '',
+    photoReferences: [],
+    reviewStatus: 'draft',
+    comparisonStatus: 'not_compared',
+  };
+}
+
 export const getDefaultItemsForRoomType = (roomType?: RoomType | string, roomName: string = ''): InspectionItem[] => {
   const lowerType = (roomType || '').toLowerCase();
   const lowerName = roomName.toLowerCase();
 
+  let itemNames: string[] = [];
+
   if (lowerType === 'kitchen' || lowerName.includes('kitchen')) {
-    return [
-      { id: generateId(), name: 'Doors, Drawers & Handles', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Walls, Skirting & Splashback', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Benchtops & Sink / Taps', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Oven, Grill & Cooktop', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Rangehood & Filters', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Dishwasher (if fitted)', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Flooring / Tiles', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Light Switches & Outlets', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Ceiling & Exhaust', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
+    itemNames = [
+      'Doors, Drawers & Handles',
+      'Walls, Skirting & Splashback',
+      'Benchtops & Sink / Taps',
+      'Oven, Grill & Cooktop',
+      'Rangehood & Filters',
+      'Dishwasher (if fitted)',
+      'Flooring / Tiles',
+      'Light Switches & Outlets',
+      'Ceiling & Exhaust',
+    ];
+  } else if (lowerType === 'bathroom' || lowerName.includes('bathroom') || lowerName.includes('ensuite') || lowerName.includes('toilet') || lowerName.includes('powder')) {
+    itemNames = [
+      'Door, Lock & Towel Rails',
+      'Walls, Tiles & Grouting',
+      'Vanity, Basin & Mirror',
+      'Shower Screen, Recess & Taps',
+      'Bath Tub (if fitted)',
+      'Toilet Suite, Seat & Roll Holder',
+      'Flooring / Tiles',
+      'Exhaust Fan & Heat Lamps',
+      'Light Switches & Fixtures',
+    ];
+  } else if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('bed')) {
+    itemNames = [
+      'Entry Door, Handle & Lock',
+      'Walls, Skirting & Cornices',
+      'Windows, Screens & Blinds/Curtains',
+      'Flooring / Carpet',
+      'Built-in Robes, Doors & Shelves',
+      'Light Switches & Power Outlets',
+      'Ceiling & Ceiling Fan/A/C',
+    ];
+  } else if (lowerType === 'living' || lowerType === 'dining' || lowerName.includes('living') || lowerName.includes('lounge') || lowerName.includes('dining') || lowerName.includes('family')) {
+    itemNames = [
+      'Doors, Handles & Screen Doors',
+      'Walls, Skirting & Picture Rails',
+      'Windows, Screens & Window Coverings',
+      'Flooring / Timber / Carpet',
+      'Light Switches & Power Outlets',
+      'Air Conditioner / Heating Unit',
+      'Ceiling, Light Fixtures & Fan',
+    ];
+  } else if (lowerType === 'laundry' || lowerName.includes('laundry')) {
+    itemNames = [
+      'Door & Screen Door',
+      'Walls, Tiles & Skirting',
+      'Laundry Tub, Taps & Cabinet',
+      'Washing Machine Taps & Waste',
+      'Flooring / Floor Drain',
+      'Light Switch & Power Points',
+    ];
+  } else if (lowerType === 'outdoor' || lowerType === 'garage' || lowerName.includes('patio') || lowerName.includes('balcony') || lowerName.includes('garage') || lowerName.includes('garden')) {
+    itemNames = [
+      'Paved / Concrete Floor / Decking',
+      'Walls, Fascia & Gutters',
+      'Garage Door / Gates & Remotes',
+      'Outdoor Lighting & Power Outlets',
+      'Lawn, Garden Beds & Reticulation',
+      'Fencing & Gates',
+    ];
+  } else {
+    itemNames = [
+      'Entry Door, Handle & Locks',
+      'Walls, Skirting & Painting',
+      'Windows, Screens & Coverings',
+      'Flooring Condition',
+      'Light Switches & Power Outlets',
+      'Ceiling & Light Fixtures',
     ];
   }
 
-  if (lowerType === 'bathroom' || lowerName.includes('bathroom') || lowerName.includes('ensuite') || lowerName.includes('toilet') || lowerName.includes('powder')) {
-    return [
-      { id: generateId(), name: 'Door, Lock & Towel Rails', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Walls, Tiles & Grouting', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Vanity, Basin & Mirror', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Shower Screen, Recess & Taps', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Bath Tub (if fitted)', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Toilet Suite, Seat & Roll Holder', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Flooring / Tiles', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Exhaust Fan & Heat Lamps', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Light Switches & Fixtures', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    ];
-  }
-
-  if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('bed')) {
-    return [
-      { id: generateId(), name: 'Entry Door, Handle & Lock', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Walls, Skirting & Cornices', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Windows, Screens & Blinds/Curtains', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Flooring / Carpet', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Built-in Robes, Doors & Shelves', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Light Switches & Power Outlets', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Ceiling & Ceiling Fan/A/C', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    ];
-  }
-
-  if (lowerType === 'living' || lowerType === 'dining' || lowerName.includes('living') || lowerName.includes('lounge') || lowerName.includes('dining') || lowerName.includes('family')) {
-    return [
-      { id: generateId(), name: 'Doors, Handles & Screen Doors', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Walls, Skirting & Picture Rails', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Windows, Screens & Window Coverings', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Flooring / Timber / Carpet', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Light Switches & Power Outlets', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Air Conditioner / Heating Unit', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Ceiling, Light Fixtures & Fan', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    ];
-  }
-
-  if (lowerType === 'laundry' || lowerName.includes('laundry')) {
-    return [
-      { id: generateId(), name: 'Door & Screen Door', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Walls, Tiles & Skirting', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Laundry Tub, Taps & Cabinet', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Washing Machine Taps & Waste', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Flooring / Floor Drain', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Light Switch & Power Points', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    ];
-  }
-
-  if (lowerType === 'outdoor' || lowerType === 'garage' || lowerName.includes('patio') || lowerName.includes('balcony') || lowerName.includes('garage') || lowerName.includes('garden')) {
-    return [
-      { id: generateId(), name: 'Paved / Concrete Floor / Decking', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Walls, Fascia & Gutters', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Garage Door / Gates & Remotes', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Outdoor Lighting & Power Outlets', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Lawn, Garden Beds & Reticulation', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: generateId(), name: 'Fencing & Gates', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    ];
-  }
-
-  // Generic room / area items
-  return [
-    { id: generateId(), name: 'Entry Door, Handle & Locks', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    { id: generateId(), name: 'Walls, Skirting & Painting', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    { id: generateId(), name: 'Windows, Screens & Coverings', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    { id: generateId(), name: 'Flooring Condition', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    { id: generateId(), name: 'Light Switches & Power Outlets', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-    { id: generateId(), name: 'Ceiling & Light Fixtures', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-  ];
+  return itemNames.map((name) => createSeededItem(name));
 };
 
 export const seedRoomsFromProperty = (property: PropertyRecord): Room[] => {

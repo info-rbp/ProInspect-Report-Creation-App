@@ -21,7 +21,8 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import type { InspectionJob, PropertyRecord, ReportData } from '../../types/platform';
+import type { InspectionJob, PropertyRecord } from '../../types/platform';
+import type { ReportData } from '../../types';
 import { getProperty, updateProperty } from '../../services/platform/propertyService';
 import { PropertyFormModal } from '../../components/properties/PropertyFormModal';
 import { listInspectionJobs, createInspectionJob } from '../../services/platform/inspectionJobService';

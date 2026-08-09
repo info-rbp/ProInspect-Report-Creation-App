@@ -4,6 +4,13 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   server: { port: 3000, host: '0.0.0.0' },
   plugins: [react()],
-  resolve: { alias: { '@': path.resolve(import.meta.dirname, '.') } },
-  build: { outDir: 'dist' }
+  resolve: {
+    alias: {
+      '@': path.resolve(import.meta.dirname, '.'),
+      '@pcr/domain': path.resolve(import.meta.dirname, '../../packages/domain/src/index.ts'),
+      '@pcr/templates/pcrPreset': path.resolve(import.meta.dirname, '../../packages/templates/src/pcrPreset.ts'),
+      '@pcr/templates': path.resolve(import.meta.dirname, '../../packages/templates/src/index.ts'),
+    },
+  },
+  build: { outDir: 'dist' },
 });

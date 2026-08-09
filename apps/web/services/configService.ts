@@ -7,7 +7,6 @@ export interface RuntimeConfig {
   storageBucket: string;
   messagingSenderId: string;
   appId: string;
-  geminiApiKey: string;
   enableCloudSync: boolean;
 }
 
@@ -30,7 +29,6 @@ const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   storageBucket: '',
   messagingSenderId: '',
   appId: '',
-  geminiApiKey: '',
   enableCloudSync: false,
 };
 
@@ -43,7 +41,6 @@ const sanitizeRuntimeConfig = (value: Partial<RuntimeConfig> | null | undefined)
   storageBucket: sanitizeString(value?.storageBucket),
   messagingSenderId: sanitizeString(value?.messagingSenderId),
   appId: sanitizeString(value?.appId),
-  geminiApiKey: sanitizeString(value?.geminiApiKey),
   enableCloudSync: Boolean(value?.enableCloudSync),
 });
 
@@ -148,12 +145,24 @@ export const getFirebaseConfig = (): FirebaseRuntimeConfig => {
   return getResolvedFirebaseConfig() || getRuntimeFirebaseConfig();
 };
 
-export const getGeminiApiKey = (): string => {
-  const envKey = sanitizeString(import.meta.env.VITE_GEMINI_API_KEY) || sanitizeString((import.meta.env as Record<string, unknown>).GEMINI_API_KEY);
-  return envKey || getRuntimeConfig().geminiApiKey;
+let cachedAiStatus = true;
+
+export const checkAiStatus = async (): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/v1/analysis/status');
+    if (res.ok) {
+      const json = await res.json();
+      cachedAiStatus = Boolean(json?.data?.available);
+    }
+  } catch {
+    cachedAiStatus = false;
+  }
+  return cachedAiStatus;
 };
 
-export const isAiConfigured = (): boolean => getGeminiApiKey().length > 0;
+export const getGeminiApiKey = (): string => '';
+
+export const isAiConfigured = (): boolean => cachedAiStatus;
 
 export const isCloudSyncEnabled = (): boolean => {
   return Boolean(getResolvedFirebaseConfig());

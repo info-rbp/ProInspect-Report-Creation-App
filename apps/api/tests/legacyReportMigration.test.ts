@@ -17,7 +17,15 @@ describe('legacy report migration planner', () => {
           { id: 'photo-1', objectPath: 'agencies/agency-a/photos/photo-1.jpg' },
           { id: 'photo-inline', downloadUrl: 'data:image/jpeg;base64,abc' },
         ],
-        items: [{ id: 'front-door', name: 'Front Door', isClean: true, isUndamaged: false, isWorking: false, comment: 'Minor chips noted.' }],
+        items: [{
+          id: 'front-door',
+          name: 'Front Door',
+          isClean: true,
+          isUndamaged: false,
+          isWorking: false,
+          comment: 'Minor chips noted.',
+          photoReferences: [{ photoId: 'photo-1', objectPath: 'agencies/agency-a/photos/photo-1.jpg' }],
+        }],
       }],
     });
 

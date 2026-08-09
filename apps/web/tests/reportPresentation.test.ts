@@ -23,15 +23,25 @@ describe('reportPresentation', () => {
 
   it('aggregates item statuses correctly', () => {
     expect(getAggregateRoomStatus([])).toEqual({
+      allClean: false,
+      allIntact: false,
+      issuesCount: 0,
+      maintenanceCount: 0,
+      untestedCount: 0,
       isClean: null,
       isUndamaged: null,
       isWorking: null,
     });
 
     expect(getAggregateRoomStatus([
-      { id: '1', name: 'Walls', isClean: true, isUndamaged: true, isWorking: true, comment: '' },
-      { id: '2', name: 'Floor', isClean: false, isUndamaged: true, isWorking: true, comment: '' },
+      { id: '1', name: 'Walls', cleanlinessCategory: 'clean', conditionCategory: 'intact', workingStatus: 'operation_confirmed', testStatus: 'not_applicable', defects: [], maintenanceRequired: false, comment: '' },
+      { id: '2', name: 'Floor', cleanlinessCategory: 'requires_cleaning', conditionCategory: 'intact', workingStatus: 'operation_confirmed', testStatus: 'not_applicable', defects: [], maintenanceRequired: false, comment: '' },
     ])).toEqual({
+      allClean: false,
+      allIntact: true,
+      issuesCount: 1,
+      maintenanceCount: 0,
+      untestedCount: 0,
       isClean: false,
       isUndamaged: true,
       isWorking: true,

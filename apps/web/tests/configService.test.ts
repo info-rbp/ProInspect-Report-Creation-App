@@ -21,7 +21,6 @@ describe('configService', () => {
       storageBucket: '',
       messagingSenderId: '',
       appId: '',
-      geminiApiKey: '',
       enableCloudSync: false,
     });
   });
@@ -34,7 +33,6 @@ describe('configService', () => {
       storageBucket: ' bucket ',
       messagingSenderId: ' sender ',
       appId: ' app-id ',
-      geminiApiKey: ' gemini-key ',
       enableCloudSync: true,
     });
 

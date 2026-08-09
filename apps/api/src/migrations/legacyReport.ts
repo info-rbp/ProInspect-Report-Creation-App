@@ -1,4 +1,4 @@
-import type { ReportAggregate } from '@pcr/domain';
+import type { ReportAggregate, ReportPhotoReference } from '@pcr/domain';
 
 interface LegacyPhoto { id?: unknown; objectPath?: unknown; downloadUrl?: unknown; thumbnailObjectPath?: unknown }
 interface LegacyItem { id?: unknown; name?: unknown; isClean?: unknown; isUndamaged?: unknown; isWorking?: unknown; comment?: unknown }
@@ -47,6 +47,7 @@ export function planLegacyReportMigration(sourceReportId: string, value: Record<
       name: text(room.name, `Area ${areaIndex + 1}`),
       sequence: areaIndex + 1,
       ...(text(room.overallComment) ? { overallCommentary: text(room.overallComment) } : {}),
+      ...(photoReferences.length > 0 ? { photoReferences } : {}),
       components: array<LegacyItem>(room.items).map((item, componentIndex) => {
         const isClean = boolean(item.isClean, false);
         const isUndamaged = boolean(item.isUndamaged, false);
@@ -61,7 +62,7 @@ export function planLegacyReportMigration(sourceReportId: string, value: Record<
           defects: isUndamaged ? [] : [text(item.comment, 'Legacy condition issue recorded.')],
           maintenanceRequired: !isUndamaged,
           commentary: text(item.comment, `${text(item.name, 'Component')} migrated from the legacy report.`),
-          photoReferences,
+          photoReferences: array<ReportPhotoReference>((item as any).photoReferences),
           reviewStatus: room.status === 'complete' ? 'reviewer_approved' as const : 'draft' as const,
           comparisonStatus: 'not_compared' as const,
         };

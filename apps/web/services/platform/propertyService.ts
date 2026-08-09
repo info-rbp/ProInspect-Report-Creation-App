@@ -1,10 +1,9 @@
-import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { generateId } from '../../utils';
 import type { PropertyRecord } from '../../types/platform';
 import { apiRequest } from '../apiClient';
 import { getFirestoreDb, isFirebaseConfigured } from '../storageService';
 import { localGet, localList, localPut } from './localPlatformStore';
-import { stripUndefined } from './firestoreData';
 
 export type CreatePropertyInput = Omit<PropertyRecord, 'id' | 'status' | 'createdAt' | 'updatedAt' | 'clientIds'> &
   Partial<Pick<PropertyRecord, 'clientIds' | 'status'>>;
@@ -148,23 +147,14 @@ export const createProperty = async (input: CreatePropertyInput): Promise<Proper
     updatedAt: timestamp,
   };
 
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL) {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
     try {
       return await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', {
         method: 'POST',
         body: property,
       });
-    } catch {
-      // Fall through to direct Firestore or local
-    }
-  }
-
-  const firestoreDb = getFirestoreDb();
-  if (firestoreDb) {
-    try {
-      await setDoc(doc(firestoreDb, 'properties', newId), stripUndefined(property));
     } catch (err) {
-      console.warn('Firestore createProperty failed, saving locally:', err);
+      console.warn('API createProperty failed, saving locally:', err);
     }
   }
 
@@ -233,13 +223,6 @@ export const listProperties = async (): Promise<PropertyRecord[]> => {
   // Seed initial samples if empty
   for (const sample of SAMPLE_PROPERTIES) {
     await localPut('properties', sample);
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, 'properties', sample.id), stripUndefined(sample));
-      } catch {
-        // ignore
-      }
-    }
   }
   return SAMPLE_PROPERTIES;
 };
@@ -259,23 +242,14 @@ export const updateProperty = async (
     updatedAt: timestamp,
   };
 
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL) {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
     try {
       return await apiRequest<PropertyRecord>(existing.agencyId, `/api/v1/properties/${propertyId}`, {
         method: 'PATCH',
         body: { ...updates, expectedVersion: (existing as VersionedProperty).version ?? 1 },
       });
-    } catch {
-      // Fall through
-    }
-  }
-
-  const firestoreDb = getFirestoreDb();
-  if (firestoreDb) {
-    try {
-      await setDoc(doc(firestoreDb, 'properties', propertyId), stripUndefined(updatedProperty), { merge: true });
     } catch (err) {
-      console.warn('Firestore updateProperty failed, updating local:', err);
+      console.warn('API updateProperty failed, updating locally:', err);
     }
   }
 

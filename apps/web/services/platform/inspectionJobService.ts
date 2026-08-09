@@ -141,23 +141,77 @@ export const assignInspector = async (inspectionJobId: string, assignedInspector
 export const assignReviewer = async (inspectionJobId: string, assignedReviewerId: string): Promise<InspectionJob> =>
   updateInspectionJob(inspectionJobId, { assignedReviewerId });
 
+export interface WorkflowAction {
+  action: string;
+  targetStatus: string;
+  label: string;
+  reasonRequired: boolean;
+}
+
+export interface WorkflowBlocker {
+  gate: string;
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export interface WorkflowBlockedAction {
+  action: string;
+  targetStatus: string;
+  label: string;
+  missingGates: string[];
+  blockers: WorkflowBlocker[];
+}
+
+export interface InspectionJobWorkflowInfo {
+  entityId: string;
+  currentStatus: string;
+  version: number;
+  availableActions: WorkflowAction[];
+  blockedActions: WorkflowBlockedAction[];
+  gateContext: Record<string, boolean>;
+}
+
+export const getInspectionJobWorkflow = async (inspectionJobId: string): Promise<InspectionJobWorkflowInfo | undefined> => {
+  const existing = await getInspectionJob(inspectionJobId);
+  if (!existing) return undefined;
+
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
+    try {
+      return await apiRequest<InspectionJobWorkflowInfo>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/workflow`);
+    } catch (err) {
+      console.warn('API getInspectionJobWorkflow failed:', err);
+    }
+  }
+
+  return {
+    entityId: inspectionJobId,
+    currentStatus: existing.status,
+    version: (existing as VersionedInspectionJob).version ?? 1,
+    availableActions: [],
+    blockedActions: [],
+    gateContext: {},
+  };
+};
+
 export const updateInspectionJobStatus = async (
   inspectionJobId: string,
   status: InspectionJobStatus,
+  reason?: string,
 ): Promise<InspectionJob> => {
   const existing = await getInspectionJob(inspectionJobId);
   if (!existing) throw new Error('Inspection job not found.');
+
   if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
-    try {
-      return await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/transitions`, {
-        method: 'POST',
-        body: { status, expectedVersion: (existing as VersionedInspectionJob).version ?? 1 },
-      });
-    } catch (err) {
-      console.warn('API updateInspectionJobStatus failed, updating status locally:', err);
-    }
+    return await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/transitions`, {
+      method: 'POST',
+      body: { status, expectedVersion: (existing as VersionedInspectionJob).version ?? 1, ...(reason ? { reason } : {}) },
+    });
   }
-  return updateInspectionJob(inspectionJobId, { status });
+
+  const updatedInspectionJob: InspectionJob = { ...existing, status, updatedAt: new Date().toISOString() };
+  await localPut('inspectionJobs', updatedInspectionJob);
+  return updatedInspectionJob;
 };
 
 export const deleteInspectionJob = async (inspectionJobId: string): Promise<void> => {

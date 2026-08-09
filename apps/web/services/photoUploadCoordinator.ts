@@ -65,7 +65,7 @@ export async function syncPhoto(item: LocalPhotoQueueItem): Promise<void> {
       }
       if (!session.resumableUploadUrl) throw new Error('Upload service is not configured.');
       uploadUrl = session.resumableUploadUrl;
-      await updatePhotoProgress(item.id, item.uploadedBytes, 'uploading', {
+      await updatePhotoProgress(item.id, item.uploadedBytes, 'syncing', {
         uploadSessionId: session.id,
         resumableUploadUrl: uploadUrl,
       });
@@ -75,7 +75,7 @@ export async function syncPhoto(item: LocalPhotoQueueItem): Promise<void> {
     let uploadedBytes = item.uploadedBytes;
     while (uploadedBytes < item.size) {
       uploadedBytes = await uploadChunk(item, activeUploadUrl, uploadedBytes);
-      await updatePhotoProgress(item.id, uploadedBytes, uploadedBytes === item.size ? 'synced' : 'uploading');
+      await updatePhotoProgress(item.id, uploadedBytes, uploadedBytes === item.size ? 'synced' : 'syncing');
     }
   } catch (error) {
     await updatePhotoProgress(item.id, item.uploadedBytes, 'failed', {
