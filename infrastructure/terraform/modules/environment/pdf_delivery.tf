@@ -19,9 +19,9 @@ resource "google_cloud_run_v2_service_iam_member" "pdf_worker_pubsub_invoker" {
 }
 
 resource "google_project_service_identity" "pubsub_agent" {
-  provider = google-beta
-  project  = var.project_id
-  service  = "pubsub.googleapis.com"
+  provider   = google-beta
+  project    = var.project_id
+  service    = "pubsub.googleapis.com"
   depends_on = [google_project_service.required]
 }
 
