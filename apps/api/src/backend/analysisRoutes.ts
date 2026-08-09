@@ -98,6 +98,10 @@ export async function routeAnalysisRequest(
   }
 
   const agencyId = getAgencyIdFromHeader(req);
+  if (!agencyId) {
+    throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.');
+  }
+
   await authenticateAndAuthorise(
     req,
     dependencies,
@@ -105,6 +109,16 @@ export async function routeAnalysisRequest(
     { agencyId },
     correlationId
   );
+
+  // Fail closed when the model service is unavailable. Analysis must never fabricate
+  // clean/intact/working observations merely because a credential or upstream model is absent.
+  if (!isGeminiAvailable()) {
+    throw new ApiError(
+      503,
+      'AI_UNAVAILABLE',
+      'AI analysis is currently unavailable. Preserve the existing inspection assessment and retry when the service is configured.'
+    );
+  }
 
   const body = await readJsonPayload(req);
 

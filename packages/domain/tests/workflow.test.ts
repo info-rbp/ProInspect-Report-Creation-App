@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { transitionInspectionJob, transitionReport, type WorkflowGateContext } from '../src/workflow.js';
+import {
+  missingInspectionTransitionGates,
+  missingReportTransitionGates,
+  transitionInspectionJob,
+  transitionReport,
+  type WorkflowGateContext,
+} from '../src/workflow.js';
 
 const complete: WorkflowGateContext = {
   requiredEvidenceComplete: true,
@@ -90,5 +96,51 @@ describe('authoritative workflow transitions', () => {
       occurredAt: '2026-07-20T01:00:00.000Z',
     });
     expect(event.resultingVersion).toBe(5);
+  });
+
+  it('allows the reviewer approval action without requiring approval to exist beforehand', () => {
+    const context = { ...complete, reviewerApproved: false };
+    expect(missingInspectionTransitionGates('reviewer_approved', context)).toEqual([]);
+
+    const event = transitionInspectionJob({
+      entityId: 'job-review',
+      current: 'reviewer_review_in_progress',
+      requested: 'reviewer_approved',
+      currentVersion: 8,
+      expectedVersion: 8,
+      actorId: 'reviewer-1',
+      actorRole: 'reviewer',
+      correlationId: 'correlation-review',
+      context,
+      occurredAt: '2026-08-09T13:30:00.000Z',
+    });
+
+    expect(event.to).toBe('reviewer_approved');
+  });
+
+  it('allows report approval after analyst sign-off without a circular reviewer gate', () => {
+    const context = { ...complete, reviewerApproved: false };
+    expect(missingReportTransitionGates('approved_for_issue', context)).toEqual([]);
+
+    const event = transitionReport({
+      entityId: 'report-review',
+      current: 'review_required',
+      requested: 'approved_for_issue',
+      currentVersion: 9,
+      expectedVersion: 9,
+      actorId: 'reviewer-1',
+      actorRole: 'reviewer',
+      correlationId: 'correlation-report-review',
+      context,
+      occurredAt: '2026-08-09T13:31:00.000Z',
+    });
+
+    expect(event.to).toBe('approved_for_issue');
+  });
+
+  it('still blocks reviewer approval when analyst sign-off is missing', () => {
+    const context = { ...complete, analystApproved: false, reviewerApproved: false };
+    expect(missingInspectionTransitionGates('reviewer_approved', context)).toEqual(['analystApproved']);
+    expect(missingReportTransitionGates('approved_for_issue', context)).toEqual(['analystApproved']);
   });
 });

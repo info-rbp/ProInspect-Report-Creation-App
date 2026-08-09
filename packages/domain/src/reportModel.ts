@@ -89,6 +89,12 @@ export interface ReportAreaRecord {
   name: string;
   sequence: number;
   overallCommentary?: string;
+  /**
+   * Complete area-level evidence set, including overview and currently unassigned
+   * photographs. Component photoReferences are a narrower provenance relationship
+   * and must never be used as the only source of the area gallery.
+   */
+  photoReferences?: ReportPhotoReference[];
   componentCount: number;
   version: number;
   createdAt: string;
