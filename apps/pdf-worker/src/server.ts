@@ -5,6 +5,7 @@ import {
   parsePubSubPdfTask,
   processPdfGenerationTask,
 } from './pdfGenerationService.js';
+import { assertPdfTaskReady } from './pdfTaskPreflight.js';
 
 const config = loadRuntimeConfig();
 
@@ -54,6 +55,7 @@ export async function handlePdfWorkerRequest(req: IncomingMessage, res: ServerRe
     const body = await readJson(req);
     const task = parsePubSubPdfTask(body);
     taskId = task.taskId;
+    await assertPdfTaskReady(task);
     const result = await processPdfGenerationTask(task);
     console.log(JSON.stringify({
       level: config.logLevel,
@@ -79,8 +81,8 @@ export async function handlePdfWorkerRequest(req: IncomingMessage, res: ServerRe
     }));
 
     if (!retryable) {
-      // Permanent validation/provenance failures are already recorded on the PDF job.
-      // Acknowledge them so Pub/Sub does not retry an impossible task forever.
+      // Permanent validation/provenance failures are acknowledged so Pub/Sub does
+      // not retry an impossible or superseded finalisation task forever.
       sendJson(res, 200, {
         status: 'failed',
         error: {
