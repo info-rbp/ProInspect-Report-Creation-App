@@ -49,6 +49,14 @@ const PROTECTED_WORKFLOW_FIELDS = new Set([
   'issuedAt',
   'archivedAt',
   'reviewStatus',
+  'finalPdfUrl',
+  'finalPdfReportVersionId',
+  'finalPdfObjectPath',
+  'finalPdfSha256',
+  'finalPdfGeneration',
+  'renderManifestObjectPath',
+  'renderManifestSha256',
+  'pdfGeneratedAt',
 ]);
 
 function mapJobStatusToReportStatus(status: InspectionJobStatus): ReportLifecycleStatus | undefined {
