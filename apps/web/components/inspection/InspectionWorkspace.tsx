@@ -14,6 +14,7 @@ interface InspectionWorkspaceProps {
   previousReport?: PreviousReportAttachment;
   previousReportNotes?: string;
   agencyId?: string;
+  inspectionType?: string;
   readOnly?: boolean;
 }
 
@@ -27,6 +28,7 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
   previousReport,
   previousReportNotes,
   agencyId,
+  inspectionType,
   readOnly = false,
 }) => {
   const activeArea = areas.find((a) => a.id === activeAreaId) || areas[0] || null;
@@ -54,7 +56,6 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-      {/* Area Navigator (Sidebar) */}
       <div className="md:col-span-1">
         <AreaNavigator
           areas={areas}
@@ -65,7 +66,6 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
         />
       </div>
 
-      {/* Main Area Workspace */}
       <div className="md:col-span-3">
         {activeArea ? (
           <AreaWorkspace
@@ -76,6 +76,7 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
             previousReport={previousReport}
             previousReportNotes={previousReportNotes}
             agencyId={agencyId}
+            inspectionType={inspectionType}
             readOnly={readOnly}
           />
         ) : (
