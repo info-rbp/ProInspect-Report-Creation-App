@@ -86,27 +86,34 @@ interface AggregateArea {
   name: string;
   sequence: number;
   overallCommentary?: string;
+  photoReferences?: ReportPhotoReference[];
   components: AggregateComponent[];
 }
 
 interface ReportAggregatePayload {
-  report: Record<string, unknown> & { id: string; agencyId: string; lifecycleStatus: string; version?: number; createdAt?: string; updatedAt?: string };
+  report: Record<string, unknown> & {
+    id: string;
+    agencyId: string;
+    lifecycleStatus: string;
+    version?: number;
+    createdAt?: string;
+    updatedAt?: string;
+  };
   areas: AggregateArea[];
   expectedVersion?: number;
 }
 
 const initLocalDB = async () => openDB(LOCAL_DB_NAME, 1, {
   upgrade(database) {
-    if (!database.objectStoreNames.contains(LOCAL_STORE_NAME)) database.createObjectStore(LOCAL_STORE_NAME, { keyPath: 'id' });
+    if (!database.objectStoreNames.contains(LOCAL_STORE_NAME)) {
+      database.createObjectStore(LOCAL_STORE_NAME, { keyPath: 'id' });
+    }
   },
 });
 
 export function normalizeItem(rawItem: any): InspectionItem {
-  if (!rawItem) {
-    return createSeededItem('Component');
-  }
+  if (!rawItem) return createSeededItem('Component');
 
-  // If already structured
   if (rawItem.conditionCategory && rawItem.cleanlinessCategory) {
     const operational = isOperationalItem(rawItem.name || rawItem.component || '');
     return {
@@ -131,12 +138,10 @@ export function normalizeItem(rawItem: any): InspectionItem {
     };
   }
 
-  // Legacy normalization mapping (from old boolean-only objects)
   const operational = isOperationalItem(rawItem.name || rawItem.component || '');
   const isUndamaged = rawItem.isUndamaged !== false;
   const isClean = rawItem.isClean !== false;
 
-  // Crucial: legacy isWorking: true does NOT mean operation_confirmed! It means untested unless explicit test recorded.
   let workingStatus: ComponentWorkingStatus = operational ? 'untested' : 'not_applicable';
   let testStatus: ComponentTestStatus = operational ? 'untested' : 'not_applicable';
 
@@ -157,7 +162,9 @@ export function normalizeItem(rawItem: any): InspectionItem {
     cleanlinessCategory: isClean ? 'clean' : 'requires_cleaning',
     workingStatus,
     testStatus,
-    defects: !isUndamaged && commentText ? [commentText] : (Array.isArray(rawItem.defects) ? rawItem.defects : []),
+    defects: !isUndamaged && commentText
+      ? [commentText]
+      : (Array.isArray(rawItem.defects) ? rawItem.defects : []),
     maintenanceRequired: Boolean(rawItem.maintenanceRequired || !isUndamaged || workingStatus === 'not_working'),
     comment: commentText,
     photoReferences: Array.isArray(rawItem.photoReferences) ? rawItem.photoReferences : [],
@@ -209,7 +216,9 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
   return {
     report: metadata,
     areas: (report.rooms || []).map((room, areaIndex) => {
-      const references = (room.photos || []).map(photoReference).filter((value): value is NonNullable<typeof value> => Boolean(value));
+      const references = (room.photos || [])
+        .map(photoReference)
+        .filter((value): value is NonNullable<typeof value> => Boolean(value));
       return {
         id: room.id,
         name: room.name,
@@ -235,7 +244,13 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
             commentary: norm.comment || '',
             photoReferences: norm.photoReferences || [],
             aiConfidence: norm.aiConfidence,
-            reviewStatus: norm.reviewStatus || (room.status === 'complete' ? 'reviewer_approved' : room.status === 'analyzed' ? 'ai_generated' : 'draft'),
+            reviewStatus: norm.reviewStatus || (
+              room.status === 'complete'
+                ? 'reviewer_approved'
+                : room.status === 'analyzed'
+                  ? 'ai_generated'
+                  : 'draft'
+            ),
             comparisonStatus: norm.comparisonStatus || 'not_compared',
           };
         }),
@@ -300,16 +315,25 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
 async function fromAggregate(aggregate: ReportAggregatePayload): Promise<ReportData> {
   const rooms = await Promise.all(aggregate.areas.map(async (area): Promise<Room> => {
     const references = new Map<string, ReportPhotoReference>();
+
+    // Area evidence is authoritative for the gallery, including overview and unassigned photos.
+    for (const reference of area.photoReferences || []) {
+      references.set(reference.photoId, reference);
+    }
+    // Component references are merged for backwards compatibility with older aggregates.
     for (const component of area.components) {
-      if (Array.isArray(component.photoReferences)) {
-        for (const reference of component.photoReferences) references.set(reference.photoId, reference);
+      for (const reference of component.photoReferences || []) {
+        if (!references.has(reference.photoId)) references.set(reference.photoId, reference);
       }
     }
+
     const photos = await Promise.all([...references.values()].map(resolvedPhoto));
     return {
       id: area.id,
       name: area.name,
-      status: area.components.every((component) => component.reviewStatus === 'reviewer_approved') ? 'complete' : 'draft',
+      status: area.components.every((component) => component.reviewStatus === 'reviewer_approved')
+        ? 'complete'
+        : 'draft',
       items: area.components.map((component) => normalizeItem({
         id: component.id,
         name: component.component,
@@ -346,10 +370,11 @@ export const saveReportToDB = async (report: ReportData): Promise<ReportData> =>
     return prepared;
   }
   try {
-    const stored = await apiRequest<ReportAggregatePayload>(report.agencyId, `/api/v1/reports/${report.id}/aggregate`, {
-      method: 'PUT',
-      body: toAggregate(prepared),
-    });
+    const stored = await apiRequest<ReportAggregatePayload>(
+      report.agencyId,
+      `/api/v1/reports/${report.id}/aggregate`,
+      { method: 'PUT', body: toAggregate(prepared) },
+    );
     return fromAggregate(stored);
   } catch (err) {
     console.warn('Cloud API save failed, saving to local IndexedDB:', err);
@@ -390,7 +415,9 @@ export const loadReportFromDB = async (id: string): Promise<ReportData | undefin
     return normalizeReport(localReport);
   }
   try {
-    const report = await fromAggregate(await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`));
+    const report = await fromAggregate(
+      await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`),
+    );
     return normalizeReport(report);
   } catch (error) {
     if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
@@ -406,7 +433,10 @@ export const getAllSavedReports = async (): Promise<ReportData[]> => {
     reports = await (await initLocalDB()).getAll(LOCAL_STORE_NAME);
   } else {
     try {
-      const aggregateReports = await apiRequest<Array<ReportAggregatePayload['report']>>(undefined, '/api/v1/reports');
+      const aggregateReports = await apiRequest<Array<ReportAggregatePayload['report']>>(
+        undefined,
+        '/api/v1/reports',
+      );
       reports = aggregateReports.map((metadata) => reportMetadata(metadata));
     } catch (err) {
       console.warn('Cloud API getAllSavedReports failed, fetching from local IndexedDB:', err);
@@ -423,10 +453,18 @@ export const deleteReportFromDB = async (id: string): Promise<void> => {
   }
   try {
     const existing = await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`);
-    await apiRequest<Record<string, unknown>>(String(existing.report.agencyId), `/api/v1/reports/${id}/transitions`, {
-      method: 'POST',
-      body: { status: 'cancelled', expectedVersion: existing.report.version ?? 1, reason: 'draft_deleted_by_operator' },
-    });
+    await apiRequest<Record<string, unknown>>(
+      String(existing.report.agencyId),
+      `/api/v1/reports/${id}/transitions`,
+      {
+        method: 'POST',
+        body: {
+          status: 'cancelled',
+          expectedVersion: existing.report.version ?? 1,
+          reason: 'draft_deleted_by_operator',
+        },
+      },
+    );
   } catch (err) {
     console.warn('Cloud API delete failed, deleting from local IndexedDB:', err);
     await (await initLocalDB()).delete(LOCAL_STORE_NAME, id);
