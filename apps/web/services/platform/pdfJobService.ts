@@ -23,8 +23,11 @@ export interface PdfJobRecord {
 
 export async function queueFinalPdf(report: ReportData): Promise<PdfJobRecord> {
   if (!report.agencyId) throw new Error('Report agency is required before generating a final PDF.');
+  if (report.lifecycleStatus !== 'finalisation_ready') {
+    throw new Error('The report must be finalisation ready before its audited final PDF can be generated.');
+  }
   if (!report.currentVersionId) {
-    throw new Error('Approve the report to create an immutable report version before generating the final PDF.');
+    throw new Error('An immutable approved report version is required before generating the final PDF.');
   }
 
   return apiRequest<PdfJobRecord>(report.agencyId, '/api/v1/pdf-jobs', {
