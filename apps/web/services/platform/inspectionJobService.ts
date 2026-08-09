@@ -90,7 +90,7 @@ async function transitionNewJobToRequestedStatus(
 ): Promise<InspectionJob> {
   if (requestedStatus === 'draft') return job;
 
-  let current = await transitionInspectionJobApi(job, 'booked');
+  const current = await transitionInspectionJobApi(job, 'booked');
   if (requestedStatus === 'booked') return current;
 
   if (requestedStatus === 'assigned') {
@@ -126,16 +126,13 @@ export const createInspectionJob = async (input: CreateInspectionJobInput): Prom
   const requestedStatus = input.status || 'draft';
 
   if (cloudMode()) {
-    try {
-      const { status: _ignoredStatus, ...creationInput } = input;
-      const created = await apiRequest<InspectionJob>(input.agencyId, '/api/v1/inspection-jobs', {
-        method: 'POST',
-        body: { ...creationInput, id: generateId() },
-      });
-      return transitionNewJobToRequestedStatus(created as VersionedInspectionJob, requestedStatus);
-    } catch (err) {
-      console.warn('API createInspectionJob failed, storing locally:', err);
-    }
+    const creationInput = { ...input };
+    delete creationInput.status;
+    const created = await apiRequest<InspectionJob>(input.agencyId, '/api/v1/inspection-jobs', {
+      method: 'POST',
+      body: { ...creationInput, id: generateId() },
+    });
+    return transitionNewJobToRequestedStatus(created as VersionedInspectionJob, requestedStatus);
   }
 
   const timestamp = new Date().toISOString();
