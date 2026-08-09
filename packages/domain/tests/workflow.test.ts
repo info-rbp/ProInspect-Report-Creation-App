@@ -219,6 +219,26 @@ describe('authoritative workflow transitions', () => {
     expect(event.to).toBe('approved_for_issue');
   });
 
+  it('reopens an approved report through changes requested before editing', () => {
+    const event = transitionReport({
+      entityId: 'report-approved',
+      current: 'approved_for_issue',
+      requested: 'changes_requested',
+      currentVersion: 10,
+      expectedVersion: 10,
+      actorId: 'reviewer-1',
+      actorRole: 'reviewer',
+      correlationId: 'correlation-changes',
+      context: complete,
+      reason: 'Correct the Entry wall commentary before issue.',
+      occurredAt: '2026-08-09T13:32:00.000Z',
+    });
+
+    expect(event.from).toBe('approved_for_issue');
+    expect(event.to).toBe('changes_requested');
+    expect(event.reason).toBe('Correct the Entry wall commentary before issue.');
+  });
+
   it('still blocks reviewer approval when analyst sign-off is missing', () => {
     const context = { ...complete, analystApproved: false, reviewerApproved: false };
     expect(missingInspectionTransitionGates('reviewer_approved', context)).toEqual(['analystApproved']);
