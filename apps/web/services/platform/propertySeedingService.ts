@@ -65,11 +65,16 @@ function resolveCanonicalArea(roomType?: RoomType | string, roomName = ''): Temp
   const lowerType = (roomType || '').toLowerCase();
   const lowerName = roomName.toLowerCase();
 
+  if (lowerName.includes('exterior front')) return findAreaById('exterior-front');
+  if (lowerName.includes('exterior back') || lowerName.includes('rear exterior')) return findAreaById('exterior-back');
+  if (lowerName.includes('security') || lowerType === 'security') return findAreaById('security-safety');
+  if (lowerName.includes('general external')) return findAreaById('general-external-items');
+  if (lowerName.includes('lounge / dining') || lowerName.includes('living & dining')) return findAreaById('lounge-dining-room');
   if (lowerType === 'kitchen' || lowerName.includes('kitchen')) return findAreaById('kitchen');
   if (lowerName.includes('ensuite')) return findAreaById('ensuite');
   if (lowerType === 'bathroom' || lowerName.includes('bathroom')) return findAreaById('bathroom');
   if (lowerName.includes('toilet') || lowerName.includes('wc') || lowerName.includes('powder')) return findAreaById('toilet-wc');
-  if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('master bed')) return findAreaById('bedroom');
+  if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('master bed') || lowerName.includes('main bedroom')) return findAreaById('bedroom');
   if (lowerName.includes('study')) return findAreaById('study');
   if (lowerName.includes('activity')) return findAreaById('activity-room');
   if (lowerType === 'laundry' || lowerName.includes('laundry')) return findAreaById('laundry');
@@ -77,10 +82,9 @@ function resolveCanonicalArea(roomType?: RoomType | string, roomName = ''): Temp
   if (lowerName.includes('entry')) return findAreaById('entry');
   if (lowerName.includes('hallway') || lowerName.includes('passage')) return findAreaById('passage-hallway');
   if (lowerName.includes('linen')) return findAreaById('linen-press');
-  if (lowerType === 'dining' || lowerName.includes('dining')) return findAreaById('dining-room') || findAreaById('lounge-dining-room');
-  if (lowerType === 'living' || lowerName.includes('living') || lowerName.includes('lounge') || lowerName.includes('family')) {
-    return findAreaById('lounge-room') || findAreaById('family-room') || findAreaById('lounge-dining-room');
-  }
+  if (lowerType === 'dining' || lowerName.includes('dining')) return findAreaById('dining-room');
+  if (lowerName.includes('family')) return findAreaById('family-room');
+  if (lowerType === 'living' || lowerName.includes('living') || lowerName.includes('lounge')) return findAreaById('lounge-room');
   if (lowerName.includes('shed') || lowerName.includes('storage')) return findAreaById('garden-shed-external-storage');
   if (lowerType === 'outdoor' || lowerName.includes('outdoor') || lowerName.includes('courtyard') || lowerName.includes('balcony') || lowerName.includes('patio')) {
     return findAreaById('general-external-items');
@@ -95,7 +99,6 @@ export const getDefaultItemsForRoomType = (roomType?: RoomType | string, roomNam
     return canonicalArea.components.map((component) => createSeededItem(component.name, component.id));
   }
 
-  // Unknown/custom areas remain supported, but use deterministic component identifiers.
   return [
     createSeededItem('Doors / Doorway Frames', 'doors-doorway-frames'),
     createSeededItem('Ceiling / Cornices', 'ceiling-cornices'),
@@ -119,7 +122,6 @@ function room(id: string, name: string, roomType?: RoomType | string, notes = ''
 }
 
 export const seedRoomsFromProperty = (property: PropertyRecord): Room[] => {
-  // Preserve configured property area identities across inspections whenever available.
   if (property.roomsConfig && property.roomsConfig.length > 0) {
     return property.roomsConfig.map((rm, index) => {
       const configuredId = rm.id?.trim();
