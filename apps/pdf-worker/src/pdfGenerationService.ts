@@ -394,6 +394,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
       }
 
       const artifact = {
+        finalPdfReportVersionId: approved.renderInput.reportVersionId,
         finalPdfObjectPath: render.outputObjectPath,
         finalPdfSha256: pdfSha256,
         finalPdfGeneration: pdfStored.generation,
