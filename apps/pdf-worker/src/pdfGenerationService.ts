@@ -166,7 +166,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     const evidence = evidenceSnapshot.data() as Record<string, unknown>;
     const objectPath = text(evidence.objectPath);
     const generation = text(evidence.generation);
-    const evidenceHash = text(evidence.sha256);
+    const evidenceHash = text(evidence.sha256).toLowerCase();
     const contentType = text(evidence.contentType);
     if (!objectPath || !generation || !/^[a-f0-9]{64}$/i.test(evidenceHash)) {
       throw new PdfWorkerError(
@@ -181,22 +181,31 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
       photoId,
       objectPath,
       generation,
-      sha256: evidenceHash.toLowerCase(),
+      sha256: evidenceHash,
       ...(contentType ? { contentType } : {}),
     });
 
     if (contentType === 'image/jpeg' || contentType === 'image/png') {
       try {
-        const [bytes] = await uploadBucket.file(objectPath).download({
-          validation: false,
-        });
+        const evidenceFile = uploadBucket.file(objectPath, { generation });
+        const [bytes] = await evidenceFile.download({ validation: false });
+        const actualHash = sha256(new Uint8Array(bytes));
+        if (actualHash !== evidenceHash) {
+          throw new PdfWorkerError(
+            'EVIDENCE_HASH_MISMATCH',
+            `Evidence image ${photoId} does not match its recorded SHA-256.`,
+            false,
+            { photoId, generation, expectedSha256: evidenceHash, actualSha256: actualHash },
+          );
+        }
         imageBytes.set(photoId, new Uint8Array(bytes));
       } catch (error) {
+        if (error instanceof PdfWorkerError) throw error;
         throw new PdfWorkerError(
           'EVIDENCE_DOWNLOAD_FAILED',
           `Evidence image ${photoId} could not be loaded for PDF rendering.`,
           true,
-          { photoId, cause: error instanceof Error ? error.message : String(error) },
+          { photoId, generation, cause: error instanceof Error ? error.message : String(error) },
         );
       }
     }
