@@ -292,13 +292,13 @@ export async function routeApiRequest(
       const record = await dependencies.repository.get(policy.collection, agencyId, id);
       if (!record) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
       const principal = await authenticateAndAuthorise(req, dependencies, policy.readCapability, policy.target({ ...record, agencyId }, id), correlationId);
-      return { status: 200, body: { data: record, meta: { correlationId, actor: principal.uid } };
+      return { status: 200, body: { data: record, meta: { correlationId, actor: principal.uid } } };
     }
     const principal = await authenticateAndAuthorise(req, dependencies, policy.readCapability, policy.target({ agencyId }), correlationId);
     const url = new URL(req.url ?? '/', 'http://localhost');
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 50), 1), 100);
     const page = await dependencies.repository.list(policy.collection, agencyId, limit, url.searchParams.get('cursor') ?? undefined);
-    return { status: 200, body: { data: page.items, meta: { correlationId, actor: principal.uid, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) } };
+    return { status: 200, body: { data: page.items, meta: { correlationId, actor: principal.uid, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) } } };
   }
 
   const writeCapability = policy.writeCapability;
@@ -406,7 +406,7 @@ export async function routeApiRequest(
           ...(transition.assignedUserId ? { assignedUserId: transition.assignedUserId } : {}),
         });
         await appendMaterialAudit(dependencies, principal, writeCapability, 'reports.transition', correlationId, stored);
-        return { status: 200, body: { data: stored, meta: { correlationId } };
+        return { status: 200, body: { data: stored, meta: { correlationId } } };
       });
     }
   }
@@ -444,7 +444,7 @@ export async function routeApiRequest(
       const responseId = randomUUID();
       const stored = await dependencies.repository.create(policy.collection, agencyId, responseId, { ...input, status: 'submitted', submittedAt: new Date().toISOString() }, principal.uid);
       await appendMaterialAudit(dependencies, principal, writeCapability, 'tenant-responses.submit', correlationId, stored);
-      return { status: 201, body: { data: stored, meta: { correlationId } };
+      return { status: 201, body: { data: stored, meta: { correlationId } } };
     });
   }
 
@@ -457,7 +457,7 @@ export async function routeApiRequest(
       if (resourceName === 'reports') initial.lifecycleStatus = 'draft';
       const stored = await dependencies.repository.create(policy.collection, agencyId, recordId, initial, principal.uid);
       await appendMaterialAudit(dependencies, principal, writeCapability, `${resourceName}.create`, correlationId, stored);
-      return { status: 201, body: { data: stored, meta: { correlationId } };
+      return { status: 201, body: { data: stored, meta: { correlationId } } };
     });
   }
 
