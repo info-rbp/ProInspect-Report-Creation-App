@@ -130,7 +130,7 @@ export function useReportAnalysis(agencyId?: string) {
               visibility: photoReferences.length > 0 ? 'visible' : 'not_visible',
               condition: conditionFor(match.conditionCategory),
               cleanliness: match.cleanlinessCategory,
-              ...(match.cleanlinessCategory === 'requires_cleaning' || match.cleanlinessCategory === 'heavy_soiling'
+              ...(match.cleanlinessCategory === 'requires_cleaning' || match.cleanlinessCategory === 'stained'
                 ? { cleanlinessIssue: match.cleanlinessCategory.replaceAll('_', ' ') }
                 : {}),
               ...(match.defects?.length ? { conditionIssue: match.defects.join('; ') } : {}),
