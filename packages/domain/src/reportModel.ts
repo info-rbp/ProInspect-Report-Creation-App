@@ -117,6 +117,7 @@ export interface ReportMetadataRecord {
   currentVersionId?: string;
   templateId?: string;
   templateVersion?: number;
+  finalPdfReportVersionId?: string;
   finalPdfObjectPath?: string;
   finalPdfSha256?: string;
   finalPdfGeneration?: string;
@@ -151,3 +152,19 @@ export interface ReportAggregate {
 }
 
 export const IMMUTABLE_REPORT_STATUSES = new Set<ReportLifecycleStatus>(['finalised', 'archived']);
+
+/**
+ * Once review approval creates an immutable report version, inspection content is
+ * locked. Corrections must travel through an explicit changes-requested workflow
+ * and create a superseding immutable version rather than mutating issued evidence.
+ */
+export const REPORT_CONTENT_LOCKED_STATUSES = new Set<ReportLifecycleStatus>([
+  'approved_for_issue',
+  'issued_to_tenant',
+  'tenant_response_in_progress',
+  'tenant_submitted',
+  'agent_response_required',
+  'finalisation_ready',
+  'finalised',
+  'archived',
+]);
