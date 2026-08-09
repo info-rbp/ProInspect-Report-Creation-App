@@ -115,6 +115,14 @@ export interface ReportMetadataRecord {
   lifecycleStatus: ReportLifecycleStatus;
   assignedUserId?: string;
   currentVersionId?: string;
+  templateId?: string;
+  templateVersion?: number;
+  finalPdfObjectPath?: string;
+  finalPdfSha256?: string;
+  finalPdfGeneration?: string;
+  renderManifestObjectPath?: string;
+  renderManifestSha256?: string;
+  pdfGeneratedAt?: string;
   areaCount: number;
   componentCount: number;
   finalisedAt?: string;
