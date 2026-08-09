@@ -99,7 +99,7 @@ async function commentaryFromStructuredAnalysis(input: {
     visibility: photoReferences.length > 0 ? 'visible' : 'not_visible',
     condition: conditionState(analysis.conditionCategory),
     cleanliness: analysis.cleanlinessCategory,
-    ...(analysis.cleanlinessCategory === 'requires_cleaning' || analysis.cleanlinessCategory === 'heavy_soiling'
+    ...(analysis.cleanlinessCategory === 'requires_cleaning' || analysis.cleanlinessCategory === 'stained'
       ? { cleanlinessIssue: humanise(analysis.cleanlinessCategory) }
       : {}),
     ...(analysis.defects?.length ? { conditionIssue: analysis.defects.join('; ') } : {}),
