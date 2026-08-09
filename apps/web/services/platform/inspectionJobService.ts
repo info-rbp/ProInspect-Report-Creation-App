@@ -84,22 +84,62 @@ async function transitionInspectionJobApi(
   });
 }
 
-export const createInspectionJob = async (input: CreateInspectionJobInput): Promise<InspectionJob> => {
-  if (cloudMode()) {
-    try {
-      return await apiRequest<InspectionJob>(input.agencyId, '/api/v1/inspection-jobs', {
-        method: 'POST',
-        body: { ...input, id: generateId(), status: input.status || 'draft' },
-      });
-    } catch (err) {
-      console.warn('API createInspectionJob failed, storing locally:', err);
+async function transitionNewJobToRequestedStatus(
+  job: VersionedInspectionJob,
+  requestedStatus: InspectionJobStatus,
+): Promise<InspectionJob> {
+  if (requestedStatus === 'draft') return job;
+
+  const current = await transitionInspectionJobApi(job, 'booked');
+  if (requestedStatus === 'booked') return current;
+
+  if (requestedStatus === 'assigned') {
+    if (!current.assignedInspectorId) {
+      throw new Error('An inspector must be assigned before creating an inspection job in the assigned state.');
     }
+    return transitionInspectionJobApi(current as VersionedInspectionJob, 'assigned');
   }
+
+  throw new Error('New inspection jobs may only be created as draft, booked or assigned.');
+}
+
+async function transitionJobToRequestedStatus(
+  job: VersionedInspectionJob,
+  requestedStatus: InspectionJobStatus,
+): Promise<InspectionJob> {
+  if (job.status === requestedStatus) return job;
+
+  // Existing UI flows may start a booked inspection immediately after linking its report.
+  // Traverse the authoritative intermediate state rather than bypassing the state machine.
+  if (job.status === 'booked' && requestedStatus === 'inspection_started') {
+    if (!job.assignedInspectorId) {
+      throw new Error('Assign an inspector before starting this inspection.');
+    }
+    const assigned = await transitionInspectionJobApi(job, 'assigned');
+    return transitionInspectionJobApi(assigned as VersionedInspectionJob, 'inspection_started');
+  }
+
+  return transitionInspectionJobApi(job, requestedStatus);
+}
+
+export const createInspectionJob = async (input: CreateInspectionJobInput): Promise<InspectionJob> => {
+  const requestedStatus = input.status || 'draft';
+
+  if (cloudMode()) {
+    const creationInput = { ...input };
+    delete creationInput.status;
+    const created = await apiRequest<InspectionJob>(input.agencyId, '/api/v1/inspection-jobs', {
+      method: 'POST',
+      body: { ...creationInput, id: generateId() },
+    });
+    return transitionNewJobToRequestedStatus(created as VersionedInspectionJob, requestedStatus);
+  }
+
   const timestamp = new Date().toISOString();
   const inspectionJob: InspectionJob = {
     ...input,
     id: generateId(),
-    status: input.status || 'draft',
+    status: requestedStatus,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -157,7 +197,7 @@ export const updateInspectionJob = async (
     }
 
     if (requestedStatus && requestedStatus !== current.status) {
-      return transitionInspectionJobApi(current as VersionedInspectionJob, requestedStatus);
+      return transitionJobToRequestedStatus(current as VersionedInspectionJob, requestedStatus);
     }
 
     return current;
@@ -176,7 +216,7 @@ export const updateInspectionJob = async (
 
 export const assignInspector = async (inspectionJobId: string, assignedInspectorId: string): Promise<InspectionJob> => {
   const updated = await updateInspectionJob(inspectionJobId, { assignedInspectorId });
-  if (updated.status === 'booked') return updateInspectionJobStatus(updated.id, 'assigned');
+  if (updated.status === 'booked') return transitionJobToRequestedStatus(updated as VersionedInspectionJob, 'assigned');
   return updated;
 };
 
@@ -245,7 +285,8 @@ export const updateInspectionJobStatus = async (
   if (!existing) throw new Error('Inspection job not found.');
 
   if (cloudMode()) {
-    return transitionInspectionJobApi(existing as VersionedInspectionJob, status, reason);
+    if (reason) return transitionInspectionJobApi(existing as VersionedInspectionJob, status, reason);
+    return transitionJobToRequestedStatus(existing as VersionedInspectionJob, status);
   }
 
   const updatedInspectionJob: InspectionJob = {
@@ -262,11 +303,18 @@ export const deleteInspectionJob = async (inspectionJobId: string): Promise<void
   if (!existing) return;
   if (cloudMode()) {
     try {
-      await apiRequest<void>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}`, {
-        method: 'DELETE',
+      await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/transitions`, {
+        method: 'POST',
+        body: {
+          status: 'cancelled',
+          expectedVersion: (existing as VersionedInspectionJob).version ?? 1,
+          reason: 'inspection_job_deleted_by_operator',
+        },
       });
+      return;
     } catch (err) {
-      console.warn('API deleteInspectionJob failed, deleting locally:', err);
+      console.warn('API cancellation failed; preserving the cloud inspection job:', err);
+      throw err;
     }
   }
   await localDelete('inspectionJobs', inspectionJobId);

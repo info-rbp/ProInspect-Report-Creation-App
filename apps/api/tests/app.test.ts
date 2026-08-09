@@ -183,6 +183,58 @@ describe('Cloud Run API', () => {
     expect(await response.json()).toMatchObject({ data: { status: 'inspection_started', version: 2 } });
   });
 
+  it('forces new inspection jobs to start in draft even when the client supplies another status', async () => {
+    const response = await request(dependencies(), '/api/v1/inspection-jobs', {
+      method: 'POST',
+      headers: { ...headers, 'idempotency-key': 'create-job-state-1' },
+      body: JSON.stringify({ id: 'job-created', propertyId: 'property-1', reportType: 'Property Condition Report', status: 'booked' }),
+    });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ data: { id: 'job-created', status: 'draft' } });
+  });
+
+  it('rejects lifecycle status changes through generic inspection job updates', async () => {
+    const repository = new MemoryRepository();
+    await repository.create('inspectionJobs', 'agency-a', 'job-protected', { status: 'booked', propertyId: 'property-1', reportType: 'Property Condition Report' }, 'admin-1');
+    const response = await request(dependencies(repository), '/api/v1/inspection-jobs/job-protected', {
+      method: 'PATCH',
+      headers: { ...headers, 'idempotency-key': 'protected-status-1' },
+      body: JSON.stringify({ status: 'inspection_started', expectedVersion: 1 }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'WORKFLOW_FIELD_PROTECTED' } });
+  });
+
+  it('uses target-specific gates when reporting available workflow actions', async () => {
+    const repository = new MemoryRepository();
+    const reports = new MemoryReportStore();
+    reports.aggregate = {
+      ...aggregate,
+      report: { ...aggregate.report, lifecycleStatus: 'analysis_complete', version: 4 },
+    };
+    await repository.create('inspectionJobs', 'agency-a', 'job-review', {
+      status: 'analysis_complete',
+      reportId: 'report-1',
+      analysisStatus: 'completed',
+      analystApproved: false,
+      tenantResponseRequired: false,
+    }, 'admin-1');
+
+    const response = await request(dependencies(repository, reports), '/api/v1/inspection-jobs/job-review/workflow', {
+      headers: { authorization: 'Bearer token', 'x-agency-id': 'agency-a' },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      data: {
+        availableActions: Array<{ targetStatus: string }>;
+        blockedActions: Array<{ targetStatus: string; missingGates: string[] }>;
+      };
+    };
+    expect(body.data.availableActions.map((action) => action.targetStatus)).toContain('analyst_review_in_progress');
+    const reviewAction = body.data.blockedActions.find((action) => action.targetStatus === 'review_required');
+    expect(reviewAction).toBeUndefined();
+  });
+
   it('returns the same error envelope for unknown routes', async () => {
     const response = await request(dependencies(), '/api/v1/not-real', { headers: { authorization: 'Bearer token', 'x-agency-id': 'agency-a' } });
     expect(response.status).toBe(404);

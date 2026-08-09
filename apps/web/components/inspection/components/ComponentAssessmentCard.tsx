@@ -23,7 +23,6 @@ interface ComponentAssessmentCardProps {
 
 export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = ({
   item,
-  areaName,
   areaPhotos,
   onChange,
   onRemove,
