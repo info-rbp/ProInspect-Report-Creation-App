@@ -9,6 +9,7 @@ import {
 } from 'firebase-admin/firestore';
 import {
   IMMUTABLE_REPORT_STATUSES,
+  REPORT_CONTENT_LOCKED_STATUSES,
   calculateWorkflowGateContext,
   transitionReport,
   WorkflowError,
@@ -263,6 +264,14 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
         : undefined;
       if (existing && IMMUTABLE_REPORT_STATUSES.has(existing.lifecycleStatus)) {
         throw error('REPORT_IMMUTABLE', 409, 'Finalised report data cannot be modified.');
+      }
+      if (existing && REPORT_CONTENT_LOCKED_STATUSES.has(existing.lifecycleStatus)) {
+        throw error(
+          'REPORT_CONTENT_LOCKED',
+          409,
+          'Approved or issued report content is locked. Request changes and create a superseding version instead of editing it in place.',
+          { lifecycleStatus: existing.lifecycleStatus, currentVersionId: existing.currentVersionId },
+        );
       }
       if (existing && expectedVersion === undefined) {
         throw error(

@@ -235,6 +235,39 @@ describe('Cloud Run API', () => {
     expect(reviewAction).toBeUndefined();
   });
 
+  it('rejects final PDF jobs before the report reaches finalisation readiness', async () => {
+    const reports = new MemoryReportStore();
+    reports.aggregate = {
+      ...aggregate,
+      report: { ...aggregate.report, currentVersionId: 'version-final', lifecycleStatus: 'approved_for_issue', version: 5 },
+    };
+    const response = await request(dependencies(new MemoryRepository(), reports), '/api/v1/pdf-jobs', {
+      method: 'POST',
+      headers: { ...headers, 'idempotency-key': 'pdf-too-early-1' },
+      body: JSON.stringify({ reportId: 'report-1', reportVersionId: 'version-final', priority: 'high' }),
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: { code: 'REPORT_NOT_FINALISATION_READY' } });
+  });
+
+  it('queues a final PDF only for the current immutable finalisation-ready version', async () => {
+    const repository = new MemoryRepository();
+    const reports = new MemoryReportStore();
+    reports.aggregate = {
+      ...aggregate,
+      report: { ...aggregate.report, currentVersionId: 'version-final', lifecycleStatus: 'finalisation_ready', version: 6 },
+    };
+    const response = await request(dependencies(repository, reports), '/api/v1/pdf-jobs', {
+      method: 'POST',
+      headers: { ...headers, 'idempotency-key': 'pdf-final-ready-1' },
+      body: JSON.stringify({ reportId: 'report-1', reportVersionId: 'version-final', priority: 'high' }),
+    });
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({
+      data: { reportId: 'report-1', reportVersionId: 'version-final', requestedBy: 'admin-1', status: 'queued' },
+    });
+  });
+
   it('returns the same error envelope for unknown routes', async () => {
     const response = await request(dependencies(), '/api/v1/not-real', { headers: { authorization: 'Bearer token', 'x-agency-id': 'agency-a' } });
     expect(response.status).toBe(404);

@@ -200,8 +200,21 @@ export function calculateWorkflowGateContext(
     });
   }
 
+  const report = reportAggregate?.report;
+  const shaPattern = /^[a-f0-9]{64}$/i;
+  const versionBoundPdf = Boolean(
+    report?.currentVersionId &&
+    report.finalPdfReportVersionId === report.currentVersionId &&
+    report.finalPdfObjectPath?.trim() &&
+    report.finalPdfGeneration?.trim() &&
+    report.finalPdfSha256 &&
+    shaPattern.test(report.finalPdfSha256) &&
+    report.renderManifestObjectPath?.trim() &&
+    report.renderManifestSha256 &&
+    shaPattern.test(report.renderManifestSha256),
+  );
   const finalPdfCreated = Boolean(
-    jobRecord?.finalPdfUrl ||
+    versionBoundPdf ||
     reportAggregate?.report?.finalisedAt ||
     (reportStatus && ['finalised', 'archived'].includes(reportStatus)) ||
     (jobStatus && ['finalised', 'archived'].includes(jobStatus)),
@@ -209,8 +222,8 @@ export function calculateWorkflowGateContext(
   if (!finalPdfCreated) {
     blockers.push({
       gate: 'finalPdfCreated',
-      code: 'PDF_NOT_GENERATED',
-      message: 'Final signed PDF report must be generated.',
+      code: 'PDF_NOT_GENERATED_OR_STALE',
+      message: 'A stored final PDF and render manifest must match the current immutable report version.',
     });
   }
 
@@ -272,7 +285,7 @@ const reportTransitions: Record<ReportLifecycleStatus, readonly ReportLifecycleS
   analysis_complete: ['review_required', 'internal_review', 'cancelled'],
   review_required: ['changes_requested', 'approved_for_issue', 'cancelled'],
   changes_requested: ['internal_review', 'analysis_queued', 'cancelled'],
-  approved_for_issue: ['issued_to_tenant', 'cancelled'],
+  approved_for_issue: ['issued_to_tenant', 'changes_requested', 'cancelled'],
   issued_to_tenant: ['tenant_response_in_progress', 'finalisation_ready'],
   tenant_response_in_progress: ['tenant_submitted', 'finalisation_ready'],
   tenant_submitted: ['agent_response_required', 'finalisation_ready'],

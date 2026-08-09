@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { ReportAggregate } from '../src/reportModel.js';
 import {
+  calculateWorkflowGateContext,
   missingInspectionTransitionGates,
   missingReportTransitionGates,
   transitionInspectionJob,
@@ -31,6 +33,41 @@ const reportInput = {
   context: complete,
   occurredAt: '2026-07-20T00:00:00.000Z',
 };
+
+const finalisationAggregate = (overrides: Partial<ReportAggregate['report']> = {}): ReportAggregate => ({
+  report: {
+    id: 'report-final',
+    agencyId: 'agency-a',
+    reportType: 'Property Condition Report',
+    propertyAddress: '1 Test Street',
+    lifecycleStatus: 'finalisation_ready',
+    currentVersionId: 'version-final',
+    ...overrides,
+  },
+  areas: [
+    {
+      id: 'entry',
+      name: 'Entry',
+      sequence: 1,
+      components: [
+        {
+          id: 'front-door',
+          component: 'Front Door',
+          conditionCategory: 'intact',
+          cleanlinessCategory: 'clean',
+          workingStatus: 'not_applicable',
+          testStatus: 'not_applicable',
+          defects: [],
+          maintenanceRequired: false,
+          commentary: 'Front Door - Painted door, intact.',
+          photoReferences: [],
+          reviewStatus: 'reviewer_approved',
+          comparisonStatus: 'not_compared',
+        },
+      ],
+    },
+  ],
+});
 
 describe('authoritative workflow transitions', () => {
   it('accepts an allowed report transition and returns an audit event', () => {
@@ -80,6 +117,50 @@ describe('authoritative workflow transitions', () => {
         context: { ...complete, finalPdfCreated: false },
       }),
     ).toThrow('finalPdfCreated');
+  });
+
+  it('does not treat an arbitrary job finalPdfUrl as a completed final artifact', () => {
+    const evaluation = calculateWorkflowGateContext(finalisationAggregate(), {
+      status: 'finalisation_ready',
+      finalPdfUrl: 'gs://fake-bucket/fake.pdf',
+      tenantResponseRequired: false,
+    });
+    expect(evaluation.context.finalPdfCreated).toBe(false);
+    expect(evaluation.blockers).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PDF_NOT_GENERATED_OR_STALE' })]),
+    );
+  });
+
+  it('accepts a stored PDF only when its provenance matches the current immutable version', () => {
+    const hash = 'a'.repeat(64);
+    const evaluation = calculateWorkflowGateContext(
+      finalisationAggregate({
+        finalPdfReportVersionId: 'version-final',
+        finalPdfObjectPath: 'final-report-assets/reports/report-final/version-final/report.pdf',
+        finalPdfSha256: hash,
+        finalPdfGeneration: '7',
+        renderManifestObjectPath: 'final-report-assets/reports/report-final/version-final/report.manifest.json',
+        renderManifestSha256: hash,
+      }),
+      { status: 'finalisation_ready', tenantResponseRequired: false },
+    );
+    expect(evaluation.context.finalPdfCreated).toBe(true);
+  });
+
+  it('rejects a stored PDF bound to a superseded report version', () => {
+    const hash = 'b'.repeat(64);
+    const evaluation = calculateWorkflowGateContext(
+      finalisationAggregate({
+        finalPdfReportVersionId: 'version-old',
+        finalPdfObjectPath: 'final-report-assets/reports/report-final/version-old/report.pdf',
+        finalPdfSha256: hash,
+        finalPdfGeneration: '2',
+        renderManifestObjectPath: 'final-report-assets/reports/report-final/version-old/report.manifest.json',
+        renderManifestSha256: hash,
+      }),
+      { status: 'finalisation_ready', tenantResponseRequired: false },
+    );
+    expect(evaluation.context.finalPdfCreated).toBe(false);
   });
 
   it('applies the same server-authoritative controls to inspection jobs', () => {
@@ -136,6 +217,26 @@ describe('authoritative workflow transitions', () => {
     });
 
     expect(event.to).toBe('approved_for_issue');
+  });
+
+  it('reopens an approved report through changes requested before editing', () => {
+    const event = transitionReport({
+      entityId: 'report-approved',
+      current: 'approved_for_issue',
+      requested: 'changes_requested',
+      currentVersion: 10,
+      expectedVersion: 10,
+      actorId: 'reviewer-1',
+      actorRole: 'reviewer',
+      correlationId: 'correlation-changes',
+      context: complete,
+      reason: 'Correct the Entry wall commentary before issue.',
+      occurredAt: '2026-08-09T13:32:00.000Z',
+    });
+
+    expect(event.from).toBe('approved_for_issue');
+    expect(event.to).toBe('changes_requested');
+    expect(event.reason).toBe('Correct the Entry wall commentary before issue.');
   });
 
   it('still blocks reviewer approval when analyst sign-off is missing', () => {

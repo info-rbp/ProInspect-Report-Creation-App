@@ -49,6 +49,14 @@ const PROTECTED_WORKFLOW_FIELDS = new Set([
   'issuedAt',
   'archivedAt',
   'reviewStatus',
+  'finalPdfUrl',
+  'finalPdfReportVersionId',
+  'finalPdfObjectPath',
+  'finalPdfSha256',
+  'finalPdfGeneration',
+  'renderManifestObjectPath',
+  'renderManifestSha256',
+  'pdfGeneratedAt',
 ]);
 
 function mapJobStatusToReportStatus(status: InspectionJobStatus): ReportLifecycleStatus | undefined {
@@ -426,9 +434,40 @@ export async function routeApiRequest(
   if (req.method === 'POST' && (resourceName === 'analysis-jobs' || resourceName === 'pdf-jobs' || resourceName === 'notifications')) {
     const input = resourceName === 'notifications' ? validation(resourceWriteSchema.parse(body)) : validation(taskCreationSchema.parse(body));
     const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...input, agencyId }), correlationId);
+
+    let resolvedTaskInput = input as Record<string, unknown>;
+    if (resourceName === 'pdf-jobs') {
+      const report = await dependencies.reports.load(agencyId, input.reportId);
+      if (!report) throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report not found.');
+      if (report.report.lifecycleStatus !== 'finalisation_ready') {
+        throw new ApiError(
+          422,
+          'REPORT_NOT_FINALISATION_READY',
+          'The audited final PDF can only be generated when the report is finalisation ready.',
+        );
+      }
+      const currentVersionId = report.report.currentVersionId?.trim();
+      if (!currentVersionId) {
+        throw new ApiError(
+          422,
+          'REPORT_VERSION_REQUIRED',
+          'An immutable current report version is required before final PDF generation.',
+        );
+      }
+      if (input.reportVersionId && input.reportVersionId !== currentVersionId) {
+        throw new ApiError(
+          409,
+          'REPORT_VERSION_SUPERSEDED',
+          'The requested report version is no longer the current immutable version.',
+          { requestedVersionId: input.reportVersionId, currentVersionId },
+        );
+      }
+      resolvedTaskInput = { ...input, reportVersionId: currentVersionId, requestedBy: principal.uid };
+    }
+
     return idempotent(dependencies, req, agencyId, `${resourceName}.create`, body, async () => {
       const taskId = randomUUID();
-      const data = { ...input, status: 'queued', queuedAt: new Date().toISOString() } as Record<string, unknown>;
+      const data = { ...resolvedTaskInput, status: 'queued', queuedAt: new Date().toISOString() } as Record<string, unknown>;
       const stored = await dependencies.repository.create(policy.collection, agencyId, taskId, data, principal.uid);
       const kind = resourceName === 'analysis-jobs' ? 'analysis' : resourceName === 'pdf-jobs' ? 'pdf' : 'notification';
       await dependencies.tasks.dispatch(kind, agencyId, taskId, data);
