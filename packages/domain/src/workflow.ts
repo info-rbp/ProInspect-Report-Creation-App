@@ -285,7 +285,7 @@ const reportTransitions: Record<ReportLifecycleStatus, readonly ReportLifecycleS
   analysis_complete: ['review_required', 'internal_review', 'cancelled'],
   review_required: ['changes_requested', 'approved_for_issue', 'cancelled'],
   changes_requested: ['internal_review', 'analysis_queued', 'cancelled'],
-  approved_for_issue: ['issued_to_tenant', 'cancelled'],
+  approved_for_issue: ['issued_to_tenant', 'changes_requested', 'cancelled'],
   issued_to_tenant: ['tenant_response_in_progress', 'finalisation_ready'],
   tenant_response_in_progress: ['tenant_submitted', 'finalisation_ready'],
   tenant_submitted: ['agent_response_required', 'finalisation_ready'],
