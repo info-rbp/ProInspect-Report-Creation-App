@@ -57,8 +57,6 @@ const PROTECTED_WORKFLOW_FIELDS = new Set([
   'renderManifestObjectPath',
   'renderManifestSha256',
   'pdfGeneratedAt',
-  'archiveManifestObjectPath',
-  'archiveManifestSha256',
 ]);
 
 function mapJobStatusToReportStatus(status: InspectionJobStatus): ReportLifecycleStatus | undefined {
@@ -134,9 +132,7 @@ function payloadHash(body: Record<string, unknown>): string {
 
 function expectedVersion(body: Record<string, unknown>): number {
   const value = body.expectedVersion;
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-    throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion must be a positive integer.');
-  }
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion must be a positive integer.');
   return value;
 }
 
@@ -203,13 +199,7 @@ async function idempotent(
   body: Record<string, unknown>,
   action: () => Promise<IdempotencyResult>,
 ): Promise<ApiResponse> {
-  const execution = await dependencies.idempotency.execute(
-    agencyId,
-    operation,
-    idempotencyKey(req),
-    payloadHash(body),
-    action,
-  );
+  const execution = await dependencies.idempotency.execute(agencyId, operation, idempotencyKey(req), payloadHash(body), action);
   return {
     status: execution.result.status,
     body: execution.result.body,
@@ -231,9 +221,7 @@ export async function routeApiRequest(
   const parts = routeParts(req.url);
   if (parts[0] !== 'api' || parts[1] !== 'v1') return undefined;
   const resourceName = parts[2];
-  if (!resourceName) {
-    return { status: 200, body: { name: 'Property Condition Report API', version: 'v1', documentation: '/api/v1/openapi.json' } };
-  }
+  if (!resourceName) return { status: 200, body: { name: 'Property Condition Report API', version: 'v1', documentation: '/api/v1/openapi.json' } };
   if (resourceName === 'openapi.json') return undefined;
   const policy = ROUTE_POLICIES[resourceName];
   if (!policy) throw new ApiError(404, 'NOT_FOUND', 'Route not found.');
@@ -252,33 +240,18 @@ export async function routeApiRequest(
 
       const existing = await dependencies.repository.get(policy.collection, agencyId, id);
       if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
-      const principal = await authenticateAndAuthorise(
-        req,
-        dependencies,
-        policy.readCapability,
-        policy.target({ ...existing, agencyId }, id),
-        correlationId,
-      );
+      const principal = await authenticateAndAuthorise(req, dependencies, policy.readCapability, policy.target({ ...existing, agencyId }, id), correlationId);
 
-      const linkedReportId = typeof existing.reportId === 'string'
-        ? existing.reportId
-        : resourceName === 'reports'
-          ? id
-          : undefined;
+      const linkedReportId = typeof existing.reportId === 'string' ? existing.reportId : resourceName === 'reports' ? id : undefined;
       const linkedReport = linkedReportId ? await dependencies.reports.load(agencyId, linkedReportId) : null;
+
       const gateEval = calculateWorkflowGateContext(linkedReport, existing);
       const currentStatus = (resourceName === 'reports' ? existing.lifecycleStatus : existing.status) as string;
       const matrix = resourceName === 'reports' ? REPORT_TRANSITION_MATRIX : INSPECTION_TRANSITION_MATRIX;
       const possibleTargets = (matrix as Record<string, readonly string[]>)[currentStatus] ?? [];
 
       const availableActions: Array<{ action: string; targetStatus: string; label: string; reasonRequired: boolean }> = [];
-      const blockedActions: Array<{
-        action: string;
-        targetStatus: string;
-        label: string;
-        missingGates: string[];
-        blockers: typeof gateEval.blockers;
-      }> = [];
+      const blockedActions: Array<{ action: string; targetStatus: string; label: string; missingGates: string[]; blockers: typeof gateEval.blockers }> = [];
       const reasonRequiredSet = new Set(['changes_requested', 'on_hold', 'cancelled', 'draft']);
 
       for (const targetStatus of possibleTargets) {
@@ -297,7 +270,13 @@ export async function routeApiRequest(
             reasonRequired: reasonRequiredSet.has(targetStatus),
           });
         } else {
-          blockedActions.push({ action: targetStatus, targetStatus, label, missingGates, blockers: targetBlockers });
+          blockedActions.push({
+            action: targetStatus,
+            targetStatus,
+            label,
+            missingGates,
+            blockers: targetBlockers,
+          });
         }
       }
 
@@ -320,38 +299,14 @@ export async function routeApiRequest(
     if (id) {
       const record = await dependencies.repository.get(policy.collection, agencyId, id);
       if (!record) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
-      const principal = await authenticateAndAuthorise(
-        req,
-        dependencies,
-        policy.readCapability,
-        policy.target({ ...record, agencyId }, id),
-        correlationId,
-      );
+      const principal = await authenticateAndAuthorise(req, dependencies, policy.readCapability, policy.target({ ...record, agencyId }, id), correlationId);
       return { status: 200, body: { data: record, meta: { correlationId, actor: principal.uid } } };
     }
-
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      policy.readCapability,
-      policy.target({ agencyId }),
-      correlationId,
-    );
+    const principal = await authenticateAndAuthorise(req, dependencies, policy.readCapability, policy.target({ agencyId }), correlationId);
     const url = new URL(req.url ?? '/', 'http://localhost');
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 50), 1), 100);
-    const page = await dependencies.repository.list(
-      policy.collection,
-      agencyId,
-      limit,
-      url.searchParams.get('cursor') ?? undefined,
-    );
-    return {
-      status: 200,
-      body: {
-        data: page.items,
-        meta: { correlationId, actor: principal.uid, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) },
-      },
-    };
+    const page = await dependencies.repository.list(policy.collection, agencyId, limit, url.searchParams.get('cursor') ?? undefined);
+    return { status: 200, body: { data: page.items, meta: { correlationId, actor: principal.uid, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) } } };
   }
 
   const writeCapability = policy.writeCapability;
@@ -361,19 +316,9 @@ export async function routeApiRequest(
     const transition = validation(workflowTransitionSchema.parse(body));
     const existing = await dependencies.repository.get(policy.collection, agencyId, id);
     if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      writeCapability,
-      policy.target({ ...existing, agencyId }, id),
-      correlationId,
-    );
+    const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...existing, agencyId }, id), correlationId);
 
-    const linkedReportId = typeof existing.reportId === 'string'
-      ? existing.reportId
-      : resourceName === 'reports'
-        ? id
-        : undefined;
+    const linkedReportId = typeof existing.reportId === 'string' ? existing.reportId : resourceName === 'reports' ? id : undefined;
     const linkedReport = linkedReportId ? await dependencies.reports.load(agencyId, linkedReportId) : null;
     const gateEval = calculateWorkflowGateContext(linkedReport, existing);
 
@@ -476,41 +421,19 @@ export async function routeApiRequest(
 
   if (req.method === 'POST' && resourceName === 'uploads') {
     const input = validation(uploadSessionSchema.parse(body));
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      writeCapability,
-      policy.target({ ...input, agencyId }),
-      correlationId,
-    );
+    const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...input, agencyId }), correlationId);
     return idempotent(dependencies, req, agencyId, 'uploads.create', body, async () => {
       const uploadId = randomUUID();
-      const session = await dependencies.uploads.create(
-        agencyId,
-        uploadId,
-        input as unknown as Record<string, unknown>,
-        principal,
-      );
+      const session = await dependencies.uploads.create(agencyId, uploadId, input as unknown as Record<string, unknown>, principal);
       const stored = await dependencies.repository.create(policy.collection, agencyId, uploadId, session, principal.uid);
       await appendMaterialAudit(dependencies, principal, writeCapability, 'uploads.create', correlationId, stored);
       return { status: 201, body: { data: stored, meta: { correlationId } } };
     });
   }
 
-  if (
-    req.method === 'POST' &&
-    (resourceName === 'analysis-jobs' || resourceName === 'pdf-jobs' || resourceName === 'notifications')
-  ) {
-    const input = resourceName === 'notifications'
-      ? validation(resourceWriteSchema.parse(body))
-      : validation(taskCreationSchema.parse(body));
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      writeCapability,
-      policy.target({ ...input, agencyId }),
-      correlationId,
-    );
+  if (req.method === 'POST' && (resourceName === 'analysis-jobs' || resourceName === 'pdf-jobs' || resourceName === 'notifications')) {
+    const input = resourceName === 'notifications' ? validation(resourceWriteSchema.parse(body)) : validation(taskCreationSchema.parse(body));
+    const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...input, agencyId }), correlationId);
 
     let resolvedTaskInput = input as Record<string, unknown>;
     if (resourceName === 'pdf-jobs') {
@@ -544,17 +467,9 @@ export async function routeApiRequest(
 
     return idempotent(dependencies, req, agencyId, `${resourceName}.create`, body, async () => {
       const taskId = randomUUID();
-      const data = {
-        ...resolvedTaskInput,
-        status: 'queued',
-        queuedAt: new Date().toISOString(),
-      } as Record<string, unknown>;
+      const data = { ...resolvedTaskInput, status: 'queued', queuedAt: new Date().toISOString() } as Record<string, unknown>;
       const stored = await dependencies.repository.create(policy.collection, agencyId, taskId, data, principal.uid);
-      const kind = resourceName === 'analysis-jobs'
-        ? 'analysis'
-        : resourceName === 'pdf-jobs'
-          ? 'pdf'
-          : 'notification';
+      const kind = resourceName === 'analysis-jobs' ? 'analysis' : resourceName === 'pdf-jobs' ? 'pdf' : 'notification';
       await dependencies.tasks.dispatch(kind, agencyId, taskId, data);
       await appendMaterialAudit(dependencies, principal, writeCapability, `${resourceName}.create`, correlationId, stored);
       return { status: 202, body: { data: stored, meta: { correlationId } } };
@@ -563,35 +478,17 @@ export async function routeApiRequest(
 
   if (req.method === 'POST' && resourceName === 'tenant-responses') {
     const input = validation(tenantResponseSchema.parse(body));
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      writeCapability,
-      policy.target({ ...input, agencyId }),
-      correlationId,
-    );
+    const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...input, agencyId }), correlationId);
     return idempotent(dependencies, req, agencyId, 'tenant-responses.submit', body, async () => {
       const responseId = randomUUID();
-      const stored = await dependencies.repository.create(
-        policy.collection,
-        agencyId,
-        responseId,
-        { ...input, status: 'submitted', submittedAt: new Date().toISOString() },
-        principal.uid,
-      );
+      const stored = await dependencies.repository.create(policy.collection, agencyId, responseId, { ...input, status: 'submitted', submittedAt: new Date().toISOString() }, principal.uid);
       await appendMaterialAudit(dependencies, principal, writeCapability, 'tenant-responses.submit', correlationId, stored);
       return { status: 201, body: { data: stored, meta: { correlationId } } };
     });
   }
 
   if (req.method === 'POST' && !id) {
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      writeCapability,
-      policy.target(targetBody),
-      correlationId,
-    );
+    const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target(targetBody), correlationId);
     return idempotent(dependencies, req, agencyId, `${resourceName}.create`, body, async () => {
       const recordId = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : randomUUID();
       const initial = writeBody(body, resourceName, 'create');
@@ -606,13 +503,7 @@ export async function routeApiRequest(
   if ((req.method === 'PATCH' || req.method === 'PUT') && id) {
     const existing = await dependencies.repository.get(policy.collection, agencyId, id);
     if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
-    const principal = await authenticateAndAuthorise(
-      req,
-      dependencies,
-      writeCapability,
-      policy.target({ ...existing, ...targetBody }, id),
-      correlationId,
-    );
+    const principal = await authenticateAndAuthorise(req, dependencies, writeCapability, policy.target({ ...existing, ...targetBody }, id), correlationId);
     return idempotent(dependencies, req, agencyId, `${resourceName}:${id}.update`, body, async () => {
       const stored = await dependencies.repository.update(
         policy.collection,
