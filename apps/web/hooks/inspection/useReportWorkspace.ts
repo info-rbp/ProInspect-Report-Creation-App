@@ -1,18 +1,18 @@
 import { useState, useCallback, useMemo } from 'react';
+import type { ComponentComparisonStatus } from '@pcr/domain';
 import { InspectionItem, Photo, ReportData, Room } from '../../types';
 import { generateId } from '../../utils';
 
 export function useReportWorkspace(initialReport: ReportData) {
   const [report, setReport] = useState<ReportData>(initialReport);
-  const [activeAreaId, setActiveAreaId] = useState<string>(() => {
-    return initialReport.rooms && initialReport.rooms.length > 0 ? initialReport.rooms[0].id : '';
-  });
+  const [activeAreaId, setActiveAreaId] = useState<string>(() => (
+    initialReport.rooms && initialReport.rooms.length > 0 ? initialReport.rooms[0].id : ''
+  ));
   const [isDirty, setIsDirty] = useState(false);
 
-  // Sync activeAreaId if rooms change or selected area was deleted
-  const activeArea = useMemo(() => {
-    return report.rooms.find((r) => r.id === activeAreaId) || report.rooms[0] || null;
-  }, [report.rooms, activeAreaId]);
+  const activeArea = useMemo(() => (
+    report.rooms.find((room) => room.id === activeAreaId) || report.rooms[0] || null
+  ), [report.rooms, activeAreaId]);
 
   const updateReport = useCallback((updater: ReportData | ((prev: ReportData) => ReportData)) => {
     setReport((prev) => {
@@ -22,13 +22,11 @@ export function useReportWorkspace(initialReport: ReportData) {
     });
   }, []);
 
-  const selectArea = useCallback((areaId: string) => {
-    setActiveAreaId(areaId);
-  }, []);
+  const selectArea = useCallback((areaId: string) => setActiveAreaId(areaId), []);
 
   const updateArea = useCallback((areaId: string, updatedArea: Room) => {
     setReport((prev) => {
-      const rooms = prev.rooms.map((r) => (r.id === areaId ? updatedArea : r));
+      const rooms = prev.rooms.map((room) => (room.id === areaId ? updatedArea : room));
       setIsDirty(true);
       return { ...prev, rooms };
     });
@@ -47,37 +45,32 @@ export function useReportWorkspace(initialReport: ReportData) {
 
     setReport((prev) => {
       setIsDirty(true);
-      return {
-        ...prev,
-        rooms: [...prev.rooms, newArea],
-      };
+      return { ...prev, rooms: [...prev.rooms, newArea] };
     });
-
     setActiveAreaId(newArea.id);
   }, []);
 
   const removeArea = useCallback((areaId: string) => {
     setReport((prev) => {
-      const remaining = prev.rooms.filter((r) => r.id !== areaId);
+      const remaining = prev.rooms.filter((room) => room.id !== areaId);
       setIsDirty(true);
       return { ...prev, rooms: remaining };
     });
-
-    setActiveAreaId((prev) => {
-      if (prev === areaId) {
-        const remaining = report.rooms.filter((r) => r.id !== areaId);
-        return remaining.length > 0 ? remaining[0].id : '';
-      }
-      return prev;
+    setActiveAreaId((current) => {
+      if (current !== areaId) return current;
+      const remaining = report.rooms.filter((room) => room.id !== areaId);
+      return remaining[0]?.id || '';
     });
   }, [report.rooms]);
 
   const updateComponent = useCallback((areaId: string, componentId: string, patch: Partial<InspectionItem>) => {
     setReport((prev) => {
-      const rooms = prev.rooms.map((r) => {
-        if (r.id !== areaId) return r;
-        const items = r.items.map((item) => (item.id === componentId ? { ...item, ...patch } : item));
-        return { ...r, items };
+      const rooms = prev.rooms.map((room) => {
+        if (room.id !== areaId) return room;
+        return {
+          ...room,
+          items: room.items.map((item) => (item.id === componentId ? { ...item, ...patch } : item)),
+        };
       });
       setIsDirty(true);
       return { ...prev, rooms };
@@ -86,10 +79,9 @@ export function useReportWorkspace(initialReport: ReportData) {
 
   const addComponentToArea = useCallback((areaId: string, newItem: InspectionItem) => {
     setReport((prev) => {
-      const rooms = prev.rooms.map((r) => {
-        if (r.id !== areaId) return r;
-        return { ...r, items: [...r.items, newItem] };
-      });
+      const rooms = prev.rooms.map((room) => (
+        room.id === areaId ? { ...room, items: [...room.items, newItem] } : room
+      ));
       setIsDirty(true);
       return { ...prev, rooms };
     });
@@ -97,10 +89,9 @@ export function useReportWorkspace(initialReport: ReportData) {
 
   const removeComponentFromArea = useCallback((areaId: string, componentId: string) => {
     setReport((prev) => {
-      const rooms = prev.rooms.map((r) => {
-        if (r.id !== areaId) return r;
-        return { ...r, items: r.items.filter((item) => item.id !== componentId) };
-      });
+      const rooms = prev.rooms.map((room) => (
+        room.id === areaId ? { ...room, items: room.items.filter((item) => item.id !== componentId) } : room
+      ));
       setIsDirty(true);
       return { ...prev, rooms };
     });
@@ -108,13 +99,9 @@ export function useReportWorkspace(initialReport: ReportData) {
 
   const addPhotosToArea = useCallback((areaId: string, newPhotos: Photo[]) => {
     setReport((prev) => {
-      const rooms = prev.rooms.map((r) => {
-        if (r.id !== areaId) return r;
-        return {
-          ...r,
-          photos: [...r.photos, ...newPhotos],
-          status: 'photos_uploaded' as const,
-        };
+      const rooms = prev.rooms.map((room) => {
+        if (room.id !== areaId) return room;
+        return { ...room, photos: [...room.photos, ...newPhotos], status: 'photos_uploaded' as const };
       });
       setIsDirty(true);
       return { ...prev, rooms };
@@ -123,24 +110,21 @@ export function useReportWorkspace(initialReport: ReportData) {
 
   const removePhotoFromArea = useCallback((areaId: string, photoId: string) => {
     setReport((prev) => {
-      const rooms = prev.rooms.map((r) => {
-        if (r.id !== areaId) return r;
-        const remainingPhotos = r.photos.filter((p) => p.id !== photoId);
-        // Clean up photo references in components
-        const items = r.items.map((item) => ({
+      const rooms = prev.rooms.map((room) => {
+        if (room.id !== areaId) return room;
+        const remainingPhotos = room.photos.filter((photo) => photo.id !== photoId);
+        const items = room.items.map((item) => ({
           ...item,
-          photoReferences: (item.photoReferences || []).filter((ref) => ref.photoId !== photoId),
+          photoReferences: (item.photoReferences || []).filter((reference) => reference.photoId !== photoId),
         }));
-        return { ...r, photos: remainingPhotos, items };
+        return { ...room, photos: remainingPhotos, items };
       });
       setIsDirty(true);
       return { ...prev, rooms };
     });
   }, []);
 
-  const markSaved = useCallback(() => {
-    setIsDirty(false);
-  }, []);
+  const markSaved = useCallback(() => setIsDirty(false), []);
 
   const applyExitComparison = useCallback(async () => {
     const { compareComponentEntryToExit } = await import('@pcr/domain');
@@ -148,18 +132,31 @@ export function useReportWorkspace(initialReport: ReportData) {
       const rooms = prev.rooms.map((room) => {
         const items = room.items.map((item) => {
           if (!item.baselineComponentData) return item;
-          const compResult = compareComponentEntryToExit(item.baselineComponentData, item);
+          const comparison = compareComponentEntryToExit(
+            item.baselineComponentData,
+            {
+              id: item.id,
+              component: item.name,
+              conditionCategory: item.conditionCategory,
+              cleanlinessCategory: item.cleanlinessCategory,
+              workingStatus: item.workingStatus,
+              testStatus: item.testStatus,
+              defects: item.defects,
+              commentary: item.comment,
+              photoReferences: item.photoReferences,
+            },
+          );
           return {
             ...item,
-            comparisonStatus: compResult.comparisonStatus as any,
-            presenceComparison: compResult.presenceComparison,
-            conditionComparison: compResult.conditionComparison,
-            cleanlinessComparison: compResult.cleanlinessComparison,
-            workingComparison: compResult.workingComparison,
-            comparisonCommentary: compResult.comparisonCommentary,
-            evidencePairs: compResult.evidencePairs,
-            comparisonConfidence: compResult.comparisonConfidence,
-            ...(compResult.comparisonUncertainty ? { comparisonUncertainty: compResult.comparisonUncertainty } : {}),
+            comparisonStatus: comparison.comparisonStatus as ComponentComparisonStatus,
+            presenceComparison: comparison.presenceComparison,
+            conditionComparison: comparison.conditionComparison,
+            cleanlinessComparison: comparison.cleanlinessComparison,
+            workingComparison: comparison.workingComparison,
+            comparisonCommentary: comparison.comparisonCommentary,
+            evidencePairs: comparison.evidencePairs,
+            comparisonConfidence: comparison.comparisonConfidence,
+            ...(comparison.comparisonUncertainty ? { comparisonUncertainty: comparison.comparisonUncertainty } : {}),
           };
         });
         return { ...room, items };
