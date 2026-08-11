@@ -54,7 +54,18 @@ export const ReportBuilder: React.FC = () => {
   };
 
   const workspace = useReportWorkspace(initialReportData);
-  const { report, setReport, updateReport, isDirty, markSaved, activeAreaId, selectArea, updateArea, addArea, removeArea } = workspace;
+  const {
+    report,
+    setReport,
+    updateReport,
+    isDirty,
+    markSaved,
+    activeAreaId,
+    selectArea,
+    updateArea,
+    addArea,
+    removeArea,
+  } = workspace;
 
   const handleUpdateReport = (patch: Partial<ReportData>) => {
     updateReport((prev) => ({ ...prev, ...patch }));
@@ -62,14 +73,10 @@ export const ReportBuilder: React.FC = () => {
 
   const analysis = useReportAnalysis(report.agencyId);
 
-  useUnsavedChangesGuard(
-    isDirty,
-    analysis.analysisState.isAnalyzing || isSaving
-  );
+  useUnsavedChangesGuard(isDirty, analysis.analysisState.isAnalyzing || isSaving);
 
   const isImmutable = IMMUTABLE_REPORT_STATUSES.has(report.lifecycleStatus || 'draft');
 
-  // Load properties catalogue
   useEffect(() => {
     const fetchProperties = async () => {
       try {
@@ -88,7 +95,6 @@ export const ReportBuilder: React.FC = () => {
     fetchProperties();
   }, [report.propertyId, report.propertyAddress]);
 
-  // Load Report from DB if editing existing
   useEffect(() => {
     const hydrateRouteReport = async () => {
       if (!reportId || reportId === 'new') return;
@@ -160,7 +166,6 @@ export const ReportBuilder: React.FC = () => {
 
     const sanitizedReport = sanitizeReportData(report);
     const { errors } = validateReport(sanitizedReport);
-
     if (errors.length > 0) {
       alert(errors.join('\n'));
       return;
@@ -194,9 +199,7 @@ export const ReportBuilder: React.FC = () => {
   };
 
   const handleRunFullReportAnalysis = async () => {
-    await analysis.analyseFullReport(report, (updatedReport) => {
-      setReport(updatedReport);
-    });
+    await analysis.analyseFullReport(report, (updatedReport) => setReport(updatedReport));
   };
 
   if (isHydrating) {
@@ -209,7 +212,6 @@ export const ReportBuilder: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 space-y-6 pb-24">
-      {/* Property & Inspection Metadata Header Panel */}
       <ReportContextPanel
         report={report}
         properties={properties}
@@ -222,14 +224,12 @@ export const ReportBuilder: React.FC = () => {
         disabled={isImmutable}
       />
 
-      {/* Global Bulk AI Analysis Status Panel */}
       <ReportAnalysisPanel
         analysisState={analysis.analysisState}
         onAnalyseFullReport={handleRunFullReportAnalysis}
         disabled={isImmutable}
       />
 
-      {/* Primary Inspection Area Workspace */}
       <InspectionWorkspace
         areas={report.rooms}
         activeAreaId={activeAreaId}
@@ -240,13 +240,12 @@ export const ReportBuilder: React.FC = () => {
         previousReport={report.previousReport}
         previousReportNotes={report.previousReportNotes}
         agencyId={report.agencyId}
+        inspectionType={report.reportType}
         readOnly={isImmutable}
       />
 
-      {/* Report Completeness Summary */}
       <ReportCompletenessPanel report={report} />
 
-      {/* Sticky Bottom Page Action Bar */}
       <ReportActionBar
         onSaveDraft={handleSaveReport}
         onPreview={() => navigate(`/reports/${report.id}/preview`)}
