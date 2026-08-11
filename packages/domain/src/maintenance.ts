@@ -66,6 +66,8 @@ export interface MaintenanceCandidate {
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+  /** Optimistic-lock version assigned by the operational repository. */
+  version?: number;
 }
 
 export const MAINTENANCE_ITEM_STATUSES = [
