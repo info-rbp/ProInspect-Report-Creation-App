@@ -3,6 +3,8 @@ export * from './security.js';
 export * from './reportModel.js';
 export * from './photoEvidence.js';
 export * from './workflow.js';
+export * from './comparisonEngine.js';
+export * from './maintenance.js';
 
 export type InspectionType = 'entry' | 'routine' | 'exit' | 'comparison' | 'maintenance';
 

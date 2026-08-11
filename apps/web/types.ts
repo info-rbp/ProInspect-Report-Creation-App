@@ -5,6 +5,12 @@ import type {
   ComponentTestStatus,
   ComponentReviewStatus,
   ComponentComparisonStatus,
+  PresenceComparison,
+  ConditionComparison,
+  CleanlinessComparison,
+  WorkingComparison,
+  ComponentEvidencePair,
+  BaselineComponentSnapshot,
   ReportPhotoReference,
 } from '@pcr/domain';
 import type { ReportLifecycleStatus } from './types/platform';
@@ -46,6 +52,20 @@ export interface InspectionItem {
   aiConfidence?: number;
   reviewStatus?: ComponentReviewStatus;
   comparisonStatus?: ComponentComparisonStatus;
+  presenceComparison?: PresenceComparison;
+  conditionComparison?: ConditionComparison;
+  cleanlinessComparison?: CleanlinessComparison;
+  workingComparison?: WorkingComparison;
+  comparisonCommentary?: string;
+  baselineComponentId?: string;
+  baselineComponentData?: BaselineComponentSnapshot;
+  baselineEvidencePhotoIds?: string[];
+  currentEvidencePhotoIds?: string[];
+  evidencePairs?: ComponentEvidencePair[];
+  comparisonConfidence?: number;
+  comparisonUncertainty?: string;
+  comparisonReviewStatus?: 'suggested' | 'confirmed' | 'edited' | 'rejected';
+  comparisonMethod?: 'stable_id' | 'explicit_mapping' | 'legacy_mapping' | 'ai_assisted' | 'manual';
   tenantResponseId?: string;
   version?: number;
   createdAt?: string;
@@ -85,6 +105,12 @@ export interface ReportData {
   inspectionDate: string;
   tenantName: string;
   reportType: string;
+  baselineReportId?: string;
+  baselineReportVersionId?: string;
+  baselineInspectionJobId?: string;
+  baselineTemplateId?: string;
+  baselineTemplateVersion?: number;
+  baselineQuality?: 'structured' | 'legacy_unstructured' | 'none';
   heroPhoto?: Photo;
   previousReport?: PreviousReportAttachment;
   previousReportNotes?: string;

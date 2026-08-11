@@ -1,35 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import {
-  getFirestore,
-  type DocumentData,
-  type DocumentReference,
-  type DocumentSnapshot,
-  type Transaction,
-} from 'firebase-admin/firestore';
+import { getFirestore, type DocumentData, type DocumentReference, type DocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import {
   IMMUTABLE_REPORT_STATUSES,
-  REPORT_CONTENT_LOCKED_STATUSES,
-  calculateWorkflowGateContext,
-  transitionReport,
-  WorkflowError,
   type InspectionJobStatus,
   type ReportAggregate,
   type ReportAreaRecord,
   type ReportComponentRecord,
   type ReportLifecycleStatus,
   type ReportMetadataRecord,
-  type UserRole,
 } from '@pcr/domain';
 import type { ReportAggregateStore, ReportTransitionCommand } from './types.js';
 
 const MAX_TRANSACTION_WRITES = 450;
-const VERSIONED_STATUSES = new Set<ReportLifecycleStatus>([
-  'approved_for_issue',
-  'tenant_submitted',
-  'finalised',
-  'archived',
-]);
+const VERSIONED_STATUSES = new Set<ReportLifecycleStatus>(['approved_for_issue', 'tenant_submitted', 'finalised', 'archived']);
 
 function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
@@ -45,12 +29,6 @@ function reportReference(agencyId: string, reportId: string) {
 
 function error(code: string, status: number, message: string, details?: Record<string, unknown>): Error {
   return Object.assign(new Error(message), { code, status, ...(details ? { details } : {}) });
-}
-
-function workflowError(err: WorkflowError): Error {
-  if (err.code === 'VERSION_CONFLICT') return error(err.code, 409, err.message);
-  if (err.code === 'GATE_NOT_MET') return error('WORKFLOW_GATES_NOT_MET', 422, err.message);
-  return error(err.code, 400, err.message);
 }
 
 function jobStatus(status: ReportLifecycleStatus): InspectionJobStatus {
@@ -76,11 +54,7 @@ function jobStatus(status: ReportLifecycleStatus): InspectionJobStatus {
   return mapping[status] ?? 'on_hold';
 }
 
-function metadataFromAggregate(
-  aggregate: ReportAggregate,
-  timestamp: string,
-  version: number,
-): ReportMetadataRecord {
+function metadataFromAggregate(aggregate: ReportAggregate, timestamp: string, version: number): ReportMetadataRecord {
   const componentCount = aggregate.areas.reduce((count, area) => count + area.components.length, 0);
   return {
     ...aggregate.report,
@@ -95,11 +69,7 @@ function metadataFromAggregate(
   };
 }
 
-function areaRecord(
-  aggregate: ReportAggregate,
-  area: ReportAggregate['areas'][number],
-  timestamp: string,
-): ReportAreaRecord {
+function areaRecord(aggregate: ReportAggregate, area: ReportAggregate['areas'][number], timestamp: string): ReportAreaRecord {
   return {
     id: area.id,
     agencyId: aggregate.report.agencyId,
@@ -107,7 +77,6 @@ function areaRecord(
     name: area.name,
     sequence: area.sequence,
     ...(area.overallCommentary ? { overallCommentary: area.overallCommentary } : {}),
-    ...(area.photoReferences?.length ? { photoReferences: structuredClone(area.photoReferences) } : {}),
     componentCount: area.components.length,
     version: 1,
     createdAt: timestamp,
@@ -142,26 +111,16 @@ async function readAggregateInTransaction(
   if (!reportSnapshot.exists) throw error('NOT_FOUND', 404, 'Report not found.');
   const report = reportSnapshot.data() as ReportMetadataRecord;
   const areaSnapshot = await transaction.get(reference.collection('areas'));
-  const areas = areaSnapshot.docs
-    .map((document) => document.data() as ReportAreaRecord)
-    .sort((left, right) => left.sequence - right.sequence);
+  const areas = areaSnapshot.docs.map((document) => document.data() as ReportAreaRecord).sort((left, right) => left.sequence - right.sequence);
   const components: ReportComponentRecord[] = [];
   for (const area of areas) {
-    const componentSnapshot = await transaction.get(
-      reference.collection('areas').doc(area.id).collection('components'),
-    );
-    components.push(
-      ...componentSnapshot.docs.map((document) => document.data() as ReportComponentRecord),
-    );
+    const componentSnapshot = await transaction.get(reference.collection('areas').doc(area.id).collection('components'));
+    components.push(...componentSnapshot.docs.map((document) => document.data() as ReportComponentRecord));
   }
   return { report, areas, components };
 }
 
-function aggregateFromRecords(
-  report: ReportMetadataRecord,
-  areas: ReportAreaRecord[],
-  components: ReportComponentRecord[],
-): ReportAggregate {
+function aggregateFromRecords(report: ReportMetadataRecord, areas: ReportAreaRecord[], components: ReportComponentRecord[]): ReportAggregate {
   return {
     report,
     areas: areas.map((area) => ({
@@ -169,14 +128,11 @@ function aggregateFromRecords(
       name: area.name,
       sequence: area.sequence,
       ...(area.overallCommentary ? { overallCommentary: area.overallCommentary } : {}),
-      ...(area.photoReferences?.length ? { photoReferences: structuredClone(area.photoReferences) } : {}),
       components: components
         .filter((component) => component.areaId === area.id)
         .map((component) => {
           const copy = { ...component } as Record<string, unknown>;
-          for (const field of ['agencyId', 'reportId', 'areaId', 'createdAt', 'updatedAt', 'version']) {
-            delete copy[field];
-          }
+          for (const field of ['agencyId', 'reportId', 'areaId', 'createdAt', 'updatedAt', 'version']) delete copy[field];
           return copy as ReportAggregate['areas'][number]['components'][number];
         }),
     })),
@@ -206,14 +162,9 @@ function setVersionSnapshot(
     createdAt: timestamp,
     createdBy: command.actorId,
   });
-  for (const area of records.areas) {
-    transaction.create(versionRef.collection('areas').doc(area.id), { ...area, versionId });
-  }
+  for (const area of records.areas) transaction.create(versionRef.collection('areas').doc(area.id), { ...area, versionId });
   for (const component of records.components) {
-    transaction.create(
-      versionRef.collection('areas').doc(component.areaId).collection('components').doc(component.id),
-      { ...component, versionId },
-    );
+    transaction.create(versionRef.collection('areas').doc(component.areaId).collection('components').doc(component.id), { ...component, versionId });
   }
   return versionId;
 }
@@ -229,66 +180,25 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
     const areas = areaSnapshot.docs.map((document) => document.data() as ReportAreaRecord);
     const components: ReportComponentRecord[] = [];
     for (const area of areas) {
-      const componentSnapshot = await reference
-        .collection('areas')
-        .doc(area.id)
-        .collection('components')
-        .get();
-      components.push(
-        ...componentSnapshot.docs.map((document) => document.data() as ReportComponentRecord),
-      );
+      const componentSnapshot = await reference.collection('areas').doc(area.id).collection('components').get();
+      components.push(...componentSnapshot.docs.map((document) => document.data() as ReportComponentRecord));
     }
     return aggregateFromRecords(report, areas, components);
   }
 
-  async saveDraft(
-    aggregate: ReportAggregate,
-    expectedVersion: number | undefined,
-    actorId: string,
-  ): Promise<ReportAggregate> {
+  async saveDraft(aggregate: ReportAggregate, expectedVersion: number | undefined, actorId: string): Promise<ReportAggregate> {
     const database = getFirestore(adminApp());
     const reference = reportReference(aggregate.report.agencyId, aggregate.report.id);
-    const requestedWrites =
-      1 + aggregate.areas.length + aggregate.areas.reduce((count, area) => count + area.components.length, 0);
-    if (requestedWrites > MAX_TRANSACTION_WRITES) {
-      throw error('REPORT_TOO_LARGE', 413, 'Report contains too many records for one atomic draft save.', {
-        requestedWrites,
-        maximum: MAX_TRANSACTION_WRITES,
-      });
-    }
+    const requestedWrites = 1 + aggregate.areas.length + aggregate.areas.reduce((count, area) => count + area.components.length, 0);
+    if (requestedWrites > MAX_TRANSACTION_WRITES) throw error('REPORT_TOO_LARGE', 413, 'Report contains too many records for one atomic draft save.', { requestedWrites, maximum: MAX_TRANSACTION_WRITES });
 
     return database.runTransaction(async (transaction) => {
       const existingSnapshot = await transaction.get(reference);
-      const existing = existingSnapshot.exists
-        ? (existingSnapshot.data() as ReportMetadataRecord)
-        : undefined;
-      if (existing && IMMUTABLE_REPORT_STATUSES.has(existing.lifecycleStatus)) {
-        throw error('REPORT_IMMUTABLE', 409, 'Finalised report data cannot be modified.');
-      }
-      if (existing && REPORT_CONTENT_LOCKED_STATUSES.has(existing.lifecycleStatus)) {
-        throw error(
-          'REPORT_CONTENT_LOCKED',
-          409,
-          'Approved or issued report content is locked. Request changes and create a superseding version instead of editing it in place.',
-          { lifecycleStatus: existing.lifecycleStatus, currentVersionId: existing.currentVersionId },
-        );
-      }
-      if (existing && expectedVersion === undefined) {
-        throw error(
-          'EXPECTED_VERSION_REQUIRED',
-          400,
-          'expectedVersion is required when updating a report.',
-        );
-      }
-      if (existing && existing.version !== expectedVersion) {
-        throw error('VERSION_CONFLICT', 409, 'The report has changed. Reload and retry.', {
-          expectedVersion,
-          actualVersion: existing.version,
-        });
-      }
-      if (!existing && expectedVersion !== undefined) {
-        throw error('VERSION_CONFLICT', 409, 'The report does not yet exist.');
-      }
+      const existing = existingSnapshot.exists ? existingSnapshot.data() as ReportMetadataRecord : undefined;
+      if (existing && IMMUTABLE_REPORT_STATUSES.has(existing.lifecycleStatus)) throw error('REPORT_IMMUTABLE', 409, 'Finalised report data cannot be modified.');
+      if (existing && expectedVersion === undefined) throw error('EXPECTED_VERSION_REQUIRED', 400, 'expectedVersion is required when updating a report.');
+      if (existing && existing.version !== expectedVersion) throw error('VERSION_CONFLICT', 409, 'The report has changed. Reload and retry.', { expectedVersion, actualVersion: existing.version });
+      if (!existing && expectedVersion !== undefined) throw error('VERSION_CONFLICT', 409, 'The report does not yet exist.');
 
       const oldAreaSnapshot = await transaction.get(reference.collection('areas'));
       const oldComponentReferences: DocumentReference[] = [];
@@ -297,45 +207,21 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
         oldComponentReferences.push(...oldComponents.docs.map((document) => document.ref));
       }
       const totalWrites = requestedWrites + oldAreaSnapshot.size + oldComponentReferences.length;
-      if (totalWrites > MAX_TRANSACTION_WRITES) {
-        throw error('REPORT_TOO_LARGE', 413, 'Report replacement exceeds the atomic Firestore write limit.', {
-          totalWrites,
-          maximum: MAX_TRANSACTION_WRITES,
-        });
-      }
+      if (totalWrites > MAX_TRANSACTION_WRITES) throw error('REPORT_TOO_LARGE', 413, 'Report replacement exceeds the atomic Firestore write limit.', { totalWrites, maximum: MAX_TRANSACTION_WRITES });
 
       for (const componentReference of oldComponentReferences) transaction.delete(componentReference);
       for (const areaDocument of oldAreaSnapshot.docs) transaction.delete(areaDocument.ref);
 
       const timestamp = now();
-      const metadata = metadataFromAggregate(
-        aggregate,
-        timestamp,
-        existing ? existing.version + 1 : 1,
-      );
-      transaction.set(reference, {
-        ...metadata,
-        updatedBy: actorId,
-        ...(existing ? {} : { createdBy: actorId }),
-      });
+      const metadata = metadataFromAggregate(aggregate, timestamp, existing ? existing.version + 1 : 1);
+      transaction.set(reference, { ...metadata, updatedBy: actorId, ...(existing ? {} : { createdBy: actorId }) });
       for (const area of aggregate.areas) {
         const storedArea = areaRecord(aggregate, area, timestamp);
         const areaRef = reference.collection('areas').doc(area.id);
         transaction.set(areaRef, storedArea);
-        for (const component of area.components) {
-          transaction.set(
-            areaRef.collection('components').doc(component.id),
-            componentRecord(aggregate, area.id, component, timestamp),
-          );
-        }
+        for (const component of area.components) transaction.set(areaRef.collection('components').doc(component.id), componentRecord(aggregate, area.id, component, timestamp));
       }
-      return aggregateFromRecords(
-        metadata,
-        aggregate.areas.map((area) => areaRecord(aggregate, area, timestamp)),
-        aggregate.areas.flatMap((area) =>
-          area.components.map((component) => componentRecord(aggregate, area.id, component, timestamp)),
-        ),
-      );
+      return aggregateFromRecords(metadata, aggregate.areas.map((area) => areaRecord(aggregate, area, timestamp)), aggregate.areas.flatMap((area) => area.components.map((component) => componentRecord(aggregate, area.id, component, timestamp))));
     });
   }
 
@@ -346,80 +232,33 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
       const records = await readAggregateInTransaction(transaction, agencyId, command.reportId);
       let jobSnapshot: DocumentSnapshot | undefined;
       if (records.report.inspectionJobId) {
-        jobSnapshot = await transaction.get(
-          database.doc(`agencies/${agencyId}/inspectionJobs/${records.report.inspectionJobId}`),
-        );
+        jobSnapshot = await transaction.get(database.doc(`agencies/${agencyId}/inspectionJobs/${records.report.inspectionJobId}`));
       }
+      if (records.report.version !== command.expectedVersion) throw error('VERSION_CONFLICT', 409, 'The report has changed. Reload and retry.', { expectedVersion: command.expectedVersion, actualVersion: records.report.version });
+      if (IMMUTABLE_REPORT_STATUSES.has(records.report.lifecycleStatus) && command.status !== 'archived') throw error('REPORT_IMMUTABLE', 409, 'Finalised report data cannot return to an editable lifecycle state.');
 
-      if (
-        IMMUTABLE_REPORT_STATUSES.has(records.report.lifecycleStatus) &&
-        command.status !== 'archived'
-      ) {
-        throw error(
-          'REPORT_IMMUTABLE',
-          409,
-          'Finalised report data cannot return to an editable lifecycle state.',
-        );
-      }
-
-      const aggregate = aggregateFromRecords(records.report, records.areas, records.components);
-      const gateEvaluation = calculateWorkflowGateContext(
-        aggregate,
-        jobSnapshot?.exists ? (jobSnapshot.data() as Record<string, unknown>) : undefined,
-      );
-
-      let transitionEvent;
-      try {
-        transitionEvent = transitionReport({
-          entityId: command.reportId,
-          current: records.report.lifecycleStatus,
-          requested: command.status,
-          currentVersion: records.report.version,
-          expectedVersion: command.expectedVersion,
-          actorId: command.actorId,
-          actorRole: command.actorRole as UserRole,
-          correlationId: command.correlationId,
-          context: gateEvaluation.context,
-          ...(command.reason ? { reason: command.reason } : {}),
-        });
-      } catch (err) {
-        if (err instanceof WorkflowError) throw workflowError(err);
-        throw err;
-      }
-
-      const versionWrites = VERSIONED_STATUSES.has(transitionEvent.to)
-        ? 1 + records.areas.length + records.components.length
-        : 0;
+      const versionWrites = VERSIONED_STATUSES.has(command.status) ? 1 + records.areas.length + records.components.length : 0;
       const baseWrites = 3 + (jobSnapshot?.exists ? 1 : 0);
-      if (versionWrites + baseWrites > MAX_TRANSACTION_WRITES) {
-        throw error('REPORT_TOO_LARGE', 413, 'Report version exceeds the atomic Firestore write limit.');
-      }
+      if (versionWrites + baseWrites > MAX_TRANSACTION_WRITES) throw error('REPORT_TOO_LARGE', 413, 'Report version exceeds the atomic Firestore write limit.');
 
-      const timestamp = transitionEvent.occurredAt;
-      const versionCommand: ReportTransitionCommand = { ...command, status: transitionEvent.to };
-      const versionId = VERSIONED_STATUSES.has(transitionEvent.to)
-        ? setVersionSnapshot(transaction, reference, records, versionCommand, timestamp)
-        : undefined;
+      const timestamp = now();
+      const versionId = VERSIONED_STATUSES.has(command.status) ? setVersionSnapshot(transaction, reference, records, command, timestamp) : undefined;
       const updated = {
         ...records.report,
-        lifecycleStatus: transitionEvent.to,
-        version: transitionEvent.resultingVersion,
+        lifecycleStatus: command.status,
+        version: records.report.version + 1,
         updatedAt: timestamp,
         updatedBy: command.actorId,
-        ...(command.assignedUserId
-          ? { assignedUserId: command.assignedUserId }
-          : records.report.assignedUserId
-            ? { assignedUserId: records.report.assignedUserId }
-            : {}),
-        ...(transitionEvent.reason ? { transitionReason: transitionEvent.reason } : {}),
+        ...(command.assignedUserId ? { assignedUserId: command.assignedUserId } : records.report.assignedUserId ? { assignedUserId: records.report.assignedUserId } : {}),
+        ...(command.reason ? { transitionReason: command.reason } : {}),
         ...(versionId ? { currentVersionId: versionId } : {}),
-        ...(transitionEvent.to === 'finalised' ? { finalisedAt: timestamp } : {}),
+        ...(command.status === 'finalised' ? { finalisedAt: timestamp } : {}),
       };
       transaction.set(reference, updated);
 
       if (jobSnapshot?.exists) {
         transaction.update(jobSnapshot.ref, {
-          status: jobStatus(transitionEvent.to),
+          status: jobStatus(command.status),
           ...(command.assignedUserId ? { assignedUserId: command.assignedUserId } : {}),
           updatedAt: timestamp,
           updatedBy: command.actorId,
@@ -437,12 +276,7 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
         actorRole: command.actorRole,
         timestamp,
         correlationId: command.correlationId,
-        metadata: {
-          from: transitionEvent.from,
-          to: transitionEvent.to,
-          reason: transitionEvent.reason ?? null,
-          versionId: versionId ?? null,
-        },
+        metadata: { from: records.report.lifecycleStatus, to: command.status, reason: command.reason ?? null, versionId: versionId ?? null },
       });
 
       const notificationId = randomUUID();
@@ -453,7 +287,7 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
         inspectionJobId: records.report.inspectionJobId ?? null,
         type: 'report_lifecycle_changed',
         status: 'queued',
-        lifecycleStatus: transitionEvent.to,
+        lifecycleStatus: command.status,
         queuedAt: timestamp,
         createdAt: timestamp,
         createdBy: command.actorId,

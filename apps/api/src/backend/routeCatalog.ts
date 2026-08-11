@@ -34,6 +34,13 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   'tenant-responses': { collection: 'tenantResponses', readCapability: 'report.read', writeCapability: 'tenant_response.submit', target },
   notifications: { collection: 'notificationJobs', readCapability: 'audit.read', writeCapability: 'notification.send', target },
   'audit-history': { collection: 'auditEvents', readCapability: 'audit.read', target },
+  'maintenance-candidates': { collection: 'maintenanceCandidates', readCapability: 'maintenance.manage', writeCapability: 'maintenance.manage', target },
+  'maintenance-items': { collection: 'maintenanceItems', readCapability: 'maintenance.manage', writeCapability: 'maintenance.manage', target },
+  'work-requests': { collection: 'workRequests', readCapability: 'maintenance.manage', writeCapability: 'maintenance.manage', target },
+  'tenant-instructions': { collection: 'tenantInstructions', readCapability: 'tenant_instruction.manage', writeCapability: 'tenant_instruction.manage', target },
+  'external-contacts': { collection: 'externalContacts', readCapability: 'external_contact.manage', writeCapability: 'external_contact.manage', target },
+  'external-access-grants': { collection: 'externalAccessGrants', readCapability: 'maintenance.manage', writeCapability: 'maintenance.manage', target },
+  'client-approvals': { collection: 'clientApprovals', readCapability: 'client_approval.manage', writeCapability: 'client_approval.manage', target },
 };
 
 export const API_ROUTE_NAMES = Object.freeze(Object.keys(ROUTE_POLICIES));

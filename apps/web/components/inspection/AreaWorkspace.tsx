@@ -16,7 +16,6 @@ interface AreaWorkspaceProps {
   previousReport?: PreviousReportAttachment;
   previousReportNotes?: string;
   agencyId?: string;
-  inspectionType?: string;
   readOnly?: boolean;
 }
 
@@ -26,7 +25,6 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
   onDeleteArea,
   previousReportNotes,
   agencyId,
-  inspectionType,
   readOnly = false,
 }) => {
   const {
@@ -38,7 +36,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
     generateAreaOverallCommentary,
     clearAnalysisError,
     analysisError,
-  } = useAreaAnalysis({ agencyId, inspectionType });
+  } = useAreaAnalysis({ agencyId });
 
   const handlePhotosAdded = (newPhotos: Photo[]) => {
     onUpdateArea({
@@ -100,21 +98,28 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
 
   const handleRegenerateComponentComment = async (item: InspectionItem) => {
     const comment = await generateComponentCommentary(area.name, item, area.photos, previousReportNotes);
-    if (comment) handleUpdateComponent(item.id, { comment });
+    if (comment) {
+      handleUpdateComponent(item.id, { comment });
+    }
   };
 
   const handleGenerateAreaSummary = async () => {
     const comment = await generateAreaOverallCommentary(area.name, area.items, area.photos);
-    if (comment) onUpdateArea({ ...area, overallComment: comment });
+    if (comment) {
+      onUpdateArea({ ...area, overallComment: comment });
+    }
   };
 
   const handleFocusBlocker = (componentId: string) => {
     const el = document.getElementById(`component-${componentId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <AreaHeader
         area={area}
         onDeleteArea={onDeleteArea}
@@ -130,6 +135,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         </div>
       )}
 
+      {/* AI Action Bar */}
       {!readOnly && (
         <AreaActionBar
           onAnalyseArea={handleRunAreaAnalysis}
@@ -139,6 +145,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         />
       )}
 
+      {/* Photo Upload & Gallery */}
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
         <PhotoUploadManager
           existingPhotos={area.photos}
@@ -153,6 +160,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         />
       </div>
 
+      {/* Component Assessment List */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900 space-y-3">
         <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
           Structured Component Assessments ({area.items.length})
@@ -170,6 +178,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         />
       </div>
 
+      {/* Overall Commentary Panel */}
       <AreaCommentaryPanel
         areaName={area.name}
         overallComment={area.overallComment}
@@ -181,6 +190,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         disabled={readOnly}
       />
 
+      {/* Area Completeness Summary */}
       <AreaCompletenessPanel area={area} onFocusBlocker={handleFocusBlocker} />
     </div>
   );

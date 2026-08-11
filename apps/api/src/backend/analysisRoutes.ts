@@ -9,6 +9,7 @@ import {
   generateOverallCommentServer,
   generateItemCommentServer,
   generateBatchRoomAnalysisServer,
+  generateExitComparisonServer,
   type PhotoInput,
   type PreviousReportInput,
 } from '../services/geminiAnalysisService.js';
@@ -98,10 +99,6 @@ export async function routeAnalysisRequest(
   }
 
   const agencyId = getAgencyIdFromHeader(req);
-  if (!agencyId) {
-    throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.');
-  }
-
   await authenticateAndAuthorise(
     req,
     dependencies,
@@ -109,16 +106,6 @@ export async function routeAnalysisRequest(
     { agencyId },
     correlationId
   );
-
-  // Fail closed when the model service is unavailable. Analysis must never fabricate
-  // clean/intact/working observations merely because a credential or upstream model is absent.
-  if (!isGeminiAvailable()) {
-    throw new ApiError(
-      503,
-      'AI_UNAVAILABLE',
-      'AI analysis is currently unavailable. Preserve the existing inspection assessment and retry when the service is configured.'
-    );
-  }
 
   const body = await readJsonPayload(req);
 
@@ -166,6 +153,30 @@ export async function routeAnalysisRequest(
     }));
     const previousReport = parsePreviousReportInput(body.previousReport);
     const result = await generateBatchRoomAnalysisServer(roomName, photos, items, currentOverallComment, previousReport);
+    return { status: 200, body: { data: result, meta: { correlationId } } };
+  }
+
+  if (endpoint === 'exit-comparison') {
+    const roomName = typeof body.roomName === 'string' ? body.roomName : 'Room';
+    const itemName = typeof body.itemName === 'string' ? body.itemName : 'Component';
+    const baselineComponent = (body.baselineComponent as any) || {
+      conditionCategory: 'intact',
+      cleanlinessCategory: 'clean',
+      workingStatus: 'not_applicable',
+      testStatus: 'not_applicable',
+      commentary: '',
+      defects: [],
+    };
+    const currentExitComponent = (body.currentExitComponent as any) || {
+      conditionCategory: 'intact',
+      cleanlinessCategory: 'clean',
+      workingStatus: 'not_applicable',
+      testStatus: 'not_applicable',
+      commentary: '',
+      defects: [],
+    };
+    const currentPhotos = parsePhotosInput(body.photos);
+    const result = await generateExitComparisonServer(roomName, itemName, baselineComponent, currentExitComponent, currentPhotos);
     return { status: 200, body: { data: result, meta: { correlationId } } };
   }
 

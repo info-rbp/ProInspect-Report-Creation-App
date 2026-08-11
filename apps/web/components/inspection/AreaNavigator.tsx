@@ -71,6 +71,9 @@ export const AreaNavigator: React.FC<AreaNavigatorProps> = ({
                 (item) => item.conditionCategory !== 'unable_to_confirm' && item.cleanlinessCategory !== 'unable_to_confirm'
               ).length;
               const isComplete = assessedComps === totalComps && totalComps > 0;
+              const materialChangesCount = area.items.filter(
+                (item) => item.comparisonStatus === 'material_change' || item.comparisonStatus === 'deteriorated'
+              ).length;
 
               return (
                 <button
@@ -86,7 +89,21 @@ export const AreaNavigator: React.FC<AreaNavigatorProps> = ({
                   }`}
                 >
                   <div className="min-w-0 pr-2">
-                    <span className="text-xs truncate block">{area.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs truncate block">{area.name}</span>
+                      {materialChangesCount > 0 && (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                            isActive
+                              ? 'bg-amber-300 text-amber-950'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          }`}
+                          title={`${materialChangesCount} material change(s) recorded`}
+                        >
+                          {materialChangesCount} Δ
+                        </span>
+                      )}
+                    </div>
                     <span className={`text-[10px] block mt-0.5 ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
                       {assessedComps}/{totalComps} items • {area.photos.length} photos
                     </span>

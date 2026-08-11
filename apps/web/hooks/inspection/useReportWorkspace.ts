@@ -142,6 +142,33 @@ export function useReportWorkspace(initialReport: ReportData) {
     setIsDirty(false);
   }, []);
 
+  const applyExitComparison = useCallback(async () => {
+    const { compareComponentEntryToExit } = await import('@pcr/domain');
+    setReport((prev) => {
+      const rooms = prev.rooms.map((room) => {
+        const items = room.items.map((item) => {
+          if (!item.baselineComponentData) return item;
+          const compResult = compareComponentEntryToExit(item.baselineComponentData, item);
+          return {
+            ...item,
+            comparisonStatus: compResult.comparisonStatus as any,
+            presenceComparison: compResult.presenceComparison,
+            conditionComparison: compResult.conditionComparison,
+            cleanlinessComparison: compResult.cleanlinessComparison,
+            workingComparison: compResult.workingComparison,
+            comparisonCommentary: compResult.comparisonCommentary,
+            evidencePairs: compResult.evidencePairs,
+            comparisonConfidence: compResult.comparisonConfidence,
+            ...(compResult.comparisonUncertainty ? { comparisonUncertainty: compResult.comparisonUncertainty } : {}),
+          };
+        });
+        return { ...room, items };
+      });
+      setIsDirty(true);
+      return { ...prev, rooms };
+    });
+  }, []);
+
   return {
     report,
     setReport,
@@ -158,6 +185,7 @@ export function useReportWorkspace(initialReport: ReportData) {
     removeComponentFromArea,
     addPhotosToArea,
     removePhotoFromArea,
+    applyExitComparison,
     markSaved,
   };
 }

@@ -65,90 +65,25 @@ const SAMPLE_INSPECTION_JOBS: InspectionJob[] = [
   },
 ];
 
-function cloudMode(): boolean {
-  return isFirebaseConfigured() && Boolean(import.meta.env.VITE_API_BASE_URL?.trim());
-}
-
-async function transitionInspectionJobApi(
-  existing: VersionedInspectionJob,
-  status: InspectionJobStatus,
-  reason?: string,
-): Promise<InspectionJob> {
-  return apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${existing.id}/transitions`, {
-    method: 'POST',
-    body: {
-      status,
-      expectedVersion: existing.version ?? 1,
-      ...(reason ? { reason } : {}),
-    },
-  });
-}
-
-async function transitionNewJobToRequestedStatus(
-  job: VersionedInspectionJob,
-  requestedStatus: InspectionJobStatus,
-): Promise<InspectionJob> {
-  if (requestedStatus === 'draft') return job;
-
-  const current = await transitionInspectionJobApi(job, 'booked');
-  if (requestedStatus === 'booked') return current;
-
-  if (requestedStatus === 'assigned') {
-    if (!current.assignedInspectorId) {
-      throw new Error('An inspector must be assigned before creating an inspection job in the assigned state.');
-    }
-    return transitionInspectionJobApi(current as VersionedInspectionJob, 'assigned');
-  }
-
-  throw new Error('New inspection jobs may only be created as draft, booked or assigned.');
-}
-
-async function transitionJobToRequestedStatus(
-  job: VersionedInspectionJob,
-  requestedStatus: InspectionJobStatus,
-): Promise<InspectionJob> {
-  if (job.status === requestedStatus) return job;
-
-  // Existing UI flows may start a booked inspection immediately after linking its report.
-  // Traverse the authoritative intermediate state rather than bypassing the state machine.
-  if (job.status === 'booked' && requestedStatus === 'inspection_started') {
-    if (!job.assignedInspectorId) {
-      throw new Error('Assign an inspector before starting this inspection.');
-    }
-    const assigned = await transitionInspectionJobApi(job, 'assigned');
-    return transitionInspectionJobApi(assigned as VersionedInspectionJob, 'inspection_started');
-  }
-
-  return transitionInspectionJobApi(job, requestedStatus);
-}
-
 export const createInspectionJob = async (input: CreateInspectionJobInput): Promise<InspectionJob> => {
-  const requestedStatus = input.status || 'draft';
-
-  if (cloudMode()) {
-    const creationInput = { ...input };
-    delete creationInput.status;
-    const created = await apiRequest<InspectionJob>(input.agencyId, '/api/v1/inspection-jobs', {
-      method: 'POST',
-      body: { ...creationInput, id: generateId() },
-    });
-    return transitionNewJobToRequestedStatus(created as VersionedInspectionJob, requestedStatus);
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
+    try {
+      return await apiRequest<InspectionJob>(input.agencyId, '/api/v1/inspection-jobs', {
+        method: 'POST',
+        body: { ...input, id: generateId(), status: input.status || 'draft' },
+      });
+    } catch (err) {
+      console.warn('API createInspectionJob failed, storing locally:', err);
+    }
   }
-
   const timestamp = new Date().toISOString();
-  const inspectionJob: InspectionJob = {
-    ...input,
-    id: generateId(),
-    status: requestedStatus,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
+  const inspectionJob: InspectionJob = { ...input, id: generateId(), status: input.status || 'draft', createdAt: timestamp, updatedAt: timestamp };
   await localPut('inspectionJobs', inspectionJob);
   return inspectionJob;
 };
 
 export const getInspectionJob = async (inspectionJobId: string): Promise<InspectionJob | undefined> => {
-  if (cloudMode()) {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
     try {
       return await apiRequest<InspectionJob>(undefined, `/api/v1/inspection-jobs/${inspectionJobId}`);
     } catch (error) {
@@ -162,16 +97,18 @@ export const getInspectionJob = async (inspectionJobId: string): Promise<Inspect
 };
 
 export const listInspectionJobs = async (): Promise<InspectionJob[]> => {
-  if (cloudMode()) {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
     try {
       return await apiRequest<InspectionJob[]>(undefined, '/api/v1/inspection-jobs');
     } catch {
-      // Fall through to local development data.
+      // Fall through
     }
   }
   const localJobs = await localList<InspectionJob>('inspectionJobs');
   if (localJobs.length === 0) {
-    for (const sampleJob of SAMPLE_INSPECTION_JOBS) await localPut('inspectionJobs', sampleJob);
+    for (const sampleJob of SAMPLE_INSPECTION_JOBS) {
+      await localPut('inspectionJobs', sampleJob);
+    }
     return SAMPLE_INSPECTION_JOBS;
   }
   return localJobs;
@@ -183,42 +120,23 @@ export const updateInspectionJob = async (
 ): Promise<InspectionJob> => {
   const existing = await getInspectionJob(inspectionJobId);
   if (!existing) throw new Error('Inspection job not found.');
-
-  const { status: requestedStatus, ...ordinaryUpdates } = updates;
-
-  if (cloudMode()) {
-    let current: InspectionJob = existing;
-
-    if (Object.keys(ordinaryUpdates).length > 0) {
-      current = await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}`, {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
+    try {
+      return await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}`, {
         method: 'PATCH',
-        body: { ...ordinaryUpdates, expectedVersion: (existing as VersionedInspectionJob).version ?? 1 },
+        body: { ...updates, expectedVersion: (existing as VersionedInspectionJob).version ?? 1 },
       });
+    } catch (err) {
+      console.warn('API updateInspectionJob failed, updating locally:', err);
     }
-
-    if (requestedStatus && requestedStatus !== current.status) {
-      return transitionJobToRequestedStatus(current as VersionedInspectionJob, requestedStatus);
-    }
-
-    return current;
   }
-
-  const updatedInspectionJob: InspectionJob = {
-    ...existing,
-    ...ordinaryUpdates,
-    ...(requestedStatus ? { status: requestedStatus } : {}),
-    id: inspectionJobId,
-    updatedAt: new Date().toISOString(),
-  };
+  const updatedInspectionJob: InspectionJob = { ...existing, ...updates, id: inspectionJobId, updatedAt: new Date().toISOString() };
   await localPut('inspectionJobs', updatedInspectionJob);
   return updatedInspectionJob;
 };
 
-export const assignInspector = async (inspectionJobId: string, assignedInspectorId: string): Promise<InspectionJob> => {
-  const updated = await updateInspectionJob(inspectionJobId, { assignedInspectorId });
-  if (updated.status === 'booked') return transitionJobToRequestedStatus(updated as VersionedInspectionJob, 'assigned');
-  return updated;
-};
+export const assignInspector = async (inspectionJobId: string, assignedInspectorId: string): Promise<InspectionJob> =>
+  updateInspectionJob(inspectionJobId, { assignedInspectorId, status: 'assigned' });
 
 export const assignReviewer = async (inspectionJobId: string, assignedReviewerId: string): Promise<InspectionJob> =>
   updateInspectionJob(inspectionJobId, { assignedReviewerId });
@@ -258,7 +176,7 @@ export const getInspectionJobWorkflow = async (inspectionJobId: string): Promise
   const existing = await getInspectionJob(inspectionJobId);
   if (!existing) return undefined;
 
-  if (cloudMode()) {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
     try {
       return await apiRequest<InspectionJobWorkflowInfo>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/workflow`);
     } catch (err) {
@@ -284,16 +202,14 @@ export const updateInspectionJobStatus = async (
   const existing = await getInspectionJob(inspectionJobId);
   if (!existing) throw new Error('Inspection job not found.');
 
-  if (cloudMode()) {
-    if (reason) return transitionInspectionJobApi(existing as VersionedInspectionJob, status, reason);
-    return transitionJobToRequestedStatus(existing as VersionedInspectionJob, status);
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
+    return await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/transitions`, {
+      method: 'POST',
+      body: { status, expectedVersion: (existing as VersionedInspectionJob).version ?? 1, ...(reason ? { reason } : {}) },
+    });
   }
 
-  const updatedInspectionJob: InspectionJob = {
-    ...existing,
-    status,
-    updatedAt: new Date().toISOString(),
-  };
+  const updatedInspectionJob: InspectionJob = { ...existing, status, updatedAt: new Date().toISOString() };
   await localPut('inspectionJobs', updatedInspectionJob);
   return updatedInspectionJob;
 };
@@ -301,20 +217,13 @@ export const updateInspectionJobStatus = async (
 export const deleteInspectionJob = async (inspectionJobId: string): Promise<void> => {
   const existing = await getInspectionJob(inspectionJobId);
   if (!existing) return;
-  if (cloudMode()) {
+  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
     try {
-      await apiRequest<InspectionJob>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}/transitions`, {
-        method: 'POST',
-        body: {
-          status: 'cancelled',
-          expectedVersion: (existing as VersionedInspectionJob).version ?? 1,
-          reason: 'inspection_job_deleted_by_operator',
-        },
+      await apiRequest<void>(existing.agencyId, `/api/v1/inspection-jobs/${inspectionJobId}`, {
+        method: 'DELETE',
       });
-      return;
     } catch (err) {
-      console.warn('API cancellation failed; preserving the cloud inspection job:', err);
-      throw err;
+      console.warn('API deleteInspectionJob failed, deleting locally:', err);
     }
   }
   await localDelete('inspectionJobs', inspectionJobId);

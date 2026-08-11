@@ -6,6 +6,7 @@ import { WorkingStatusAssessment } from './WorkingStatusAssessment';
 import { ComponentDescriptionFields } from './ComponentDescriptionFields';
 import { ComponentEvidencePanel } from './ComponentEvidencePanel';
 import { ComponentCommentaryPanel } from './ComponentCommentaryPanel';
+import { ExitComponentComparisonPanel } from './ExitComponentComparisonPanel';
 import { isOperationalItem } from '../../../services/platform/propertySeedingService';
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, Sparkles, Link2 } from 'lucide-react';
 
@@ -23,6 +24,7 @@ interface ComponentAssessmentCardProps {
 
 export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = ({
   item,
+  areaName: _areaName,
   areaPhotos,
   onChange,
   onRemove,
@@ -44,13 +46,16 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
     item.conditionCategory === 'replacement_recommended' ||
     item.workingStatus === 'not_working';
 
+  const hasMaterialChange = item.comparisonStatus === 'material_change' || item.comparisonStatus === 'deteriorated';
   const linkedPhotosCount = (item.photoReferences || []).length;
 
   return (
     <div
       id={id || `component-${item.id}`}
       className={`rounded-2xl border transition-all ${
-        isDamaged
+        hasMaterialChange
+          ? 'border-amber-300 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/30'
+          : isDamaged
           ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/40 dark:bg-amber-950/20'
           : isComplete
           ? 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
@@ -152,6 +157,16 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
       {/* Expanded Details Panel */}
       {isExpanded && (
         <div className="p-4 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3.5 bg-white dark:bg-slate-900">
+          {/* Exit Comparison Panel */}
+          {(item.baselineComponentData || (item.comparisonStatus && item.comparisonStatus !== 'not_compared')) && (
+            <ExitComponentComparisonPanel
+              item={item}
+              areaPhotos={areaPhotos}
+              onChange={onChange}
+              disabled={disabled}
+            />
+          )}
+
           {/* Assessment Controls Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <ConditionAssessment

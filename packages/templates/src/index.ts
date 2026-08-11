@@ -454,3 +454,4 @@ export const PCR_STANDARD_AREAS = [
   'Activity Room', 'Bathroom', 'Ensuite', 'Toilet / WC', 'Laundry', 'Security / Safety', 'General External Items',
   'Garden Shed / External Storage',
 ] as const;
+

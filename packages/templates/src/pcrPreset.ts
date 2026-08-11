@@ -373,3 +373,4 @@ export const createExitInspectionTemplate = (createdAt = new Date().toISOString(
   commentaryBank: structuredClone(DEFAULT_PCR_COMMENTARY_BANK),
   createdAt,
 });
+

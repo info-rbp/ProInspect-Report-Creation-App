@@ -208,6 +208,13 @@ export interface AuditEvent {
     | 'component'
     | 'photo'
     | 'template'
+    | 'maintenance_candidate'
+    | 'maintenance_item'
+    | 'work_request'
+    | 'tenant_instruction'
+    | 'external_contact'
+    | 'external_access_grant'
+    | 'client_approval'
     | 'system';
   entityId: string;
   eventType: string;

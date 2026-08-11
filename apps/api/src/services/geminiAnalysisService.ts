@@ -6,6 +6,12 @@ import type {
   ComponentTestStatus,
   ComponentReviewStatus,
   ComponentComparisonStatus,
+  PresenceComparison,
+  ConditionComparison,
+  CleanlinessComparison,
+  WorkingComparison,
+  ComponentEvidencePair,
+  BaselineComponentSnapshot,
   ReportPhotoReference,
 } from '@pcr/domain';
 
@@ -34,6 +40,13 @@ export interface StructuredComponentAnalysis {
   uncertainty?: string;
   reviewStatus?: ComponentReviewStatus;
   comparisonStatus?: ComponentComparisonStatus;
+  presenceComparison?: PresenceComparison;
+  conditionComparison?: ConditionComparison;
+  cleanlinessComparison?: CleanlinessComparison;
+  workingComparison?: WorkingComparison;
+  comparisonCommentary?: string;
+  baselineComponentData?: BaselineComponentSnapshot;
+  evidencePairs?: ComponentEvidencePair[];
 }
 
 export interface BatchRoomResult {
@@ -678,3 +691,90 @@ export async function generateBatchRoomAnalysisServer(
     };
   }
 }
+
+export async function generateExitComparisonServer(
+  roomName: string,
+  itemName: string,
+  baselineComponent: {
+    conditionCategory: string;
+    cleanlinessCategory: string;
+    workingStatus: string;
+    testStatus: string;
+    commentary: string;
+    defects: string[];
+    photoReferences?: ReportPhotoReference[];
+  },
+  currentExitComponent: {
+    conditionCategory: string;
+    cleanlinessCategory: string;
+    workingStatus: string;
+    testStatus: string;
+    commentary: string;
+    defects: string[];
+    photoReferences?: ReportPhotoReference[];
+  },
+  currentPhotos: PhotoInput[] = []
+): Promise<StructuredComponentAnalysis> {
+  const { compareComponentEntryToExit } = await import('@pcr/domain');
+  
+  const compResult = compareComponentEntryToExit(
+    {
+      id: itemName,
+      component: itemName,
+      conditionCategory: baselineComponent.conditionCategory,
+      cleanlinessCategory: baselineComponent.cleanlinessCategory,
+      workingStatus: baselineComponent.workingStatus,
+      testStatus: baselineComponent.testStatus,
+      commentary: baselineComponent.commentary,
+      defects: baselineComponent.defects,
+      photoReferences: baselineComponent.photoReferences || [],
+    },
+    {
+      id: itemName,
+      component: itemName,
+      conditionCategory: currentExitComponent.conditionCategory,
+      cleanlinessCategory: currentExitComponent.cleanlinessCategory,
+      workingStatus: currentExitComponent.workingStatus,
+      testStatus: currentExitComponent.testStatus,
+      commentary: currentExitComponent.commentary,
+      defects: currentExitComponent.defects,
+      photoReferences: currentExitComponent.photoReferences || [],
+    }
+  );
+
+  const validPhotoIds = new Set(currentPhotos.map((p) => p.id));
+  const validEvidence = validateEvidenceProvenance(
+    currentExitComponent.photoReferences?.map((p) => p.photoId),
+    validPhotoIds
+  );
+
+  return {
+    id: itemName,
+    name: itemName,
+    conditionCategory: (currentExitComponent.conditionCategory as ComponentConditionCategory) || 'intact',
+    cleanlinessCategory: (currentExitComponent.cleanlinessCategory as ComponentCleanlinessCategory) || 'clean',
+    workingStatus: (currentExitComponent.workingStatus as ComponentWorkingStatus) || 'not_applicable',
+    testStatus: (currentExitComponent.testStatus as ComponentTestStatus) || 'not_applicable',
+    defects: (currentExitComponent.defects || []).map(sanitizeProhibitedCausation),
+    maintenanceRequired:
+      currentExitComponent.conditionCategory === 'repair_required' ||
+      currentExitComponent.conditionCategory === 'replacement_recommended' ||
+      currentExitComponent.cleanlinessCategory === 'requires_cleaning' ||
+      currentExitComponent.cleanlinessCategory === 'stained' ||
+      currentExitComponent.workingStatus === 'not_working',
+    commentary: sanitizeProhibitedCausation(currentExitComponent.commentary || ''),
+    evidencePhotoIds: validEvidence,
+    aiConfidence: compResult.comparisonConfidence,
+    reviewStatus: 'ai_generated',
+    comparisonStatus: compResult.comparisonStatus as ComponentComparisonStatus,
+    presenceComparison: compResult.presenceComparison,
+    conditionComparison: compResult.conditionComparison,
+    cleanlinessComparison: compResult.cleanlinessComparison,
+    workingComparison: compResult.workingComparison,
+    comparisonCommentary: compResult.comparisonCommentary,
+    baselineComponentData: baselineComponent as any,
+    evidencePairs: compResult.evidencePairs,
+    ...(compResult.comparisonUncertainty ? { comparisonUncertainty: compResult.comparisonUncertainty } : {}),
+  };
+}
+

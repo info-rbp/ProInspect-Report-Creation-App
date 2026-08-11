@@ -9,7 +9,26 @@ export type UserRole =
   | 'landlord'
   | 'shopify_customer';
 
-export type EntityStatus = 'active' | 'inactive' | 'archived';
+export type {
+  MaintenanceCategory,
+  MaintenancePriority,
+  MaintenanceCandidateStatus,
+  MaintenanceCandidateSource,
+  MaintenanceCandidate,
+  MaintenanceItemStatus,
+  MaintenanceItem,
+  ExternalContactType,
+  ExternalContact,
+  ExternalAccessGrant,
+  WorkRequestStatus,
+  WorkRequest,
+  TenantInstructionType,
+  TenantInstructionStatus,
+  TenantInstruction,
+  ClientApprovalStatus,
+  ClientApproval,
+  FollowUpComparisonOutcome,
+} from '@pcr/domain';
 
 /**
  * The five report types supported by the shared inspection product model.

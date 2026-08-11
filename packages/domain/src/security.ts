@@ -25,6 +25,9 @@ export const SECURITY_CAPABILITIES = [
   'pdf.create',
   'tenant_response.submit',
   'notification.send',
+  'tenant_instruction.manage',
+  'external_contact.manage',
+  'client_approval.manage',
 ] as const;
 
 export type SecurityCapability = (typeof SECURITY_CAPABILITIES)[number];
@@ -60,8 +63,20 @@ export interface AuthorisationTarget {
   tenancyId?: string;
   inspectionJobId?: string;
   reportId?: string;
+  maintenanceItemId?: string;
+  workRequestId?: string;
+  tenantInstructionId?: string;
+  externalContactId?: string;
+  accessGrantToken?: string;
   assignedInspectorId?: string;
   assignedAnalystId?: string;
   assignedReviewerId?: string;
   lifecycleStatus?: string;
+}
+
+export const PROHIBITED_LIABILITY_REGEX = /\b(tenant caused|tenant damage|damaged by tenant|misuse|neglected|poorly maintained|tenant responsibility|bond deduction|negligent|tenant misconduct)\b/gi;
+
+export function sanitizeProhibitedCausation(text: string): string {
+  if (!text) return '';
+  return text.replace(PROHIBITED_LIABILITY_REGEX, '[causation omitted]').trim();
 }

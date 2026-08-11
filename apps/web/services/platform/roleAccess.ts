@@ -14,17 +14,19 @@ export type InternalSection =
   | 'properties'
   | 'jobs'
   | 'reports'
+  | 'maintenance'
+  | 'tenant-followup'
   | 'users'
   | 'templates'
   | 'settings';
 
 const ROLE_SECTIONS: Record<UserRole, InternalSection[]> = {
-  super_admin: ['dashboard', 'properties', 'jobs', 'reports', 'users', 'templates', 'settings'],
-  proinspect_admin: ['dashboard', 'properties', 'jobs', 'reports', 'users', 'templates', 'settings'],
-  operations: ['dashboard', 'properties', 'jobs', 'reports'],
-  inspector: ['dashboard'],
-  analyst: ['dashboard', 'reports'],
-  reviewer: ['dashboard', 'reports'],
+  super_admin: ['dashboard', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup', 'users', 'templates', 'settings'],
+  proinspect_admin: ['dashboard', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup', 'users', 'templates', 'settings'],
+  operations: ['dashboard', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup'],
+  inspector: ['dashboard', 'maintenance'],
+  analyst: ['dashboard', 'reports', 'maintenance', 'tenant-followup'],
+  reviewer: ['dashboard', 'reports', 'maintenance', 'tenant-followup'],
   tenant: [],
   landlord: [],
   shopify_customer: [],

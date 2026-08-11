@@ -18,6 +18,12 @@ import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import TemplatesPage from './pages/admin/TemplatesPage';
 import UsersPage from './pages/admin/UsersPage';
+import MaintenancePage from './pages/admin/MaintenancePage';
+import MaintenanceDetailPage from './pages/admin/MaintenanceDetailPage';
+import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
+import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
+import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
+import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
 import ReportEditPage from './pages/reports/ReportEditPage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
 
@@ -27,6 +33,11 @@ const App: React.FC = () => (
       <Routes>
         <Route path="/" element={<AuthRedirect />} />
         <Route path="/auth/login" element={<LoginRoutePage />} />
+
+        {/* External Scoped Portals */}
+        <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
+        <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
+        <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
 
         <Route path="/app" element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
@@ -48,6 +59,13 @@ const App: React.FC = () => (
               <Route path="admin/reports/:reportId" element={<ReportDetailPage />} />
               <Route path="admin/reports/:reportId/edit" element={<ReportEditPage />} />
               <Route path="admin/reports/:reportId/preview" element={<ReportPreviewPage />} />
+            </Route>
+            <Route element={<RoleProtectedRoute section="maintenance" />}>
+              <Route path="admin/maintenance" element={<MaintenancePage />} />
+              <Route path="admin/maintenance/:maintenanceId" element={<MaintenanceDetailPage />} />
+            </Route>
+            <Route element={<RoleProtectedRoute section="tenant-followup" />}>
+              <Route path="admin/tenant-followup" element={<TenantFollowUpPage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="users" />}>
               <Route path="admin/users" element={<UsersPage />} />

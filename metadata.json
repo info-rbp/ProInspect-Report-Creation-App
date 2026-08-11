@@ -1,6 +1,6 @@
 {
   "name": "Property Condition Report",
-  "description": "Property Condition Report Platform for Remote Business Partner",
+  "description": "ProInspect Property Condition Report Platform with End-to-End Maintenance, Tenant Follow-Up, and Contractor Workflows",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

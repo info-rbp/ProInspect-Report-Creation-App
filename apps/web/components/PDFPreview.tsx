@@ -139,11 +139,18 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
                   </tr>
                   {(room.items || []).map((item) => (
                     <tr key={item.id} className="border-b border-black hover:bg-gray-50">
-                      <td className="border-r border-black p-2 align-top text-black">{item.name}</td>
+                      <td className="border-r border-black p-2 align-top text-black font-medium">{item.name}</td>
                       <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(item.cleanlinessCategory === 'clean')}</td>
                       <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(['intact', 'minor_wear'].includes(item.conditionCategory))}</td>
                       <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(['operation_confirmed', 'appears_operational'].includes(item.workingStatus))}</td>
-                      <td className="p-2 align-top text-black">{item.comment || 'Refer to overall commentary.'}</td>
+                      <td className="p-2 align-top text-black space-y-1">
+                        <div>{item.comment || 'Refer to overall commentary.'}</div>
+                        {showExitSection && (item.comparisonCommentary || item.baselineComponentData) && (
+                          <div className="text-[10px] text-indigo-900 border-t border-gray-200 pt-1 mt-1">
+                            <strong className="text-black">Exit Comparison:</strong> {item.comparisonCommentary || 'Consistent with Entry baseline; no material change identified.'}
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

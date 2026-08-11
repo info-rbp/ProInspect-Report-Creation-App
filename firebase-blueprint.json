@@ -30,6 +30,95 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["reportId", "lifecycleStatus"]
+    },
+    "maintenanceCandidates": {
+      "title": "Maintenance Candidate",
+      "description": "Suggested maintenance findings needing triage/confirmation",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "reviewStatus": { "type": "string" }
+      },
+      "required": ["agencyId", "propertyId", "title", "reviewStatus"]
+    },
+    "maintenanceItems": {
+      "title": "Maintenance Item",
+      "description": "Confirmed operational maintenance item",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["agencyId", "propertyId", "title", "priority", "status"]
+    },
+    "workRequests": {
+      "title": "Work Request",
+      "description": "External work request issued to contractors",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "maintenanceItemId": { "type": "string" },
+        "externalContactId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["agencyId", "maintenanceItemId", "externalContactId", "status"]
+    },
+    "tenantInstructions": {
+      "title": "Tenant Instruction",
+      "description": "Operational instructions and follow-ups for tenants",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "tenancyId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["agencyId", "propertyId", "tenancyId", "status"]
+    },
+    "externalContacts": {
+      "title": "External Contact",
+      "description": "Contractors, suppliers, and external representatives",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["agencyId", "name", "email", "type"]
+    },
+    "externalAccessGrants": {
+      "title": "External Access Grant",
+      "description": "Signed time-limited access grant tokens for external portals",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "resourceType": { "type": "string" },
+        "resourceId": { "type": "string" },
+        "tokenHash": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["agencyId", "resourceType", "resourceId", "tokenHash", "expiresAt"]
+    },
+    "clientApprovals": {
+      "title": "Client Approval Request",
+      "description": "Landlord/Owner approval request for maintenance work",
+      "type": "object",
+      "properties": {
+        "agencyId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "maintenanceItemId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["agencyId", "propertyId", "maintenanceItemId", "status"]
     }
   }
 }

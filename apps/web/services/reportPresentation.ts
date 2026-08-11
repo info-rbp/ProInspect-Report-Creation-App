@@ -76,3 +76,26 @@ export const formatChecklistValue = (value: boolean | null): string => {
 
   return value ? 'Y' : 'N';
 };
+
+export const getComparisonSummaryStats = (rooms: { items: InspectionItem[] }[]) => {
+  const allItems = rooms.flatMap((r) => r.items || []);
+  const comparedItems = allItems.filter((i) => i.comparisonStatus && i.comparisonStatus !== 'not_compared');
+  const materialChangeCount = comparedItems.filter(
+    (i) => i.comparisonStatus === 'material_change' || i.comparisonStatus === 'deteriorated'
+  ).length;
+  const noMaterialChangeCount = comparedItems.filter(
+    (i) => i.comparisonStatus === 'no_material_change' || i.comparisonStatus === 'unchanged'
+  ).length;
+  const unableToCompareCount = comparedItems.filter(
+    (i) => i.comparisonStatus === 'unable_to_compare'
+  ).length;
+
+  return {
+    totalItems: allItems.length,
+    comparedCount: comparedItems.length,
+    materialChangeCount,
+    noMaterialChangeCount,
+    unableToCompareCount,
+  };
+};
+
