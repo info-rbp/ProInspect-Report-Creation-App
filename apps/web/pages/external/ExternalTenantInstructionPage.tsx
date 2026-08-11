@@ -1,23 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { MessageSquare, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import type { TenantInstruction } from '../../types/platform';
 import { getExternalTenantInstruction, submitExternalTenantResponse } from '../../services/platform/maintenanceService';
 
 const ExternalTenantInstructionPage: React.FC = () => {
   const { grantToken } = useParams<{ grantToken: string }>();
-
   const [instruction, setInstruction] = useState<TenantInstruction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [responseNote, setResponseNote] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (!grantToken) return;
     getExternalTenantInstruction(grantToken)
-      .then((res) => setInstruction(res))
+      .then(setInstruction)
       .catch((err) => {
         console.error('Failed to load instruction', err);
         setError('Invalid or expired access link.');
@@ -25,14 +23,14 @@ const ExternalTenantInstructionPage: React.FC = () => {
       .finally(() => setLoading(false));
   }, [grantToken]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!grantToken || !responseNote.trim()) return;
     try {
-      const updated = await submitExternalTenantResponse(grantToken, responseNote);
-      setInstruction(updated);
+      setInstruction(await submitExternalTenantResponse(grantToken, responseNote));
       setSubmitted(true);
     } catch (err) {
+      console.error('Failed to submit tenant response', err);
       alert('Failed to submit response.');
     }
   };
@@ -68,9 +66,15 @@ const ExternalTenantInstructionPage: React.FC = () => {
 
         <div className="space-y-4 text-xs">
           <div>
-            <label className="font-semibold text-gray-700">Instruction Notice:</label>
-            <p className="mt-1 text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">{instruction.description}</p>
+            <label className="font-semibold text-gray-700">Instruction:</label>
+            <p className="mt-1 text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">{instruction.instruction}</p>
           </div>
+          {instruction.dueDate && (
+            <div className="text-gray-600">
+              <span className="font-semibold text-gray-700">Due date:</span>{' '}
+              {new Date(instruction.dueDate).toLocaleDateString()}
+            </div>
+          )}
 
           {submitted && (
             <div className="rounded-lg bg-emerald-50 p-4 text-xs text-emerald-800 font-medium">
@@ -78,24 +82,22 @@ const ExternalTenantInstructionPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-3 border-t border-gray-100 pt-4">
-            <label className="block text-xs font-semibold text-gray-700">Tenant Response / Remediation Note</label>
-            <textarea
-              rows={4}
-              required
-              value={responseNote}
-              onChange={(e) => setResponseNote(e.target.value)}
-              placeholder="Confirm action taken, preferred time for contractor access, or comments..."
-              className="w-full rounded-lg border border-gray-300 p-3 text-xs focus:border-gray-900 focus:outline-none"
-            />
-
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-gray-900 py-2.5 text-xs font-medium text-white hover:bg-gray-800"
-            >
-              Submit Response
-            </button>
-          </form>
+          {instruction.responseRequired && instruction.status !== 'resolved' && instruction.status !== 'closed' && (
+            <form onSubmit={handleSubmit} className="space-y-3 border-t border-gray-100 pt-4">
+              <label className="block text-xs font-semibold text-gray-700">Tenant Response</label>
+              <textarea
+                rows={4}
+                required
+                value={responseNote}
+                onChange={(event) => setResponseNote(event.target.value)}
+                placeholder="Provide the requested information or update..."
+                className="w-full rounded-lg border border-gray-300 p-3 text-xs focus:border-gray-900 focus:outline-none"
+              />
+              <button type="submit" className="w-full rounded-lg bg-gray-900 py-2.5 text-xs font-medium text-white hover:bg-gray-800">
+                Submit Response
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

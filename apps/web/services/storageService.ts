@@ -79,6 +79,21 @@ interface AggregateComponent {
   aiConfidence?: number;
   reviewStatus: ComponentReviewStatus;
   comparisonStatus: ComponentComparisonStatus;
+  presenceComparison?: InspectionItem['presenceComparison'];
+  conditionComparison?: InspectionItem['conditionComparison'];
+  cleanlinessComparison?: InspectionItem['cleanlinessComparison'];
+  workingComparison?: InspectionItem['workingComparison'];
+  comparisonCommentary?: string;
+  baselineComponentId?: string;
+  baselineComponentData?: InspectionItem['baselineComponentData'];
+  baselineEvidencePhotoIds?: string[];
+  currentEvidencePhotoIds?: string[];
+  evidencePairs?: InspectionItem['evidencePairs'];
+  comparisonConfidence?: number;
+  comparisonUncertainty?: string;
+  comparisonReviewStatus?: InspectionItem['comparisonReviewStatus'];
+  comparisonMethod?: InspectionItem['comparisonMethod'];
+  tenantResponseId?: string;
 }
 
 interface AggregateArea {
@@ -86,27 +101,34 @@ interface AggregateArea {
   name: string;
   sequence: number;
   overallCommentary?: string;
+  photoReferences?: ReportPhotoReference[];
   components: AggregateComponent[];
 }
 
 interface ReportAggregatePayload {
-  report: Record<string, unknown> & { id: string; agencyId: string; lifecycleStatus: string; version?: number; createdAt?: string; updatedAt?: string };
+  report: Record<string, unknown> & {
+    id: string;
+    agencyId: string;
+    lifecycleStatus: string;
+    version?: number;
+    createdAt?: string;
+    updatedAt?: string;
+  };
   areas: AggregateArea[];
   expectedVersion?: number;
 }
 
 const initLocalDB = async () => openDB(LOCAL_DB_NAME, 1, {
   upgrade(database) {
-    if (!database.objectStoreNames.contains(LOCAL_STORE_NAME)) database.createObjectStore(LOCAL_STORE_NAME, { keyPath: 'id' });
+    if (!database.objectStoreNames.contains(LOCAL_STORE_NAME)) {
+      database.createObjectStore(LOCAL_STORE_NAME, { keyPath: 'id' });
+    }
   },
 });
 
 export function normalizeItem(rawItem: any): InspectionItem {
-  if (!rawItem) {
-    return createSeededItem('Component');
-  }
+  if (!rawItem) return createSeededItem('Component');
 
-  // If already structured
   if (rawItem.conditionCategory && rawItem.cleanlinessCategory) {
     const operational = isOperationalItem(rawItem.name || rawItem.component || '');
     return {
@@ -128,21 +150,34 @@ export function normalizeItem(rawItem: any): InspectionItem {
       aiConfidence: rawItem.aiConfidence,
       reviewStatus: rawItem.reviewStatus || 'draft',
       comparisonStatus: rawItem.comparisonStatus || 'not_compared',
+      presenceComparison: rawItem.presenceComparison,
+      conditionComparison: rawItem.conditionComparison,
+      cleanlinessComparison: rawItem.cleanlinessComparison,
+      workingComparison: rawItem.workingComparison,
+      comparisonCommentary: rawItem.comparisonCommentary,
+      baselineComponentId: rawItem.baselineComponentId,
+      baselineComponentData: rawItem.baselineComponentData,
+      baselineEvidencePhotoIds: rawItem.baselineEvidencePhotoIds,
+      currentEvidencePhotoIds: rawItem.currentEvidencePhotoIds,
+      evidencePairs: rawItem.evidencePairs,
+      comparisonConfidence: rawItem.comparisonConfidence,
+      comparisonUncertainty: rawItem.comparisonUncertainty,
+      comparisonReviewStatus: rawItem.comparisonReviewStatus,
+      comparisonMethod: rawItem.comparisonMethod,
+      tenantResponseId: rawItem.tenantResponseId,
     };
   }
 
-  // Legacy normalization mapping (from old boolean-only objects)
   const operational = isOperationalItem(rawItem.name || rawItem.component || '');
   const isUndamaged = rawItem.isUndamaged !== false;
   const isClean = rawItem.isClean !== false;
 
-  // Crucial: legacy isWorking: true does NOT mean operation_confirmed! It means untested unless explicit test recorded.
   let workingStatus: ComponentWorkingStatus = operational ? 'untested' : 'not_applicable';
   let testStatus: ComponentTestStatus = operational ? 'untested' : 'not_applicable';
 
   if (rawItem.isWorking === false && operational) {
     workingStatus = 'not_working';
-    testStatus = 'tested_failed';
+    testStatus = rawItem.testStatus === 'tested_failed' ? 'tested_failed' : 'unable_to_confirm';
   } else if (rawItem.workingStatus) {
     workingStatus = rawItem.workingStatus;
     testStatus = rawItem.testStatus || 'untested';
@@ -157,7 +192,9 @@ export function normalizeItem(rawItem: any): InspectionItem {
     cleanlinessCategory: isClean ? 'clean' : 'requires_cleaning',
     workingStatus,
     testStatus,
-    defects: !isUndamaged && commentText ? [commentText] : (Array.isArray(rawItem.defects) ? rawItem.defects : []),
+    defects: !isUndamaged && commentText
+      ? [commentText]
+      : (Array.isArray(rawItem.defects) ? rawItem.defects : []),
     maintenanceRequired: Boolean(rawItem.maintenanceRequired || !isUndamaged || workingStatus === 'not_working'),
     comment: commentText,
     photoReferences: Array.isArray(rawItem.photoReferences) ? rawItem.photoReferences : [],
@@ -168,11 +205,13 @@ export function normalizeItem(rawItem: any): InspectionItem {
 
 function photoReference(photo: Photo): ReportPhotoReference | undefined {
   const objectPath = photo.objectPath ?? photo.downloadUrl;
-  return objectPath ? {
-    photoId: photo.id,
-    objectPath,
-    ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}),
-  } : undefined;
+  return objectPath
+    ? {
+        photoId: photo.id,
+        objectPath,
+        ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}),
+      }
+    : undefined;
 }
 
 function toAggregate(report: ReportData): ReportAggregatePayload {
@@ -185,6 +224,8 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
     inspectionJobId: report.inspectionJobId,
     lifecycleStatus: report.lifecycleStatus ?? 'draft',
     reportType: report.reportType,
+    templateId: report.templateId,
+    templateVersion: report.templateVersion,
     propertyAddress: report.propertyAddress,
     clientName: report.clientName,
     tenantName: report.tenantName,
@@ -199,17 +240,37 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
     issuedAt: report.issuedAt,
     tenantReviewDueAt: report.tenantReviewDueAt,
     finalisedAt: report.finalisedAt,
+    archivedAt: report.archivedAt,
+    finalPdfReportVersionId: report.finalPdfReportVersionId,
+    finalPdfObjectPath: report.finalPdfObjectPath,
+    finalPdfSha256: report.finalPdfSha256,
+    finalPdfGeneration: report.finalPdfGeneration,
+    renderManifestObjectPath: report.renderManifestObjectPath,
+    renderManifestSha256: report.renderManifestSha256,
+    pdfGeneratedAt: report.pdfGeneratedAt,
+    archiveManifestObjectPath: report.archiveManifestObjectPath,
+    archiveManifestSha256: report.archiveManifestSha256,
+    baselineReportId: report.baselineReportId,
+    baselineReportVersionId: report.baselineReportVersionId,
+    baselineInspectionJobId: report.baselineInspectionJobId,
+    baselineTemplateId: report.baselineTemplateId,
+    baselineTemplateVersion: report.baselineTemplateVersion,
+    baselineQuality: report.baselineQuality,
     ownerUid: report.ownerUid,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
     version: report.version,
   };
-  for (const [key, value] of Object.entries(metadata)) if (value === undefined) delete metadata[key];
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value === undefined) delete metadata[key];
+  }
 
   return {
     report: metadata,
     areas: (report.rooms || []).map((room, areaIndex) => {
-      const references = (room.photos || []).map(photoReference).filter((value): value is NonNullable<typeof value> => Boolean(value));
+      const references = (room.photos || [])
+        .map(photoReference)
+        .filter((value): value is ReportPhotoReference => Boolean(value));
       return {
         id: room.id,
         name: room.name,
@@ -235,9 +296,34 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
             commentary: norm.comment || '',
             photoReferences: norm.photoReferences || [],
             aiConfidence: norm.aiConfidence,
-            reviewStatus: norm.reviewStatus || (room.status === 'complete' ? 'reviewer_approved' : room.status === 'analyzed' ? 'ai_generated' : 'draft'),
+            reviewStatus: norm.reviewStatus || (
+              room.status === 'complete'
+                ? 'reviewer_approved'
+                : room.status === 'analyzed'
+                  ? 'ai_generated'
+                  : 'draft'
+            ),
             comparisonStatus: norm.comparisonStatus || 'not_compared',
+            presenceComparison: norm.presenceComparison,
+            conditionComparison: norm.conditionComparison,
+            cleanlinessComparison: norm.cleanlinessComparison,
+            workingComparison: norm.workingComparison,
+            comparisonCommentary: norm.comparisonCommentary,
+            baselineComponentId: norm.baselineComponentId,
+            baselineComponentData: norm.baselineComponentData,
+            baselineEvidencePhotoIds: norm.baselineEvidencePhotoIds,
+            currentEvidencePhotoIds: norm.currentEvidencePhotoIds,
+            evidencePairs: norm.evidencePairs,
+            comparisonConfidence: norm.comparisonConfidence,
+            comparisonUncertainty: norm.comparisonUncertainty,
+            comparisonReviewStatus: norm.comparisonReviewStatus,
+            comparisonMethod: norm.comparisonMethod,
+            tenantResponseId: norm.tenantResponseId,
           };
+        }).map((component) => {
+          const cleaned = { ...component } as Record<string, unknown>;
+          for (const [key, value] of Object.entries(cleaned)) if (value === undefined) delete cleaned[key];
+          return cleaned as unknown as AggregateComponent;
         }),
       };
     }),
@@ -275,9 +361,21 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
     inspectionJobId: metadata.inspectionJobId as string | undefined,
     lifecycleStatus: metadata.lifecycleStatus as ReportData['lifecycleStatus'],
     currentVersionId: metadata.currentVersionId as string | undefined,
+    templateId: metadata.templateId as string | undefined,
+    templateVersion: metadata.templateVersion as number | undefined,
     issuedAt: metadata.issuedAt as string | undefined,
     tenantReviewDueAt: metadata.tenantReviewDueAt as string | undefined,
     finalisedAt: metadata.finalisedAt as string | undefined,
+    archivedAt: metadata.archivedAt as string | undefined,
+    finalPdfReportVersionId: metadata.finalPdfReportVersionId as string | undefined,
+    finalPdfObjectPath: metadata.finalPdfObjectPath as string | undefined,
+    finalPdfSha256: metadata.finalPdfSha256 as string | undefined,
+    finalPdfGeneration: metadata.finalPdfGeneration as string | undefined,
+    renderManifestObjectPath: metadata.renderManifestObjectPath as string | undefined,
+    renderManifestSha256: metadata.renderManifestSha256 as string | undefined,
+    pdfGeneratedAt: metadata.pdfGeneratedAt as string | undefined,
+    archiveManifestObjectPath: metadata.archiveManifestObjectPath as string | undefined,
+    archiveManifestSha256: metadata.archiveManifestSha256 as string | undefined,
     propertyAddress: String(metadata.propertyAddress ?? ''),
     agentName: String(metadata.agentName ?? ''),
     agentCompany: String(metadata.agentCompany ?? ''),
@@ -288,6 +386,12 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
     inspectionDate: String(metadata.inspectionDate ?? ''),
     tenantName: String(metadata.tenantName ?? ''),
     reportType: String(metadata.reportType ?? ''),
+    baselineReportId: metadata.baselineReportId as string | undefined,
+    baselineReportVersionId: metadata.baselineReportVersionId as string | undefined,
+    baselineInspectionJobId: metadata.baselineInspectionJobId as string | undefined,
+    baselineTemplateId: metadata.baselineTemplateId as string | undefined,
+    baselineTemplateVersion: metadata.baselineTemplateVersion as number | undefined,
+    baselineQuality: metadata.baselineQuality as ReportData['baselineQuality'],
     previousReportNotes: metadata.previousReportNotes as string | undefined,
     rooms,
     createdAt: metadata.createdAt,
@@ -300,35 +404,25 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
 async function fromAggregate(aggregate: ReportAggregatePayload): Promise<ReportData> {
   const rooms = await Promise.all(aggregate.areas.map(async (area): Promise<Room> => {
     const references = new Map<string, ReportPhotoReference>();
+    for (const reference of area.photoReferences || []) references.set(reference.photoId, reference);
     for (const component of area.components) {
-      if (Array.isArray(component.photoReferences)) {
-        for (const reference of component.photoReferences) references.set(reference.photoId, reference);
+      for (const reference of component.photoReferences || []) {
+        if (!references.has(reference.photoId)) references.set(reference.photoId, reference);
       }
     }
+
     const photos = await Promise.all([...references.values()].map(resolvedPhoto));
     return {
       id: area.id,
       name: area.name,
-      status: area.components.every((component) => component.reviewStatus === 'reviewer_approved') ? 'complete' : 'draft',
+      status: area.components.every((component) => component.reviewStatus === 'reviewer_approved')
+        ? 'complete'
+        : 'draft',
       items: area.components.map((component) => normalizeItem({
+        ...component,
         id: component.id,
         name: component.component,
-        subComponent: component.subComponent,
-        material: component.material,
-        colour: component.colour,
-        type: component.type,
-        quantity: component.quantity,
-        conditionCategory: component.conditionCategory,
-        cleanlinessCategory: component.cleanlinessCategory,
-        workingStatus: component.workingStatus,
-        testStatus: component.testStatus,
-        defects: component.defects || [],
-        maintenanceRequired: component.maintenanceRequired || false,
         commentary: component.commentary,
-        photoReferences: component.photoReferences || [],
-        aiConfidence: component.aiConfidence,
-        reviewStatus: component.reviewStatus,
-        comparisonStatus: component.comparisonStatus,
       })),
       photos,
       overallComment: area.overallCommentary ?? '',
@@ -337,26 +431,25 @@ async function fromAggregate(aggregate: ReportAggregatePayload): Promise<ReportD
   return reportMetadata(aggregate.report, rooms);
 }
 
+function cloudMode(): boolean {
+  return Boolean(isFirebaseConfigured() && auth && import.meta.env.VITE_API_BASE_URL?.trim());
+}
+
 export const saveReportToDB = async (report: ReportData): Promise<ReportData> => {
   const timestamp = new Date().toISOString();
   const prepared = { ...report, createdAt: report.createdAt || timestamp, updatedAt: timestamp };
-  if (!isFirebaseConfigured() || !auth || !import.meta.env.VITE_API_BASE_URL?.trim()) {
+  if (!cloudMode()) {
     const localDB = await initLocalDB();
     await localDB.put(LOCAL_STORE_NAME, prepared);
     return prepared;
   }
-  try {
-    const stored = await apiRequest<ReportAggregatePayload>(report.agencyId, `/api/v1/reports/${report.id}/aggregate`, {
-      method: 'PUT',
-      body: toAggregate(prepared),
-    });
-    return fromAggregate(stored);
-  } catch (err) {
-    console.warn('Cloud API save failed, saving to local IndexedDB:', err);
-    const localDB = await initLocalDB();
-    await localDB.put(LOCAL_STORE_NAME, prepared);
-    return prepared;
-  }
+
+  const stored = await apiRequest<ReportAggregatePayload>(
+    report.agencyId,
+    `/api/v1/reports/${report.id}/aggregate`,
+    { method: 'PUT', body: toAggregate(prepared) },
+  );
+  return fromAggregate(stored);
 };
 
 const normalizeReport = (report: ReportData | undefined): ReportData | undefined => {
@@ -385,50 +478,53 @@ const normalizeReport = (report: ReportData | undefined): ReportData | undefined
 };
 
 export const loadReportFromDB = async (id: string): Promise<ReportData | undefined> => {
-  if (!isFirebaseConfigured() || !auth || !import.meta.env.VITE_API_BASE_URL?.trim()) {
+  if (!cloudMode()) {
     const localReport = await (await initLocalDB()).get(LOCAL_STORE_NAME, id);
     return normalizeReport(localReport);
   }
+
   try {
-    const report = await fromAggregate(await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`));
+    const report = await fromAggregate(
+      await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`),
+    );
     return normalizeReport(report);
   } catch (error) {
     if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
-    console.warn('Cloud API load failed, loading from local IndexedDB:', error);
-    const localReport = await (await initLocalDB()).get(LOCAL_STORE_NAME, id);
-    return normalizeReport(localReport);
+    throw error;
   }
 };
 
 export const getAllSavedReports = async (): Promise<ReportData[]> => {
-  let reports: ReportData[] = [];
-  if (!isFirebaseConfigured() || !auth || !import.meta.env.VITE_API_BASE_URL?.trim()) {
+  let reports: ReportData[];
+  if (!cloudMode()) {
     reports = await (await initLocalDB()).getAll(LOCAL_STORE_NAME);
   } else {
-    try {
-      const aggregateReports = await apiRequest<Array<ReportAggregatePayload['report']>>(undefined, '/api/v1/reports');
-      reports = aggregateReports.map((metadata) => reportMetadata(metadata));
-    } catch (err) {
-      console.warn('Cloud API getAllSavedReports failed, fetching from local IndexedDB:', err);
-      reports = await (await initLocalDB()).getAll(LOCAL_STORE_NAME);
-    }
+    const aggregateReports = await apiRequest<Array<ReportAggregatePayload['report']>>(
+      undefined,
+      '/api/v1/reports',
+    );
+    reports = aggregateReports.map((metadata) => reportMetadata(metadata));
   }
-  return reports.map((r) => normalizeReport(r)!).filter(Boolean);
+  return reports.map((report) => normalizeReport(report)!).filter(Boolean);
 };
 
 export const deleteReportFromDB = async (id: string): Promise<void> => {
-  if (!isFirebaseConfigured() || !auth || !import.meta.env.VITE_API_BASE_URL?.trim()) {
+  if (!cloudMode()) {
     await (await initLocalDB()).delete(LOCAL_STORE_NAME, id);
     return;
   }
-  try {
-    const existing = await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`);
-    await apiRequest<Record<string, unknown>>(String(existing.report.agencyId), `/api/v1/reports/${id}/transitions`, {
+
+  const existing = await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`);
+  await apiRequest<Record<string, unknown>>(
+    String(existing.report.agencyId),
+    `/api/v1/reports/${id}/transitions`,
+    {
       method: 'POST',
-      body: { status: 'cancelled', expectedVersion: existing.report.version ?? 1, reason: 'draft_deleted_by_operator' },
-    });
-  } catch (err) {
-    console.warn('Cloud API delete failed, deleting from local IndexedDB:', err);
-    await (await initLocalDB()).delete(LOCAL_STORE_NAME, id);
-  }
+      body: {
+        status: 'cancelled',
+        expectedVersion: existing.report.version ?? 1,
+        reason: 'draft_deleted_by_operator',
+      },
+    },
+  );
 };

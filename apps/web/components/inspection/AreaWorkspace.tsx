@@ -16,6 +16,7 @@ interface AreaWorkspaceProps {
   previousReport?: PreviousReportAttachment;
   previousReportNotes?: string;
   agencyId?: string;
+  inspectionType?: string;
   readOnly?: boolean;
 }
 
@@ -25,6 +26,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
   onDeleteArea,
   previousReportNotes,
   agencyId,
+  inspectionType,
   readOnly = false,
 }) => {
   const {
@@ -36,14 +38,10 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
     generateAreaOverallCommentary,
     clearAnalysisError,
     analysisError,
-  } = useAreaAnalysis({ agencyId });
+  } = useAreaAnalysis({ agencyId, inspectionType });
 
   const handlePhotosAdded = (newPhotos: Photo[]) => {
-    onUpdateArea({
-      ...area,
-      photos: [...area.photos, ...newPhotos],
-      status: 'photos_uploaded',
-    });
+    onUpdateArea({ ...area, photos: [...area.photos, ...newPhotos], status: 'photos_uploaded' });
   };
 
   const handleRemovePhoto = (photoId: string) => {
@@ -52,36 +50,22 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
       ...item,
       photoReferences: (item.photoReferences || []).filter((ref) => ref.photoId !== photoId),
     }));
-
-    onUpdateArea({
-      ...area,
-      photos: remainingPhotos,
-      items: updatedItems,
-    });
+    onUpdateArea({ ...area, photos: remainingPhotos, items: updatedItems });
   };
 
   const handleUpdateComponent = (componentId: string, patch: Partial<InspectionItem>) => {
-    const updatedItems = area.items.map((item) =>
-      item.id === componentId ? { ...item, ...patch } : item
-    );
     onUpdateArea({
       ...area,
-      items: updatedItems,
+      items: area.items.map((item) => (item.id === componentId ? { ...item, ...patch } : item)),
     });
   };
 
   const handleAddComponent = (newItem: InspectionItem) => {
-    onUpdateArea({
-      ...area,
-      items: [...area.items, newItem],
-    });
+    onUpdateArea({ ...area, items: [...area.items, newItem] });
   };
 
   const handleRemoveComponent = (componentId: string) => {
-    onUpdateArea({
-      ...area,
-      items: area.items.filter((item) => item.id !== componentId),
-    });
+    onUpdateArea({ ...area, items: area.items.filter((item) => item.id !== componentId) });
   };
 
   const handleRunAreaAnalysis = async () => {
@@ -98,44 +82,30 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
 
   const handleRegenerateComponentComment = async (item: InspectionItem) => {
     const comment = await generateComponentCommentary(area.name, item, area.photos, previousReportNotes);
-    if (comment) {
-      handleUpdateComponent(item.id, { comment });
-    }
+    if (comment) handleUpdateComponent(item.id, { comment });
   };
 
   const handleGenerateAreaSummary = async () => {
     const comment = await generateAreaOverallCommentary(area.name, area.items, area.photos);
-    if (comment) {
-      onUpdateArea({ ...area, overallComment: comment });
-    }
+    if (comment) onUpdateArea({ ...area, overallComment: comment });
   };
 
   const handleFocusBlocker = (componentId: string) => {
     const el = document.getElementById(`component-${componentId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <AreaHeader
-        area={area}
-        onDeleteArea={onDeleteArea}
-        disabled={readOnly}
-      />
+      <AreaHeader area={area} onDeleteArea={onDeleteArea} disabled={readOnly} />
 
       {analysisError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200 flex items-center justify-between">
           <span>{analysisError}</span>
-          <button onClick={clearAnalysisError} className="font-bold underline">
-            Dismiss
-          </button>
+          <button onClick={clearAnalysisError} className="font-bold underline">Dismiss</button>
         </div>
       )}
 
-      {/* AI Action Bar */}
       {!readOnly && (
         <AreaActionBar
           onAnalyseArea={handleRunAreaAnalysis}
@@ -145,22 +115,11 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         />
       )}
 
-      {/* Photo Upload & Gallery */}
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <PhotoUploadManager
-          existingPhotos={area.photos}
-          onPhotosAdded={handlePhotosAdded}
-          disabled={readOnly}
-        />
-        <EvidenceGallery
-          photos={area.photos}
-          areaItems={area.items}
-          onRemovePhoto={handleRemovePhoto}
-          readOnly={readOnly}
-        />
+        <PhotoUploadManager existingPhotos={area.photos} onPhotosAdded={handlePhotosAdded} disabled={readOnly} />
+        <EvidenceGallery photos={area.photos} areaItems={area.items} onRemovePhoto={handleRemovePhoto} readOnly={readOnly} />
       </div>
 
-      {/* Component Assessment List */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900 space-y-3">
         <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
           Structured Component Assessments ({area.items.length})
@@ -178,7 +137,6 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         />
       </div>
 
-      {/* Overall Commentary Panel */}
       <AreaCommentaryPanel
         areaName={area.name}
         overallComment={area.overallComment}
@@ -190,7 +148,6 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         disabled={readOnly}
       />
 
-      {/* Area Completeness Summary */}
       <AreaCompletenessPanel area={area} onFocusBlocker={handleFocusBlocker} />
     </div>
   );

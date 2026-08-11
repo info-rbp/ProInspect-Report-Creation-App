@@ -9,6 +9,8 @@ export type UserRole =
   | 'landlord'
   | 'shopify_customer';
 
+export type EntityStatus = 'active' | 'inactive' | 'archived';
+
 export type {
   MaintenanceCategory,
   MaintenancePriority,
@@ -30,13 +32,6 @@ export type {
   FollowUpComparisonOutcome,
 } from '@pcr/domain';
 
-/**
- * The five report types supported by the shared inspection product model.
- *
- * Entry, Routine and Exit are the first-release field-inspection modules.
- * Comparison and Maintenance are recognised by the domain now and are
- * completed as operational modules during Phase 2.
- */
 export const INSPECTION_REPORT_TYPES = [
   'Property Condition Report',
   'Routine Inspection',
@@ -95,11 +90,6 @@ export type ReportLifecycleStatus =
   | 'archived'
   | 'cancelled';
 
-/**
- * Stage-specific operational conditions. These do not replace the durable
- * lifecycle state. For example, an archive failure leaves a report finalised
- * until archival succeeds.
- */
 export type WorkflowExceptionCode =
   | 'evidence_upload_failed'
   | 'analysis_failed'

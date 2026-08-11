@@ -1,5 +1,6 @@
 import type { PropertyRecord, RoomType, PropertyFeatures } from '../../types/platform';
 import type { InspectionItem, ReportData, Room } from '../../types';
+import { pcrStandardAreas, type TemplateArea } from '@pcr/templates';
 import { generateId } from '../../utils';
 
 export function isOperationalItem(name: string): boolean {
@@ -20,17 +21,28 @@ export function isOperationalItem(name: string): boolean {
     lower.includes('remote') ||
     lower.includes('reticulation') ||
     lower.includes('appliance') ||
-    lower.includes('light fixture') ||
+    lower.includes('light fitting') ||
     lower.includes('heat lamp') ||
     lower.includes('exhaust') ||
-    lower.includes('intercom')
+    lower.includes('intercom') ||
+    lower.includes('door motor') ||
+    lower.includes('hot water') ||
+    lower.includes('tap')
   );
 }
 
-export function createSeededItem(name: string): InspectionItem {
+function slug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export function createSeededItem(name: string, stableId?: string): InspectionItem {
   const operational = isOperationalItem(name);
   return {
-    id: generateId(),
+    id: stableId?.trim() || slug(name) || generateId(),
     name,
     conditionCategory: 'unable_to_confirm',
     cleanlinessCategory: 'unable_to_confirm',
@@ -45,206 +57,121 @@ export function createSeededItem(name: string): InspectionItem {
   };
 }
 
-export const getDefaultItemsForRoomType = (roomType?: RoomType | string, roomName: string = ''): InspectionItem[] => {
+function findAreaById(id: string): TemplateArea | undefined {
+  return pcrStandardAreas.find((area) => area.id === id);
+}
+
+function resolveCanonicalArea(roomType?: RoomType | string, roomName = ''): TemplateArea | undefined {
   const lowerType = (roomType || '').toLowerCase();
   const lowerName = roomName.toLowerCase();
 
-  let itemNames: string[] = [];
-
-  if (lowerType === 'kitchen' || lowerName.includes('kitchen')) {
-    itemNames = [
-      'Doors, Drawers & Handles',
-      'Walls, Skirting & Splashback',
-      'Benchtops & Sink / Taps',
-      'Oven, Grill & Cooktop',
-      'Rangehood & Filters',
-      'Dishwasher (if fitted)',
-      'Flooring / Tiles',
-      'Light Switches & Outlets',
-      'Ceiling & Exhaust',
-    ];
-  } else if (lowerType === 'bathroom' || lowerName.includes('bathroom') || lowerName.includes('ensuite') || lowerName.includes('toilet') || lowerName.includes('powder')) {
-    itemNames = [
-      'Door, Lock & Towel Rails',
-      'Walls, Tiles & Grouting',
-      'Vanity, Basin & Mirror',
-      'Shower Screen, Recess & Taps',
-      'Bath Tub (if fitted)',
-      'Toilet Suite, Seat & Roll Holder',
-      'Flooring / Tiles',
-      'Exhaust Fan & Heat Lamps',
-      'Light Switches & Fixtures',
-    ];
-  } else if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('bed')) {
-    itemNames = [
-      'Entry Door, Handle & Lock',
-      'Walls, Skirting & Cornices',
-      'Windows, Screens & Blinds/Curtains',
-      'Flooring / Carpet',
-      'Built-in Robes, Doors & Shelves',
-      'Light Switches & Power Outlets',
-      'Ceiling & Ceiling Fan/A/C',
-    ];
-  } else if (lowerType === 'living' || lowerType === 'dining' || lowerName.includes('living') || lowerName.includes('lounge') || lowerName.includes('dining') || lowerName.includes('family')) {
-    itemNames = [
-      'Doors, Handles & Screen Doors',
-      'Walls, Skirting & Picture Rails',
-      'Windows, Screens & Window Coverings',
-      'Flooring / Timber / Carpet',
-      'Light Switches & Power Outlets',
-      'Air Conditioner / Heating Unit',
-      'Ceiling, Light Fixtures & Fan',
-    ];
-  } else if (lowerType === 'laundry' || lowerName.includes('laundry')) {
-    itemNames = [
-      'Door & Screen Door',
-      'Walls, Tiles & Skirting',
-      'Laundry Tub, Taps & Cabinet',
-      'Washing Machine Taps & Waste',
-      'Flooring / Floor Drain',
-      'Light Switch & Power Points',
-    ];
-  } else if (lowerType === 'outdoor' || lowerType === 'garage' || lowerName.includes('patio') || lowerName.includes('balcony') || lowerName.includes('garage') || lowerName.includes('garden')) {
-    itemNames = [
-      'Paved / Concrete Floor / Decking',
-      'Walls, Fascia & Gutters',
-      'Garage Door / Gates & Remotes',
-      'Outdoor Lighting & Power Outlets',
-      'Lawn, Garden Beds & Reticulation',
-      'Fencing & Gates',
-    ];
-  } else {
-    itemNames = [
-      'Entry Door, Handle & Locks',
-      'Walls, Skirting & Painting',
-      'Windows, Screens & Coverings',
-      'Flooring Condition',
-      'Light Switches & Power Outlets',
-      'Ceiling & Light Fixtures',
-    ];
+  if (lowerName.includes('exterior front')) return findAreaById('exterior-front');
+  if (lowerName.includes('exterior back') || lowerName.includes('rear exterior')) return findAreaById('exterior-back');
+  if (lowerName.includes('security') || lowerType === 'security') return findAreaById('security-safety');
+  if (lowerName.includes('general external')) return findAreaById('general-external-items');
+  if (lowerName.includes('lounge / dining') || lowerName.includes('living & dining')) return findAreaById('lounge-dining-room');
+  if (lowerType === 'kitchen' || lowerName.includes('kitchen')) return findAreaById('kitchen');
+  if (lowerName.includes('ensuite')) return findAreaById('ensuite');
+  if (lowerType === 'bathroom' || lowerName.includes('bathroom')) return findAreaById('bathroom');
+  if (lowerName.includes('toilet') || lowerName.includes('wc') || lowerName.includes('powder')) return findAreaById('toilet-wc');
+  if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('master bed') || lowerName.includes('main bedroom')) return findAreaById('bedroom');
+  if (lowerName.includes('study')) return findAreaById('study');
+  if (lowerName.includes('activity')) return findAreaById('activity-room');
+  if (lowerType === 'laundry' || lowerName.includes('laundry')) return findAreaById('laundry');
+  if (lowerType === 'garage' || lowerName.includes('garage') || lowerName.includes('carport')) return findAreaById('garage-carport');
+  if (lowerName.includes('entry')) return findAreaById('entry');
+  if (lowerName.includes('hallway') || lowerName.includes('passage')) return findAreaById('passage-hallway');
+  if (lowerName.includes('linen')) return findAreaById('linen-press');
+  if (lowerType === 'dining' || lowerName.includes('dining')) return findAreaById('dining-room');
+  if (lowerName.includes('family')) return findAreaById('family-room');
+  if (lowerType === 'living' || lowerName.includes('living') || lowerName.includes('lounge')) return findAreaById('lounge-room');
+  if (lowerName.includes('shed') || lowerName.includes('storage')) return findAreaById('garden-shed-external-storage');
+  if (lowerType === 'outdoor' || lowerName.includes('outdoor') || lowerName.includes('courtyard') || lowerName.includes('balcony') || lowerName.includes('patio')) {
+    return findAreaById('general-external-items');
   }
 
-  return itemNames.map((name) => createSeededItem(name));
+  return undefined;
+}
+
+export const getDefaultItemsForRoomType = (roomType?: RoomType | string, roomName = ''): InspectionItem[] => {
+  const canonicalArea = resolveCanonicalArea(roomType, roomName);
+  if (canonicalArea) {
+    return canonicalArea.components.map((component) => createSeededItem(component.name, component.id));
+  }
+
+  return [
+    createSeededItem('Doors / Doorway Frames', 'doors-doorway-frames'),
+    createSeededItem('Ceiling / Cornices', 'ceiling-cornices'),
+    createSeededItem('Walls', 'walls'),
+    createSeededItem('Light Fittings', 'light-fittings'),
+    createSeededItem('Points and Switches', 'points-switches'),
+    createSeededItem('Floor / Floorcoverings', 'floor-floorcoverings'),
+  ];
 };
 
+function room(id: string, name: string, roomType?: RoomType | string, notes = ''): Room {
+  return {
+    id,
+    name,
+    status: 'draft',
+    items: getDefaultItemsForRoomType(roomType, name),
+    photos: [],
+    overallComment: notes,
+    isExpanded: true,
+  };
+}
+
 export const seedRoomsFromProperty = (property: PropertyRecord): Room[] => {
-  // If property has configured rooms in roomsConfig, use them
   if (property.roomsConfig && property.roomsConfig.length > 0) {
-    return property.roomsConfig.map((rm) => ({
-      id: rm.id ? (rm.id.startsWith('room-') ? rm.id : `room-${rm.id}`) : generateId(),
-      name: rm.name,
-      status: 'draft',
-      items: getDefaultItemsForRoomType(rm.roomType, rm.name),
-      photos: [],
-      overallComment: rm.notes || '',
-      isExpanded: true,
-    }));
+    return property.roomsConfig.map((rm, index) => {
+      const configuredId = rm.id?.trim();
+      const stableAreaId = configuredId
+        ? (configuredId.startsWith('room-') ? configuredId : `room-${configuredId}`)
+        : `room-${slug(rm.name) || index + 1}`;
+      return room(stableAreaId, rm.name, rm.roomType, rm.notes || '');
+    });
   }
 
-  // Otherwise generate dynamic rooms based on property counts
   const rooms: Room[] = [];
 
-  // Entry / Hallway
-  rooms.push({
-    id: generateId(),
-    name: 'Entry / Hallway',
-    status: 'draft',
-    items: getDefaultItemsForRoomType('hallway', 'Entry / Hallway'),
-    photos: [],
-    overallComment: '',
-    isExpanded: true,
-  });
+  rooms.push(room('area-entry', 'Entry', 'hallway'));
+  rooms.push(room('area-passage-hallway', 'Passage / Hallway', 'hallway'));
 
-  // Living Areas
   const livingCount = property.livingAreas || 1;
   for (let i = 1; i <= livingCount; i += 1) {
-    const name = livingCount === 1 ? 'Living & Dining Room' : i === 1 ? 'Main Living Room' : `Family / Lounge Room ${i}`;
-    rooms.push({
-      id: generateId(),
-      name,
-      status: 'draft',
-      items: getDefaultItemsForRoomType('living', name),
-      photos: [],
-      overallComment: '',
-      isExpanded: true,
-    });
+    const name = livingCount === 1 ? 'Lounge / Dining Room' : i === 1 ? 'Lounge Room' : `Family Room ${i - 1}`;
+    rooms.push(room(`area-living-${i}`, name, 'living'));
   }
 
-  // Kitchen
-  rooms.push({
-    id: generateId(),
-    name: 'Kitchen',
-    status: 'draft',
-    items: getDefaultItemsForRoomType('kitchen', 'Kitchen'),
-    photos: [],
-    overallComment: '',
-    isExpanded: true,
-  });
+  rooms.push(room('area-kitchen', 'Kitchen', 'kitchen'));
 
-  // Bedrooms
   const bedCount = property.bedrooms || 3;
   for (let i = 1; i <= bedCount; i += 1) {
-    const name = i === 1 ? 'Master Bedroom' : `Bedroom ${i}`;
-    rooms.push({
-      id: generateId(),
-      name,
-      status: 'draft',
-      items: getDefaultItemsForRoomType('bedroom', name),
-      photos: [],
-      overallComment: '',
-      isExpanded: true,
-    });
+    const name = i === 1 ? 'Bedroom 1 / Main Bedroom' : `Bedroom ${i}`;
+    rooms.push(room(`area-bedroom-${i}`, name, 'bedroom'));
   }
 
-  // Bathrooms
   const bathCount = property.bathrooms || 1;
   for (let i = 1; i <= bathCount; i += 1) {
-    const name = bathCount > 1 && i === 1 ? 'Ensuite Bathroom' : i === 1 ? 'Main Bathroom' : `Bathroom ${i}`;
-    rooms.push({
-      id: generateId(),
-      name,
-      status: 'draft',
-      items: getDefaultItemsForRoomType('bathroom', name),
-      photos: [],
-      overallComment: '',
-      isExpanded: true,
-    });
+    const name = bathCount > 1 && i === 1 ? 'Ensuite' : i === 1 ? 'Bathroom' : `Bathroom ${i}`;
+    rooms.push(room(`area-bathroom-${i}`, name, i === 1 && bathCount > 1 ? 'ensuite' : 'bathroom'));
   }
 
-  // Laundry
-  rooms.push({
-    id: generateId(),
-    name: 'Laundry',
-    status: 'draft',
-    items: getDefaultItemsForRoomType('laundry', 'Laundry'),
-    photos: [],
-    overallComment: '',
-    isExpanded: true,
-  });
+  rooms.push(room('area-laundry', 'Laundry', 'laundry'));
 
-  // Outdoor
-  rooms.push({
-    id: generateId(),
-    name: property.propertyType === 'apartment' || property.propertyType === 'unit' ? 'Balcony / Patio' : 'Outdoor & Courtyard',
-    status: 'draft',
-    items: getDefaultItemsForRoomType('outdoor', 'Outdoor'),
-    photos: [],
-    overallComment: '',
-    isExpanded: true,
-  });
+  if (property.propertyType === 'apartment' || property.propertyType === 'unit') {
+    rooms.push(room('area-external', 'Balcony / External', 'outdoor'));
+  } else {
+    rooms.push(room('area-exterior-front', 'Exterior Front', 'outdoor'));
+    rooms.push(room('area-exterior-back', 'Exterior Back', 'outdoor'));
+    rooms.push(room('area-general-external', 'General External Items', 'outdoor'));
+  }
 
-  // Garage / Parking
   if ((property.parking && property.parking > 0) || property.propertyType === 'house') {
-    rooms.push({
-      id: generateId(),
-      name: 'Garage / Carport',
-      status: 'draft',
-      items: getDefaultItemsForRoomType('garage', 'Garage / Carport'),
-      photos: [],
-      overallComment: '',
-      isExpanded: true,
-    });
+    rooms.push(room('area-garage-carport', 'Garage / Carport', 'garage'));
   }
+
+  rooms.push(room('area-security-safety', 'Security / Safety', 'security'));
 
   return rooms;
 };
@@ -279,8 +206,6 @@ export const seedReportFromProperty = (
     .join(', ');
 
   const seededRooms = seedRoomsFromProperty(property);
-
-  // If existing report already has user-modified rooms, preserve them if present, or combine
   const rooms = existingReport?.rooms && existingReport.rooms.length > 0
     ? existingReport.rooms
     : seededRooms;

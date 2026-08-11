@@ -14,6 +14,7 @@ interface InspectionWorkspaceProps {
   previousReport?: PreviousReportAttachment;
   previousReportNotes?: string;
   agencyId?: string;
+  inspectionType?: string;
   readOnly?: boolean;
 }
 
@@ -27,6 +28,7 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
   previousReport,
   previousReportNotes,
   agencyId,
+  inspectionType,
   readOnly = false,
 }) => {
   const activeArea = areas.find((a) => a.id === activeAreaId) || areas[0] || null;
@@ -37,7 +39,7 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
         <Building className="mx-auto h-12 w-12 text-slate-400 mb-3 opacity-60" />
         <h3 className="text-base font-bold text-slate-900 dark:text-white">No Inspection Areas Configured</h3>
         <p className="mt-1 text-xs max-w-sm mx-auto">
-          Add standard property area templates (Kitchen, Lounge, Bathroom) to start recording inspections.
+          Add standard property area templates to start recording inspections.
         </p>
         {!readOnly && (
           <button
@@ -54,7 +56,6 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-      {/* Area Navigator (Sidebar) */}
       <div className="md:col-span-1">
         <AreaNavigator
           areas={areas}
@@ -65,7 +66,6 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
         />
       </div>
 
-      {/* Main Area Workspace */}
       <div className="md:col-span-3">
         {activeArea ? (
           <AreaWorkspace
@@ -76,6 +76,7 @@ export const InspectionWorkspace: React.FC<InspectionWorkspaceProps> = ({
             previousReport={previousReport}
             previousReportNotes={previousReportNotes}
             agencyId={agencyId}
+            inspectionType={inspectionType}
             readOnly={readOnly}
           />
         ) : (

@@ -81,7 +81,6 @@ export type ComponentWorkingStatus = (typeof COMPONENT_WORKING_STATUSES)[number]
 export type ComponentTestStatus = (typeof COMPONENT_TEST_STATUSES)[number];
 export type ComponentReviewStatus = (typeof COMPONENT_REVIEW_STATUSES)[number];
 export type ComponentComparisonStatus = (typeof COMPONENT_COMPARISON_STATUSES)[number];
-
 export type PresenceComparison = (typeof PRESENCE_COMPARISON_STATES)[number];
 export type ConditionComparison = (typeof CONDITION_COMPARISON_STATES)[number];
 export type CleanlinessComparison = (typeof CLEANLINESS_COMPARISON_STATES)[number];
@@ -94,6 +93,14 @@ export interface ComponentEvidencePair {
   matchingConfidence: number;
 }
 
+export interface ReportPhotoReference {
+  photoId: string;
+  objectPath: string;
+  thumbnailObjectPath?: string;
+  caption?: string;
+  sequence?: number;
+}
+
 export interface BaselineComponentSnapshot {
   id?: string;
   conditionCategory: ComponentConditionCategory;
@@ -103,14 +110,6 @@ export interface BaselineComponentSnapshot {
   commentary: string;
   defects: string[];
   photoReferences?: ReportPhotoReference[];
-}
-
-export interface ReportPhotoReference {
-  photoId: string;
-  objectPath: string;
-  thumbnailObjectPath?: string;
-  caption?: string;
-  sequence?: number;
 }
 
 export interface ReportComponentRecord {
@@ -162,6 +161,8 @@ export interface ReportAreaRecord {
   name: string;
   sequence: number;
   overallCommentary?: string;
+  /** Complete area-level evidence, including overview and currently unassigned photos. */
+  photoReferences?: ReportPhotoReference[];
   componentCount: number;
   version: number;
   createdAt: string;
@@ -182,12 +183,24 @@ export interface ReportMetadataRecord {
   lifecycleStatus: ReportLifecycleStatus;
   assignedUserId?: string;
   currentVersionId?: string;
+  templateId?: string;
+  templateVersion?: number;
   baselineReportId?: string;
   baselineReportVersionId?: string;
   baselineInspectionJobId?: string;
   baselineTemplateId?: string;
   baselineTemplateVersion?: number;
   baselineQuality?: 'structured' | 'legacy_unstructured' | 'none';
+  finalPdfReportVersionId?: string;
+  finalPdfObjectPath?: string;
+  finalPdfSha256?: string;
+  finalPdfGeneration?: string;
+  renderManifestObjectPath?: string;
+  renderManifestSha256?: string;
+  pdfGeneratedAt?: string;
+  archiveManifestObjectPath?: string;
+  archiveManifestSha256?: string;
+  archivedAt?: string;
   areaCount: number;
   componentCount: number;
   finalisedAt?: string;
@@ -216,3 +229,18 @@ export interface ReportAggregate {
 }
 
 export const IMMUTABLE_REPORT_STATUSES = new Set<ReportLifecycleStatus>(['finalised', 'archived']);
+
+/**
+ * Once review approval creates an immutable report version, direct content editing is locked.
+ * Corrections must travel through the explicit changes-requested workflow and create a superseding version.
+ */
+export const REPORT_CONTENT_LOCKED_STATUSES = new Set<ReportLifecycleStatus>([
+  'approved_for_issue',
+  'issued_to_tenant',
+  'tenant_response_in_progress',
+  'tenant_submitted',
+  'agent_response_required',
+  'finalisation_ready',
+  'finalised',
+  'archived',
+]);
