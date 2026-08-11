@@ -22,7 +22,9 @@ jobs:
         run: npm run build:packages
       - name: Type check web
         id: web_typecheck
-        run: npm run typecheck --workspace @pcr/web 2>&1 | tee web-typecheck.log
+        run: |
+          set -o pipefail
+          npm run typecheck --workspace @pcr/web 2>&1 | tee web-typecheck.log
       - name: Upload web typecheck diagnostics
         if: failure() && steps.web_typecheck.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -33,7 +35,9 @@ jobs:
           retention-days: 1
       - name: Type check API
         id: api_typecheck
-        run: npm run typecheck --workspace @pcr/api 2>&1 | tee api-typecheck.log
+        run: |
+          set -o pipefail
+          npm run typecheck --workspace @pcr/api 2>&1 | tee api-typecheck.log
       - name: Upload API typecheck diagnostics
         if: failure() && steps.api_typecheck.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -52,7 +56,9 @@ jobs:
         run: npm run format:check
       - name: Lint
         id: lint
-        run: npm run lint 2>&1 | tee lint.log
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee lint.log
       - name: Upload lint diagnostics
         if: failure() && steps.lint.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -65,7 +71,9 @@ jobs:
         run: npm run test:run
       - name: Build applications
         id: build_apps
-        run: npm run build:apps 2>&1 | tee build-apps.log
+        run: |
+          set -o pipefail
+          npm run build:apps 2>&1 | tee build-apps.log
       - name: Upload application build diagnostics
         if: failure() && steps.build_apps.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -76,7 +84,9 @@ jobs:
           retention-days: 1
       - name: Verify built artifacts
         id: verify_dist
-        run: npm run verify:dist 2>&1 | tee verify-dist.log
+        run: |
+          set -o pipefail
+          npm run verify:dist 2>&1 | tee verify-dist.log
       - name: Upload built artifact diagnostics
         if: failure() && steps.verify_dist.outcome == 'failure'
         uses: actions/upload-artifact@v4
