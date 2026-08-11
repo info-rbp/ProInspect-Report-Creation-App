@@ -27,7 +27,7 @@ jobs:
           npm run typecheck --workspace @pcr/web 2>&1 | tee web-typecheck.log
       - name: Upload web typecheck diagnostics
         if: failure() && steps.web_typecheck.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-typecheck-diagnostics
           path: web-typecheck.log
@@ -40,7 +40,7 @@ jobs:
           npm run typecheck --workspace @pcr/api 2>&1 | tee api-typecheck.log
       - name: Upload API typecheck diagnostics
         if: failure() && steps.api_typecheck.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: api-typecheck-diagnostics
           path: api-typecheck.log
@@ -61,7 +61,7 @@ jobs:
           npm run lint 2>&1 | tee lint.log
       - name: Upload lint diagnostics
         if: failure() && steps.lint.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lint-diagnostics
           path: lint.log
@@ -76,7 +76,7 @@ jobs:
           npm run build:apps 2>&1 | tee build-apps.log
       - name: Upload application build diagnostics
         if: failure() && steps.build_apps.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-apps-diagnostics
           path: build-apps.log
@@ -89,7 +89,7 @@ jobs:
           npm run verify:dist 2>&1 | tee verify-dist.log
       - name: Upload built artifact diagnostics
         if: failure() && steps.verify_dist.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: verify-dist-diagnostics
           path: verify-dist.log
