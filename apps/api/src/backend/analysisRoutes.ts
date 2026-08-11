@@ -67,6 +67,30 @@ function parsePreviousReportInput(raw: unknown): PreviousReportInput | undefined
   };
 }
 
+type ExitComparisonComponentInput = Parameters<typeof generateExitComparisonServer>[2];
+
+function parseExitComparisonComponent(value: unknown): ExitComparisonComponentInput {
+  const item = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    conditionCategory: typeof item.conditionCategory === 'string' ? item.conditionCategory : 'unable_to_confirm',
+    cleanlinessCategory: typeof item.cleanlinessCategory === 'string' ? item.cleanlinessCategory : 'unable_to_confirm',
+    workingStatus: typeof item.workingStatus === 'string' ? item.workingStatus : 'unable_to_confirm',
+    testStatus: typeof item.testStatus === 'string' ? item.testStatus : 'unable_to_confirm',
+    commentary: typeof item.commentary === 'string' ? item.commentary : '',
+    defects: Array.isArray(item.defects) ? item.defects.filter((defect): defect is string => typeof defect === 'string') : [],
+    photoReferences: Array.isArray(item.photoReferences)
+      ? item.photoReferences.filter((reference): reference is ExitComparisonComponentInput['photoReferences'][number] => (
+          Boolean(reference) &&
+          typeof reference === 'object' &&
+          typeof (reference as { photoId?: unknown }).photoId === 'string' &&
+          typeof (reference as { objectPath?: unknown }).objectPath === 'string'
+        ))
+      : [],
+  };
+}
+
 function requireAi(endpoint: string): void {
   if (endpoint === 'exit-comparison') return;
   if (!isGeminiAvailable()) {
@@ -152,7 +176,7 @@ export async function routeAnalysisRequest(
   if (endpoint === 'batch-room') {
     const roomName = typeof body.roomName === 'string' ? body.roomName : 'Room';
     const currentOverallComment = typeof body.currentOverallComment === 'string' ? body.currentOverallComment : '';
-    const rawItems = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : [];
+    const rawItems = Array.isArray(body.items) ? body.items as Record<string, unknown>[] : [];
     const items = rawItems.map((it) => ({
       id: typeof it.id === 'string' ? it.id : typeof it.name === 'string' ? it.name : 'Component',
       name: typeof it.name === 'string' ? it.name : typeof it.id === 'string' ? it.id : 'Component',
@@ -171,25 +195,11 @@ export async function routeAnalysisRequest(
   if (endpoint === 'exit-comparison') {
     const roomName = typeof body.roomName === 'string' ? body.roomName : 'Room';
     const itemName = typeof body.itemName === 'string' ? body.itemName : 'Component';
-    const safeUnknown = {
-      conditionCategory: 'unable_to_confirm',
-      cleanlinessCategory: 'unable_to_confirm',
-      workingStatus: 'unable_to_confirm',
-      testStatus: 'unable_to_confirm',
-      commentary: '',
-      defects: [] as string[],
-    };
-    const baselineComponent = body.baselineComponent && typeof body.baselineComponent === 'object'
-      ? body.baselineComponent
-      : safeUnknown;
-    const currentExitComponent = body.currentExitComponent && typeof body.currentExitComponent === 'object'
-      ? body.currentExitComponent
-      : safeUnknown;
     const result = await generateExitComparisonServer(
       roomName,
       itemName,
-      baselineComponent as Parameters<typeof generateExitComparisonServer>[2],
-      currentExitComponent as Parameters<typeof generateExitComparisonServer>[3],
+      parseExitComparisonComponent(body.baselineComponent),
+      parseExitComparisonComponent(body.currentExitComponent),
       parsePhotosInput(body.photos),
     );
     return { status: 200, body: { data: result, meta: { correlationId } } };
