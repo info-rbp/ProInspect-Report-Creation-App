@@ -1,16 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  CheckCircle2,
-  Clock,
-  Copy,
-  Eye,
-  FileText,
-  MessageSquare,
-  Plus,
-  RefreshCw,
-  Send,
-  UserCheck,
-} from 'lucide-react';
+import { Copy, Plus, RefreshCw } from 'lucide-react';
 import type { TenantInstruction, TenantInstructionType } from '../../types/platform';
 import {
   createTenantInstruction,
@@ -24,22 +13,18 @@ const TenantFollowUpPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
-  // Form
   const [propertyId, setPropertyId] = useState('prop-1');
   const [tenancyId, setTenancyId] = useState('ten-1');
-  const [instructionType, setInstructionType] = useState<TenantInstructionType>('cleaning_remediation');
+  const [instructionType, setInstructionType] = useState<TenantInstructionType>('cleaning_request');
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [responseRequiredBy, setResponseRequiredBy] = useState('');
-
-  // Generated Link
+  const [instruction, setInstruction] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
 
   const fetchInstructions = async () => {
     setLoading(true);
     try {
-      const data = await listTenantInstructions();
-      setInstructions(data);
+      setInstructions(await listTenantInstructions());
     } catch (err) {
       console.error('Failed to load tenant instructions', err);
     } finally {
@@ -51,47 +36,47 @@ const TenantFollowUpPage: React.FC = () => {
     fetchInstructions();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!title.trim() || !instruction.trim()) return;
     try {
-      const inst = await createTenantInstruction({
+      const created = await createTenantInstruction({
         propertyId,
         tenancyId,
-        instructionType,
+        type: instructionType,
         title,
-        description,
-        status: 'issued',
-        responseRequiredBy: responseRequiredBy || undefined,
-        issuedAt: new Date().toISOString(),
+        instruction,
+        sourceEvidenceIds: [],
+        responseRequired: true,
+        ...(dueDate ? { dueDate } : {}),
       });
 
-      // Generate Access Grant Link for tenant
-      const grant = await generateAccessGrant('tenant_instruction', inst.id, 'tenant@example.com', 168);
+      const grant = await generateAccessGrant('tenant_instruction', created.id, 'tenant@example.com', 168);
       setGeneratedLink(`${window.location.origin}${grant.accessUrl}`);
-
       setShowModal(false);
       setTitle('');
-      setDescription('');
+      setInstruction('');
       await fetchInstructions();
     } catch (err) {
+      console.error('Failed to issue tenant instruction', err);
       alert('Failed to issue tenant instruction.');
     }
   };
 
-  const handleResolve = async (inst: TenantInstruction) => {
+  const handleResolve = async (item: TenantInstruction) => {
     try {
       await updateTenantInstruction(
-        inst.id,
+        item.id,
         {
           status: 'resolved',
           resolvedAt: new Date().toISOString(),
-          agentResolutionNote: 'Resolved by agency reviewer.',
+          resolutionNote: 'Resolved by agency reviewer.',
         },
-        inst.version,
+        item.version,
       );
       await fetchInstructions();
     } catch (err) {
+      console.error('Failed to resolve tenant instruction', err);
       alert('Failed to resolve instruction.');
     }
   };
@@ -102,7 +87,7 @@ const TenantFollowUpPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tenant Follow-Up Workflows</h1>
           <p className="text-sm text-gray-500">
-            Issue tenant operational advice, request cleaning or maintenance remediation, and track responses.
+            Issue factual tenant follow-up instructions and track responses without changing the source inspection report.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -110,15 +95,13 @@ const TenantFollowUpPage: React.FC = () => {
             onClick={fetchInstructions}
             className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <RefreshCw size={16} />
-            Refresh
+            <RefreshCw size={16} /> Refresh
           </button>
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
           >
-            <Plus size={16} />
-            New Tenant Instruction
+            <Plus size={16} /> New Tenant Instruction
           </button>
         </div>
       </div>
@@ -136,13 +119,10 @@ const TenantFollowUpPage: React.FC = () => {
               <Copy size={16} />
             </button>
           </div>
-          <p className="text-blue-700">
-            Send this time-limited link to the tenant to allow them to view instructions and upload photos or comments.
-          </p>
+          <p className="text-blue-700">This time-limited link only exposes the released tenant instruction.</p>
         </div>
       )}
 
-      {/* Instruction List */}
       {loading ? (
         <div className="p-8 text-center text-sm text-gray-500">Loading instructions...</div>
       ) : instructions.length === 0 ? (
@@ -162,35 +142,33 @@ const TenantFollowUpPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {instructions.map((inst) => (
-                <tr key={inst.id} className="hover:bg-gray-50">
+              {instructions.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">
-                    <div>{inst.title}</div>
-                    <div className="text-xs text-gray-400 capitalize">{inst.instructionType.replaceAll('_', ' ')}</div>
+                    <div>{item.title}</div>
+                    <div className="text-xs text-gray-400 capitalize">{item.type.replaceAll('_', ' ')}</div>
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold capitalize ${
-                        inst.status === 'resolved'
+                        item.status === 'resolved'
                           ? 'bg-emerald-100 text-emerald-800'
-                          : inst.status === 'tenant_responded'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-amber-100 text-amber-800'
+                          : item.status === 'tenant_responded'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
                       }`}
                     >
-                      {inst.status.replaceAll('_', ' ')}
+                      {item.status.replaceAll('_', ' ')}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
-                    {inst.issuedAt ? new Date(inst.issuedAt).toLocaleDateString() : 'Draft'}
+                    {item.issuedAt ? new Date(item.issuedAt).toLocaleDateString() : 'Not issued'}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-600">
-                    {inst.tenantResponseNote || 'No response yet'}
-                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-600">{item.tenantResponseNote || 'No response yet'}</td>
                   <td className="px-4 py-3 text-right">
-                    {inst.status !== 'resolved' && (
+                    {item.status !== 'resolved' && item.status !== 'closed' && (
                       <button
-                        onClick={() => handleResolve(inst)}
+                        onClick={() => handleResolve(item)}
                         className="rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
                       >
                         Mark Resolved
@@ -204,75 +182,60 @@ const TenantFollowUpPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-gray-900">Issue Tenant Instruction</h2>
+            <h2 className="text-lg font-bold text-gray-900">Create Tenant Instruction</h2>
             <form onSubmit={handleCreate} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700">Instruction Type</label>
                 <select
                   value={instructionType}
-                  onChange={(e) => setInstructionType(e.target.value as any)}
+                  onChange={(event) => setInstructionType(event.target.value as TenantInstructionType)}
                   className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm"
                 >
-                  <option value="cleaning_remediation">Cleaning Remediation</option>
-                  <option value="maintenance_access">Maintenance Access Request</option>
-                  <option value="operational_advice">Operational Advice</option>
-                  <option value="garden_upkeep">Garden / Exterior Upkeep</option>
-                  <option value="safety_compliance">Safety & Compliance</option>
+                  <option value="cleaning_request">Cleaning Request</option>
+                  <option value="access_request">Access Request</option>
+                  <option value="photo_request">Photograph Request</option>
+                  <option value="info_request">Information Request</option>
+                  <option value="general_followup">General Follow-Up</option>
                 </select>
               </div>
-
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Property ID</label>
+                <input value={propertyId} onChange={(event) => setPropertyId(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Tenancy ID</label>
+                <input value={tenancyId} onChange={(event) => setTenancyId(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm" />
+              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700">Title</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Mold treatment in bathroom"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(event) => setTitle(event.target.value)}
                   className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm"
                 />
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-gray-700">Instruction Details</label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="Neutral, objective instructions for the tenant..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  value={instruction}
+                  onChange={(event) => setInstruction(event.target.value)}
                   className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm"
                 />
               </div>
-
               <div>
-                <label className="block text-xs font-medium text-gray-700">Response Required By Date</label>
-                <input
-                  type="date"
-                  value={responseRequiredBy}
-                  onChange={(e) => setResponseRequiredBy(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm"
-                />
+                <label className="block text-xs font-medium text-gray-700">Due Date</label>
+                <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm" />
               </div>
-
               <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-medium text-white hover:bg-gray-800"
-                >
-                  Issue Instruction
-                </button>
+                <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-medium text-white hover:bg-gray-800">Create Instruction</button>
               </div>
             </form>
           </div>
