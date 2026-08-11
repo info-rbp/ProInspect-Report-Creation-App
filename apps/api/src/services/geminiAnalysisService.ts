@@ -62,86 +62,86 @@ export interface PreviousReportInput {
 }
 
 const OPERATIONAL_KEYWORDS = [
-  'switch', 'power', 'light', 'socket', 'plug', 'appliance', 'oven', 'stove',
-  'cooktop', 'rangehood', 'fan', 'aircon', 'air conditioner', 'heater', 'tap',
-  'faucet', 'dishwasher', 'reticulation', 'intercom', 'alarm', 'garage door',
-  'pump', 'disposal', 'exhaust'
+  'switch', 'power', 'light', 'socket', 'plug', 'appliance', 'oven', 'stove', 'cooktop',
+  'rangehood', 'fan', 'aircon', 'air conditioner', 'heater', 'tap', 'faucet', 'dishwasher',
+  'reticulation', 'intercom', 'alarm', 'garage door', 'pump', 'disposal', 'exhaust', 'motor',
 ];
+
+const CONDITION_VALUES = new Set<ComponentConditionCategory>([
+  'not_applicable', 'not_visible', 'partially_visible', 'intact', 'minor_wear', 'repair_required',
+  'replacement_recommended', 'unable_to_confirm',
+]);
+const CLEANLINESS_VALUES = new Set<ComponentCleanlinessCategory>([
+  'not_applicable', 'clean', 'requires_cleaning', 'stained', 'unable_to_confirm',
+]);
 
 export function isOperationalItem(itemName: string): boolean {
   const lower = itemName.toLowerCase();
-  return OPERATIONAL_KEYWORDS.some((kw) => lower.includes(kw));
+  return OPERATIONAL_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
-const PROHIBITED_CAUSATION_REGEX = /\b(tenant caused|tenant damage|misuse|neglected|tenant's fault|tenant negligence|caused by tenant)\b/gi;
+const PROHIBITED_CAUSATION_REGEX = /\b(tenant caused|tenant damage|tenant damaged|tenant is responsible|tenant responsibility|tenant's fault|tenant negligence|negligent|misuse|neglected|caused by tenant|bond deduction|deduct from bond|fair wear and tear|not fair wear and tear)\b/gi;
 
 export function sanitizeProhibitedCausation(text: string): string {
   if (!text) return text;
-  return text.replace(PROHIBITED_CAUSATION_REGEX, 'visible wear/damage observed');
+  return text.replace(PROHIBITED_CAUSATION_REGEX, '[causation or liability omitted]').trim();
 }
 
+/**
+ * Photo analysis never proves operation. Tests are recorded separately by the inspector.
+ * Even a visibly damaged operational item is assessed physically here and remains untested.
+ */
 export function enforceWorkingStatusRules(
   itemName: string,
-  workingStatus: string | undefined,
-  testStatus: string | undefined
+  _workingStatus: string | undefined,
+  _testStatus: string | undefined,
 ): { workingStatus: ComponentWorkingStatus; testStatus: ComponentTestStatus } {
-  const operational = isOperationalItem(itemName);
-  if (operational) {
-    if (workingStatus === 'not_working' || testStatus === 'tested_failed') {
-      return { workingStatus: 'not_working', testStatus: 'tested_failed' };
-    }
-    return { workingStatus: 'untested', testStatus: 'untested' };
-  }
+  if (isOperationalItem(itemName)) return { workingStatus: 'untested', testStatus: 'untested' };
   return { workingStatus: 'not_applicable', testStatus: 'not_applicable' };
 }
 
 export function validateEvidenceProvenance(
   evidencePhotoIds: string[] | undefined,
-  validPhotoIds: Set<string>
+  validPhotoIds: Set<string>,
 ): string[] {
-  if (!evidencePhotoIds || !Array.isArray(evidencePhotoIds)) {
-    return [];
-  }
-  return evidencePhotoIds.filter((id) => validPhotoIds.has(id));
+  if (!Array.isArray(evidencePhotoIds)) return [];
+  return [...new Set(evidencePhotoIds.filter((id) => typeof id === 'string' && validPhotoIds.has(id)))];
 }
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
 function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || !apiKey.trim()) {
+  if (!apiKey?.trim()) {
     throw new Error('GEMINI_API_KEY environment variable is not configured on the server.');
   }
   return new GoogleGenAI({
     apiKey: apiKey.trim(),
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
+    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
   });
 }
 
 export function isGeminiAvailable(): boolean {
-  const apiKey = process.env.GEMINI_API_KEY;
-  return Boolean(apiKey && apiKey.trim().length > 0);
+  return Boolean(process.env.GEMINI_API_KEY?.trim());
+}
+
+function requireGemini(): GoogleGenAI {
+  if (!isGeminiAvailable()) {
+    throw new Error('AI analysis is unavailable because GEMINI_API_KEY is not configured.');
+  }
+  return getGeminiClient();
 }
 
 const GLOBAL_RULES = `
-1. GLOBAL RULES FOR PROPERTY CONDITION INSPECTION ANALYSIS:
-   - Object Presence & Visibility: Never default to "not visible" if ANY part is present. Partial view (corner of window, edge of floor) = VISIBLE. Confirm presence and comment on the visible portion.
-   - Contextual Reasoning: Infer context. If a shower head is visible, a shower area exists.
-   - Condition Category Enums: "intact", "minor_wear", "repair_required", "replacement_recommended", "unable_to_confirm".
-   - Cleanliness Category Enums: "clean", "minor_soiling", "requires_cleaning", "heavy_soiling", "unable_to_confirm".
-   - Working Status & Test Status Rules:
-     * Static photos CANNOT confirm physical operation unless explicit visual proof exists.
-     * For operational items (switches, appliances, fans, aircon, reticulation, taps): Set "workingStatus": "untested" and "testStatus": "untested". Never confirm operation ("operation_confirmed", "tested_passed") from static photos.
-     * For static non-operational items (walls, ceilings, doors, benchtops, tiles, floors): Set "workingStatus": "not_applicable" and "testStatus": "not_applicable".
-     * If broken/damaged controls or exposed wiring are seen: Set "workingStatus": "not_working" and "testStatus": "tested_failed".
-   - Prohibited Causation: Do NOT allege tenant liability, misuse, negligence, or tenant-caused damage in any commentary or defects. Use neutral, objective descriptions of visible physical state.
-   - Evidence Citation: Always cite the source photo ID(s) in evidencePhotoIds.
-   - Maintenance Required: Set to true if repair_required, replacement_recommended, requires_cleaning, heavy_soiling, or not_working is selected.
-   - Language & Tone: Strictly use Australian English spelling (e.g. colour, discolouration, mould, organise, generalised). Professional, objective Form 1 PCR tone.
+PROPERTY CONDITION INSPECTION ANALYSIS RULES
+- Analyse only what is supported by the supplied evidence. Do not invent hidden condition.
+- If a component is only partly shown, describe only the visible portion and retain uncertainty.
+- Condition values: not_applicable, not_visible, partially_visible, intact, minor_wear, repair_required, replacement_recommended, unable_to_confirm.
+- Cleanliness values: not_applicable, clean, requires_cleaning, stained, unable_to_confirm.
+- Static photographs cannot confirm operation. For operational items return workingStatus=untested and testStatus=untested. For static non-operational items return not_applicable for both.
+- Do not assign tenant causation, negligence, legal responsibility, fair wear and tear, breach, compensation or bond deductions.
+- evidencePhotoIds must contain only supplied photo IDs where the stated observation is actually visible.
+- Use Australian English and objective property-inspection language.
 `;
 
 function parseJson<T>(rawText: string): T {
@@ -149,194 +149,34 @@ function parseJson<T>(rawText: string): T {
   return JSON.parse(cleaned) as T;
 }
 
-export async function generateImageTagsServer(photo: PhotoInput): Promise<string[]> {
-  if (!isGeminiAvailable()) {
-    return photo.tags && photo.tags.length > 0 ? photo.tags : ['Room Photo'];
-  }
-
-  const ai = getGeminiClient();
-  const parts: any[] = [];
-
-  if (photo.base64Data) {
-    parts.push({
-      inlineData: {
-        mimeType: photo.mimeType || 'image/jpeg',
-        data: photo.base64Data,
-      },
-    });
-  }
-
-  parts.push({
-    text: `Analyse this real estate inspection photo (ID: "${photo.id}"). Return a JSON array of up to 4 short tags describing room type and key visible features/defects. Example: ["Kitchen", "Oven", "Tiled Floor"]. Output JSON array only.`,
-  });
-
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: { role: 'user', parts },
-      config: { responseMimeType: 'application/json' },
-    });
-
-    const text = response.text;
-    if (!text) return photo.tags && photo.tags.length > 0 ? photo.tags : ['Room Photo'];
-    const tags = parseJson<string[]>(text);
-    return Array.isArray(tags) ? tags.map(sanitizeProhibitedCausation) : ['Room Photo'];
-  } catch (error) {
-    console.warn('Server image tagging failed:', error);
-    return photo.tags && photo.tags.length > 0 ? photo.tags : ['Room Photo'];
-  }
+function normaliseCondition(value: unknown): ComponentConditionCategory {
+  return typeof value === 'string' && CONDITION_VALUES.has(value as ComponentConditionCategory)
+    ? value as ComponentConditionCategory
+    : 'unable_to_confirm';
 }
 
-export async function discoverRoomItemsServer(
-  roomName: string,
-  photos: PhotoInput[]
-): Promise<StructuredComponentAnalysis[]> {
-  const validPhotoIds = new Set(photos.map((p) => p.id));
-  if (!isGeminiAvailable()) {
-    return photos.flatMap((p) =>
-      (p.tags || ['General Feature']).map((tag) => {
-        const statuses = enforceWorkingStatusRules(tag, undefined, undefined);
-        return {
-          id: tag,
-          conditionCategory: 'intact',
-          cleanlinessCategory: 'clean',
-          workingStatus: statuses.workingStatus,
-          testStatus: statuses.testStatus,
-          defects: [],
-          maintenanceRequired: false,
-          commentary: `Visual inspection confirms ${tag} is visible in photo (${p.id}), presenting in clean and undamaged condition.`,
-          evidencePhotoIds: [p.id],
-          aiConfidence: 0.85,
-          reviewStatus: 'ai_generated',
-          comparisonStatus: 'not_compared',
-        };
-      })
-    );
-  }
-
-  const ai = getGeminiClient();
-  const parts: any[] = [];
-
-  photos.forEach((photo, idx) => {
-    if (photo.base64Data) {
-      parts.push({
-        inlineData: {
-          mimeType: photo.mimeType || 'image/jpeg',
-          data: photo.base64Data,
-        },
-      });
-      parts.push({
-        text: `[Photo ${idx + 1} ID: "${photo.id}", Filename: "${photo.filename || photo.id}"]`,
-      });
-    }
-  });
-
-  const prompt = `
-    You are an expert Property Manager creating a Form 1 Property Condition Report for room: "${roomName}".
-
-    ${GLOBAL_RULES}
-
-    Task:
-    1. Identify all structural elements, fixtures, and fittings actually visible in the attached photos.
-    2. For each component:
-       - conditionCategory ("intact", "minor_wear", "repair_required", "replacement_recommended", "unable_to_confirm")
-       - cleanlinessCategory ("clean", "minor_soiling", "requires_cleaning", "heavy_soiling", "unable_to_confirm")
-       - workingStatus & testStatus: For operational items, set "untested". For static items, set "not_applicable".
-       - defects: array of defect strings.
-       - maintenanceRequired: boolean.
-       - commentary: objective narrative in Australian English describing visual evidence.
-       - evidencePhotoIds: array of valid photo IDs where component is visible.
-
-    Output a JSON array of objects matching this schema:
-    [{
-      "id": "Component Name",
-      "conditionCategory": "intact",
-      "cleanlinessCategory": "clean",
-      "workingStatus": "untested",
-      "testStatus": "untested",
-      "defects": [],
-      "maintenanceRequired": false,
-      "commentary": "Description...",
-      "evidencePhotoIds": ["${Array.from(validPhotoIds)[0] || 'photo1'}"],
-      "aiConfidence": 0.9,
-      "reviewStatus": "ai_generated"
-    }]
-  `;
-
-  parts.push({ text: prompt });
-
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: { role: 'user', parts },
-      config: { responseMimeType: 'application/json' },
-    });
-
-    const text = response.text;
-    if (!text) return [];
-    const results = parseJson<StructuredComponentAnalysis[]>(text);
-    if (!Array.isArray(results)) return [];
-
-    return results.map((item) => {
-      const name = item.id || item.name || 'Component';
-      const statuses = enforceWorkingStatusRules(name, item.workingStatus, item.testStatus);
-      const evidence = validateEvidenceProvenance(item.evidencePhotoIds, validPhotoIds);
-      const sanitizedComment = sanitizeProhibitedCausation(item.commentary || '');
-      const sanitizedDefects = (item.defects || []).map(sanitizeProhibitedCausation);
-      const confidence = typeof item.aiConfidence === 'number' ? Math.max(0, Math.min(1, item.aiConfidence)) : 0.85;
-
-      return {
-        id: name,
-        name,
-        conditionCategory: item.conditionCategory || 'intact',
-        cleanlinessCategory: item.cleanlinessCategory || 'clean',
-        workingStatus: statuses.workingStatus,
-        testStatus: statuses.testStatus,
-        defects: sanitizedDefects,
-        maintenanceRequired: Boolean(item.maintenanceRequired),
-        commentary: sanitizedComment,
-        evidencePhotoIds: evidence,
-        aiConfidence: confidence,
-        ...(confidence < 0.7 ? { uncertainty: 'Low visual clarity in provided photos requires manual inspector verification.' } : {}),
-        reviewStatus: 'ai_generated',
-        comparisonStatus: 'not_compared',
-      };
-    });
-  } catch (error) {
-    console.warn('Server item discovery failed:', error);
-    return [];
-  }
+function normaliseCleanliness(value: unknown): ComponentCleanlinessCategory {
+  return typeof value === 'string' && CLEANLINESS_VALUES.has(value as ComponentCleanlinessCategory)
+    ? value as ComponentCleanlinessCategory
+    : 'unable_to_confirm';
 }
 
-export async function generateOverallCommentServer(
-  roomName: string,
-  photos: PhotoInput[],
-  currentComment: string,
-  previousReport?: PreviousReportInput
-): Promise<string> {
-  if (!isGeminiAvailable()) {
-    return currentComment
-      ? `${currentComment} Visual examination of ${photos.length} attached photo(s) confirms the ${roomName} is clean and well-presented.`
-      : `General condition of the ${roomName} is clean and well-presented based on visual examination of ${photos.length} attached inspection photo(s). Wall, ceiling, and floor surfaces appear structurally sound with no major defects visible.`;
-  }
+function confidence(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.5;
+}
 
-  const ai = getGeminiClient();
-  const parts: any[] = [];
-
-  photos.forEach((photo, idx) => {
+function buildPhotoParts(photos: PhotoInput[]): Array<Record<string, unknown>> {
+  const parts: Array<Record<string, unknown>> = [];
+  photos.forEach((photo, index) => {
     if (photo.base64Data) {
-      parts.push({
-        inlineData: {
-          mimeType: photo.mimeType || 'image/jpeg',
-          data: photo.base64Data,
-        },
-      });
-      parts.push({
-        text: `[Photo ${idx + 1} ID: "${photo.id}"]`,
-      });
+      parts.push({ inlineData: { mimeType: photo.mimeType || 'image/jpeg', data: photo.base64Data } });
+      parts.push({ text: `[Photo ${index + 1} ID: "${photo.id}", Filename: "${photo.filename || photo.id}"]` });
     }
   });
+  return parts;
+}
 
+function addPreviousReportParts(parts: Array<Record<string, unknown>>, previousReport?: PreviousReportInput): void {
   if (previousReport?.base64Data) {
     parts.push({
       inlineData: {
@@ -344,39 +184,137 @@ export async function generateOverallCommentServer(
         data: previousReport.base64Data,
       },
     });
-    parts.push({ text: '[Attached Previous Condition Report for comparison]' });
+    parts.push({ text: '[Attached Previous Condition Report. Treat as historical context, not proof of current condition.]' });
   }
+}
 
-  let prompt = `
-    You are an expert Property Manager writing a room general overview for a Form 1 Condition Report in Western Australia.
-    Room: "${roomName}".
+function normaliseAnalysis(
+  itemName: string,
+  raw: Partial<StructuredComponentAnalysis>,
+  validPhotoIds: Set<string>,
+): StructuredComponentAnalysis {
+  const statuses = enforceWorkingStatusRules(itemName, raw.workingStatus, raw.testStatus);
+  const evidence = validateEvidenceProvenance(raw.evidencePhotoIds, validPhotoIds);
+  const aiConfidence = confidence(raw.aiConfidence);
+  const conditionCategory = normaliseCondition(raw.conditionCategory);
+  const cleanlinessCategory = normaliseCleanliness(raw.cleanlinessCategory);
+  const defects = Array.isArray(raw.defects)
+    ? raw.defects.filter((defect): defect is string => typeof defect === 'string').map(sanitizeProhibitedCausation)
+    : [];
 
-    ${GLOBAL_RULES}
+  return {
+    id: itemName,
+    name: raw.name || itemName,
+    conditionCategory,
+    cleanlinessCategory,
+    workingStatus: statuses.workingStatus,
+    testStatus: statuses.testStatus,
+    defects,
+    maintenanceRequired: Boolean(
+      raw.maintenanceRequired ||
+      conditionCategory === 'repair_required' ||
+      conditionCategory === 'replacement_recommended' ||
+      cleanlinessCategory === 'requires_cleaning' ||
+      cleanlinessCategory === 'stained'
+    ),
+    commentary: sanitizeProhibitedCausation(raw.commentary || ''),
+    evidencePhotoIds: evidence,
+    aiConfidence,
+    ...(aiConfidence < 0.7 || evidence.length === 0
+      ? { uncertainty: evidence.length === 0 ? 'No specific supporting photo was identified; manual verification is required.' : 'Low-confidence visual assessment requires manual verification.' }
+      : {}),
+    reviewStatus: 'ai_generated',
+    comparisonStatus: 'not_compared',
+  };
+}
 
-    Existing Comment (to refine/merge): "${currentComment}"
-  `;
+export async function generateImageTagsServer(photo: PhotoInput): Promise<string[]> {
+  if (!isGeminiAvailable()) return photo.tags?.length ? photo.tags : ['Inspection Photo'];
 
-  if (previousReport?.notes) {
-    prompt += `\nPrevious Report Notes baseline: "${previousReport.notes}". Highlight any changes, deterioration, or improvements.`;
-  }
-
-  prompt += `
-    Task: Write or refine a comprehensive summary paragraph explicitly referencing visual evidence observed in the photos (room lighting, finishes, cleanliness, surface condition). Return only the paragraph text in Australian English. Do NOT allege tenant fault/causation.
-  `;
-
-  parts.push({ text: prompt });
+  const ai = getGeminiClient();
+  const parts = buildPhotoParts([photo]);
+  parts.push({
+    text: `Analyse inspection photo ID "${photo.id}". Return a JSON array of up to four short tags for visible room/component identity only. Do not infer condition or operation. Output JSON array only.`,
+  });
 
   try {
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: { role: 'user', parts },
+      config: { responseMimeType: 'application/json' },
     });
-
-    const text = response.text;
-    return sanitizeProhibitedCausation(text?.trim() || currentComment);
+    if (!response.text) return photo.tags?.length ? photo.tags : ['Inspection Photo'];
+    const tags = parseJson<unknown>(response.text);
+    return Array.isArray(tags)
+      ? tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 4).map(sanitizeProhibitedCausation)
+      : (photo.tags?.length ? photo.tags : ['Inspection Photo']);
   } catch (error) {
-    console.warn('Server overall comment generation failed:', error);
-    return sanitizeProhibitedCausation(currentComment);
+    console.warn('Server image tagging failed:', error);
+    return photo.tags?.length ? photo.tags : ['Inspection Photo'];
+  }
+}
+
+export async function discoverRoomItemsServer(
+  roomName: string,
+  photos: PhotoInput[],
+): Promise<StructuredComponentAnalysis[]> {
+  const ai = requireGemini();
+  const validPhotoIds = new Set(photos.map((photo) => photo.id));
+  const parts = buildPhotoParts(photos);
+  parts.push({
+    text: `
+You are identifying components visible in the inspection area "${roomName}".
+${GLOBAL_RULES}
+Return a JSON array. Each item must contain id, conditionCategory, cleanlinessCategory, workingStatus, testStatus, defects, maintenanceRequired, commentary, evidencePhotoIds and aiConfidence.
+Do not return a component unless it is actually visible in at least one supplied photo.
+`,
+  });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: { role: 'user', parts },
+      config: { responseMimeType: 'application/json' },
+    });
+    if (!response.text) throw new Error('Empty AI component-discovery response.');
+    const parsed = parseJson<unknown>(response.text);
+    if (!Array.isArray(parsed)) throw new Error('AI component-discovery response was not an array.');
+    return parsed
+      .filter((item): item is Partial<StructuredComponentAnalysis> => Boolean(item && typeof item === 'object'))
+      .map((item) => normaliseAnalysis(String(item.id || item.name || 'Component'), item, validPhotoIds))
+      .filter((item) => (item.evidencePhotoIds?.length || 0) > 0);
+  } catch (error) {
+    console.warn('Server component discovery failed:', error);
+    throw new Error('AI component discovery failed; no component assessments were changed.');
+  }
+}
+
+export async function generateOverallCommentServer(
+  roomName: string,
+  photos: PhotoInput[],
+  currentComment: string,
+  previousReport?: PreviousReportInput,
+): Promise<string> {
+  const ai = requireGemini();
+  const parts = buildPhotoParts(photos);
+  addPreviousReportParts(parts, previousReport);
+  parts.push({
+    text: `
+Write an objective area-level inspection summary for "${roomName}" using only visible evidence.
+${GLOBAL_RULES}
+Existing reviewed/manual comment: "${currentComment}"
+${previousReport?.notes ? `Historical notes: "${previousReport.notes}". State differences cautiously and only where comparable.` : ''}
+Return only the Australian-English paragraph. Do not overwrite existing facts with unsupported positive assumptions.
+`,
+  });
+
+  try {
+    const response = await ai.models.generateContent({ model: MODEL_NAME, contents: { role: 'user', parts } });
+    if (!response.text?.trim()) throw new Error('Empty AI area-comment response.');
+    return sanitizeProhibitedCausation(response.text.trim());
+  } catch (error) {
+    console.warn('Server area-comment generation failed:', error);
+    throw new Error('AI area commentary generation failed; existing commentary was preserved.');
   }
 }
 
@@ -385,86 +323,33 @@ export async function generateItemCommentServer(
   roomName: string,
   photos: PhotoInput[],
   currentComment: string,
-  previousReport?: PreviousReportInput
+  previousReport?: PreviousReportInput,
 ): Promise<StructuredComponentAnalysis> {
-  const validPhotoIds = new Set(photos.map((p) => p.id));
-  if (!isGeminiAvailable()) {
-    const statuses = enforceWorkingStatusRules(itemName, undefined, undefined);
-    return {
-      id: itemName,
-      conditionCategory: 'intact',
-      cleanlinessCategory: 'clean',
-      workingStatus: statuses.workingStatus,
-      testStatus: statuses.testStatus,
-      defects: [],
-      maintenanceRequired: false,
-      commentary: `${itemName} inspected in ${roomName}. Clean and undamaged with no visible defects observed in photos.`,
-      evidencePhotoIds: Array.from(validPhotoIds),
-      aiConfidence: 0.8,
-      reviewStatus: 'ai_generated',
-      comparisonStatus: 'not_compared',
-    };
-  }
-
-  const ai = getGeminiClient();
-  const parts: any[] = [];
-
-  photos.forEach((photo, idx) => {
-    if (photo.base64Data) {
-      parts.push({
-        inlineData: {
-          mimeType: photo.mimeType || 'image/jpeg',
-          data: photo.base64Data,
-        },
-      });
-      parts.push({
-        text: `[Photo ${idx + 1} ID: "${photo.id}"]`,
-      });
-    }
+  const ai = requireGemini();
+  const validPhotoIds = new Set(photos.map((photo) => photo.id));
+  const parts = buildPhotoParts(photos);
+  addPreviousReportParts(parts, previousReport);
+  parts.push({
+    text: `
+Assess the component "${itemName}" in inspection area "${roomName}".
+${GLOBAL_RULES}
+Existing reviewed/manual commentary: "${currentComment}"
+${previousReport?.notes ? `Historical notes: "${previousReport.notes}". Historical content must not be copied into current facts unless current evidence supports it.` : ''}
+Return strictly valid JSON:
+{
+  "id": "${itemName}",
+  "conditionCategory": "unable_to_confirm",
+  "cleanlinessCategory": "unable_to_confirm",
+  "workingStatus": "untested",
+  "testStatus": "untested",
+  "defects": [],
+  "maintenanceRequired": false,
+  "commentary": "Evidence-based visual observation",
+  "evidencePhotoIds": [],
+  "aiConfidence": 0.5
+}
+`,
   });
-
-  if (previousReport?.base64Data) {
-    parts.push({
-      inlineData: {
-        mimeType: previousReport.mimeType || 'application/pdf',
-        data: previousReport.base64Data,
-      },
-    });
-    parts.push({ text: '[Attached Previous Report]' });
-  }
-
-  let prompt = `
-    You are an expert Property Manager writing a canonical structured component assessment for a Form 1 Condition Report.
-    Room: "${roomName}"
-    Item: "${itemName}"
-
-    ${GLOBAL_RULES}
-
-    Existing Comment: "${currentComment}"
-  `;
-
-  if (previousReport?.notes) {
-    prompt += `\nPrevious Report Notes: "${previousReport.notes}". Compare current photos to previous baseline.`;
-  }
-
-  prompt += `
-    Output strictly valid JSON:
-    {
-      "id": "${itemName}",
-      "conditionCategory": "intact",
-      "cleanlinessCategory": "clean",
-      "workingStatus": "untested",
-      "testStatus": "untested",
-      "defects": [],
-      "maintenanceRequired": false,
-      "commentary": "Detailed narrative in Australian English describing visual evidence...",
-      "evidencePhotoIds": ["${Array.from(validPhotoIds)[0] || 'photo1'}"],
-      "aiConfidence": 0.9,
-      "reviewStatus": "ai_generated"
-    }
-  `;
-
-  parts.push({ text: prompt });
 
   try {
     const response = await ai.models.generateContent({
@@ -472,48 +357,11 @@ export async function generateItemCommentServer(
       contents: { role: 'user', parts },
       config: { responseMimeType: 'application/json' },
     });
-
-    const text = response.text;
-    if (!text) throw new Error('Empty AI response');
-    const parsed = parseJson<StructuredComponentAnalysis>(text);
-    const statuses = enforceWorkingStatusRules(itemName, parsed.workingStatus, parsed.testStatus);
-    const evidence = validateEvidenceProvenance(parsed.evidencePhotoIds, validPhotoIds);
-    const sanitizedComment = sanitizeProhibitedCausation(parsed.commentary || '');
-    const sanitizedDefects = (parsed.defects || []).map(sanitizeProhibitedCausation);
-    const confidence = typeof parsed.aiConfidence === 'number' ? Math.max(0, Math.min(1, parsed.aiConfidence)) : 0.85;
-
-    return {
-      id: itemName,
-      conditionCategory: parsed.conditionCategory || 'intact',
-      cleanlinessCategory: parsed.cleanlinessCategory || 'clean',
-      workingStatus: statuses.workingStatus,
-      testStatus: statuses.testStatus,
-      defects: sanitizedDefects,
-      maintenanceRequired: Boolean(parsed.maintenanceRequired),
-      commentary: sanitizedComment,
-      evidencePhotoIds: evidence,
-      aiConfidence: confidence,
-      ...(confidence < 0.7 ? { uncertainty: 'Low visual clarity requires inspector verification.' } : {}),
-      reviewStatus: 'ai_generated',
-      comparisonStatus: 'not_compared',
-    };
+    if (!response.text) throw new Error('Empty AI component response.');
+    return normaliseAnalysis(itemName, parseJson<Partial<StructuredComponentAnalysis>>(response.text), validPhotoIds);
   } catch (error) {
-    console.warn(`Server item comment generation failed for ${itemName}:`, error);
-    const statuses = enforceWorkingStatusRules(itemName, undefined, undefined);
-    return {
-      id: itemName,
-      conditionCategory: 'intact',
-      cleanlinessCategory: 'clean',
-      workingStatus: statuses.workingStatus,
-      testStatus: statuses.testStatus,
-      defects: [],
-      maintenanceRequired: false,
-      commentary: `${itemName} inspected in ${roomName}. Clean and intact with no visible defects in attached photos.`,
-      evidencePhotoIds: Array.from(validPhotoIds),
-      aiConfidence: 0.8,
-      reviewStatus: 'ai_generated',
-      comparisonStatus: 'not_compared',
-    };
+    console.warn(`Server component analysis failed for ${itemName}:`, error);
+    throw new Error(`AI component analysis failed for ${itemName}; existing assessment was preserved.`);
   }
 }
 
@@ -522,105 +370,24 @@ export async function generateBatchRoomAnalysisServer(
   photos: PhotoInput[],
   items: { id?: string; name?: string; comment?: string }[],
   currentOverallComment: string,
-  previousReport?: PreviousReportInput
+  previousReport?: PreviousReportInput,
 ): Promise<BatchRoomResult> {
-  const validPhotoIds = new Set(photos.map((p) => p.id));
-  if (!isGeminiAvailable()) {
-    const generatedItems: StructuredComponentAnalysis[] = items.map((item) => {
-      const name = item.name || item.id || 'Component';
-      const statuses = enforceWorkingStatusRules(name, undefined, undefined);
-      return {
-        id: name,
-        name,
-        conditionCategory: 'intact',
-        cleanlinessCategory: 'clean',
-        workingStatus: statuses.workingStatus,
-        testStatus: statuses.testStatus,
-        defects: [],
-        maintenanceRequired: false,
-        commentary: `${name} inspected in ${roomName}. Clean, undamaged, and functional without visible defects.`,
-        evidencePhotoIds: [],
-        aiConfidence: 0.85,
-        reviewStatus: 'ai_generated',
-        comparisonStatus: 'not_compared',
-      };
-    });
-
-    return {
-      overallComment: currentOverallComment
-        ? `${currentOverallComment} Visual analysis of ${photos.length} photo(s) confirms ${roomName} is clean and well-maintained.`
-        : `General condition of ${roomName} is clean and well-presented based on visual examination of ${photos.length} inspection photo(s). Wall, ceiling, and floor surfaces are structurally sound.`,
-      items: generatedItems,
-    };
-  }
-
-  const ai = getGeminiClient();
-  const parts: any[] = [];
-
-  photos.forEach((photo, idx) => {
-    if (photo.base64Data) {
-      parts.push({
-        inlineData: {
-          mimeType: photo.mimeType || 'image/jpeg',
-          data: photo.base64Data,
-        },
-      });
-      parts.push({
-        text: `[Photo ${idx + 1} ID: "${photo.id}"]`,
-      });
-    }
+  const ai = requireGemini();
+  const validPhotoIds = new Set(photos.map((photo) => photo.id));
+  const parts = buildPhotoParts(photos);
+  addPreviousReportParts(parts, previousReport);
+  const itemList = items.map((item) => `- ${item.id || item.name}: ${item.name || item.id} (existing comment: "${item.comment || ''}")`).join('\n');
+  parts.push({
+    text: `
+Analyse inspection area "${roomName}".
+${GLOBAL_RULES}
+Existing area commentary: "${currentOverallComment}"
+Components to assess:
+${itemList}
+${previousReport?.notes ? `Historical notes: "${previousReport.notes}". Use only for cautious comparison.` : ''}
+Return strictly valid JSON with {"overallComment":"...","items":[...]}. Each returned item must use the supplied component id/name and include the same structured fields required for component analysis. If evidence does not support a dimension, return unable_to_confirm rather than a positive assumption.
+`,
   });
-
-  if (previousReport?.base64Data) {
-    parts.push({
-      inlineData: {
-        mimeType: previousReport.mimeType || 'application/pdf',
-        data: previousReport.base64Data,
-      },
-    });
-    parts.push({ text: '[Attached Previous Report]' });
-  }
-
-  const itemListStr = items.map((item) => `- ${item.name || item.id} (Current: "${item.comment || 'None'}")`).join('\n');
-
-  let prompt = `
-    You are an expert Property Manager automating a Form 1 Condition Report for room: "${roomName}".
-
-    ${GLOBAL_RULES}
-
-    Existing Room Overview: "${currentOverallComment}"
-
-    Components to inspect:
-    ${itemListStr}
-  `;
-
-  if (previousReport?.notes) {
-    prompt += `\nPrevious Report Baseline Notes: "${previousReport.notes}". Compare current photos to previous state.`;
-  }
-
-  prompt += `
-    Output strictly valid JSON:
-    {
-      "overallComment": "Updated general room summary paragraph...",
-      "items": [
-        {
-          "id": "Exact Item Name from list",
-          "conditionCategory": "intact",
-          "cleanlinessCategory": "clean",
-          "workingStatus": "untested",
-          "testStatus": "untested",
-          "defects": [],
-          "maintenanceRequired": false,
-          "commentary": "Detailed narrative in Australian English describing visual evidence...",
-          "evidencePhotoIds": ["${Array.from(validPhotoIds)[0] || 'photo1'}"],
-          "aiConfidence": 0.9,
-          "reviewStatus": "ai_generated"
-        }
-      ]
-    }
-  `;
-
-  parts.push({ text: prompt });
 
   try {
     const response = await ai.models.generateContent({
@@ -628,35 +395,32 @@ export async function generateBatchRoomAnalysisServer(
       contents: { role: 'user', parts },
       config: { responseMimeType: 'application/json' },
     });
-
-    const text = response.text;
-    if (!text) throw new Error('Empty AI batch response');
-    const parsed = parseJson<BatchRoomResult>(text);
-
-    const processedItems = (parsed.items || []).map((item) => {
-      const name = item.id || item.name || 'Component';
-      const statuses = enforceWorkingStatusRules(name, item.workingStatus, item.testStatus);
-      const evidence = validateEvidenceProvenance(item.evidencePhotoIds, validPhotoIds);
-      const sanitizedComment = sanitizeProhibitedCausation(item.commentary || '');
-      const sanitizedDefects = (item.defects || []).map(sanitizeProhibitedCausation);
-      const confidence = typeof item.aiConfidence === 'number' ? Math.max(0, Math.min(1, item.aiConfidence)) : 0.85;
-
-      return {
-        id: name,
-        name,
-        conditionCategory: item.conditionCategory || 'intact',
-        cleanlinessCategory: item.cleanlinessCategory || 'clean',
-        workingStatus: statuses.workingStatus,
-        testStatus: statuses.testStatus,
-        defects: sanitizedDefects,
-        maintenanceRequired: Boolean(item.maintenanceRequired),
-        commentary: sanitizedComment,
-        evidencePhotoIds: evidence,
-        aiConfidence: confidence,
-        ...(confidence < 0.7 ? { uncertainty: 'Low visual clarity requires manual verification.' } : {}),
-        reviewStatus: 'ai_generated' as ComponentReviewStatus,
-        comparisonStatus: 'not_compared' as ComponentComparisonStatus,
-      };
+    if (!response.text) throw new Error('Empty AI area-analysis response.');
+    const parsed = parseJson<Partial<BatchRoomResult>>(response.text);
+    const returnedItems = Array.isArray(parsed.items) ? parsed.items : [];
+    const processedItems = items.map((requested) => {
+      const key = requested.id || requested.name || 'Component';
+      const match = returnedItems.find((item) => item.id === key || item.name === requested.name);
+      if (!match) {
+        const statuses = enforceWorkingStatusRules(requested.name || key, undefined, undefined);
+        return {
+          id: key,
+          name: requested.name || key,
+          conditionCategory: 'unable_to_confirm' as const,
+          cleanlinessCategory: 'unable_to_confirm' as const,
+          workingStatus: statuses.workingStatus,
+          testStatus: statuses.testStatus,
+          defects: [],
+          maintenanceRequired: false,
+          commentary: '',
+          evidencePhotoIds: [],
+          aiConfidence: 0,
+          uncertainty: 'The AI response did not contain an assessment for this component; manual assessment is required.',
+          reviewStatus: 'ai_generated' as ComponentReviewStatus,
+          comparisonStatus: 'not_compared' as ComponentComparisonStatus,
+        };
+      }
+      return normaliseAnalysis(key, { ...match, name: requested.name || match.name }, validPhotoIds);
     });
 
     return {
@@ -664,36 +428,37 @@ export async function generateBatchRoomAnalysisServer(
       items: processedItems,
     };
   } catch (error) {
-    console.warn('Server batch room analysis failed:', error);
-    const generatedItems: StructuredComponentAnalysis[] = items.map((item) => {
-      const name = item.name || item.id || 'Component';
-      const statuses = enforceWorkingStatusRules(name, undefined, undefined);
-      return {
-        id: name,
-        name,
-        conditionCategory: 'intact',
-        cleanlinessCategory: 'clean',
-        workingStatus: statuses.workingStatus,
-        testStatus: statuses.testStatus,
-        defects: [],
-        maintenanceRequired: false,
-        commentary: `${name} inspected in ${roomName}. Clean, undamaged, and functional.`,
-        evidencePhotoIds: [],
-        aiConfidence: 0.8,
-        reviewStatus: 'ai_generated' as ComponentReviewStatus,
-        comparisonStatus: 'not_compared' as ComponentComparisonStatus,
-      };
-    });
-
-    return {
-      overallComment: sanitizeProhibitedCausation(currentOverallComment) || `General condition of ${roomName} is clean and well presented.`,
-      items: generatedItems,
-    };
+    console.warn('Server batch area analysis failed:', error);
+    throw new Error('AI area analysis failed; existing area and component assessments were preserved.');
   }
 }
 
+function conditionValue(value: string): ComponentConditionCategory {
+  return CONDITION_VALUES.has(value as ComponentConditionCategory)
+    ? value as ComponentConditionCategory
+    : 'unable_to_confirm';
+}
+
+function cleanlinessValue(value: string): ComponentCleanlinessCategory {
+  return CLEANLINESS_VALUES.has(value as ComponentCleanlinessCategory)
+    ? value as ComponentCleanlinessCategory
+    : 'unable_to_confirm';
+}
+
+function workingValue(value: string): ComponentWorkingStatus {
+  return ['not_applicable', 'operation_confirmed', 'appears_operational', 'not_working', 'untested', 'unable_to_confirm'].includes(value)
+    ? value as ComponentWorkingStatus
+    : 'unable_to_confirm';
+}
+
+function testValue(value: string): ComponentTestStatus {
+  return ['not_applicable', 'tested_passed', 'tested_failed', 'untested', 'unable_to_confirm'].includes(value)
+    ? value as ComponentTestStatus
+    : 'unable_to_confirm';
+}
+
 export async function generateExitComparisonServer(
-  roomName: string,
+  _roomName: string,
   itemName: string,
   baselineComponent: {
     conditionCategory: string;
@@ -713,68 +478,66 @@ export async function generateExitComparisonServer(
     defects: string[];
     photoReferences?: ReportPhotoReference[];
   },
-  currentPhotos: PhotoInput[] = []
+  currentPhotos: PhotoInput[] = [],
 ): Promise<StructuredComponentAnalysis> {
   const { compareComponentEntryToExit } = await import('@pcr/domain');
-  
-  const compResult = compareComponentEntryToExit(
-    {
-      id: itemName,
-      component: itemName,
-      conditionCategory: baselineComponent.conditionCategory,
-      cleanlinessCategory: baselineComponent.cleanlinessCategory,
-      workingStatus: baselineComponent.workingStatus,
-      testStatus: baselineComponent.testStatus,
-      commentary: baselineComponent.commentary,
-      defects: baselineComponent.defects,
-      photoReferences: baselineComponent.photoReferences || [],
-    },
-    {
-      id: itemName,
-      component: itemName,
-      conditionCategory: currentExitComponent.conditionCategory,
-      cleanlinessCategory: currentExitComponent.cleanlinessCategory,
-      workingStatus: currentExitComponent.workingStatus,
-      testStatus: currentExitComponent.testStatus,
-      commentary: currentExitComponent.commentary,
-      defects: currentExitComponent.defects,
-      photoReferences: currentExitComponent.photoReferences || [],
-    }
-  );
 
-  const validPhotoIds = new Set(currentPhotos.map((p) => p.id));
+  const baseline: BaselineComponentSnapshot & { component: string } = {
+    id: itemName,
+    component: itemName,
+    conditionCategory: conditionValue(baselineComponent.conditionCategory),
+    cleanlinessCategory: cleanlinessValue(baselineComponent.cleanlinessCategory),
+    workingStatus: workingValue(baselineComponent.workingStatus),
+    testStatus: testValue(baselineComponent.testStatus),
+    commentary: sanitizeProhibitedCausation(baselineComponent.commentary || ''),
+    defects: (baselineComponent.defects || []).map(sanitizeProhibitedCausation),
+    photoReferences: baselineComponent.photoReferences || [],
+  };
+  const current = {
+    id: itemName,
+    component: itemName,
+    conditionCategory: conditionValue(currentExitComponent.conditionCategory),
+    cleanlinessCategory: cleanlinessValue(currentExitComponent.cleanlinessCategory),
+    workingStatus: workingValue(currentExitComponent.workingStatus),
+    testStatus: testValue(currentExitComponent.testStatus),
+    commentary: sanitizeProhibitedCausation(currentExitComponent.commentary || ''),
+    defects: (currentExitComponent.defects || []).map(sanitizeProhibitedCausation),
+    photoReferences: currentExitComponent.photoReferences || [],
+  };
+
+  const comparison = compareComponentEntryToExit(baseline, current);
+  const validPhotoIds = new Set(currentPhotos.map((photo) => photo.id));
   const validEvidence = validateEvidenceProvenance(
-    currentExitComponent.photoReferences?.map((p) => p.photoId),
-    validPhotoIds
+    currentExitComponent.photoReferences?.map((reference) => reference.photoId),
+    validPhotoIds,
   );
 
   return {
     id: itemName,
     name: itemName,
-    conditionCategory: (currentExitComponent.conditionCategory as ComponentConditionCategory) || 'intact',
-    cleanlinessCategory: (currentExitComponent.cleanlinessCategory as ComponentCleanlinessCategory) || 'clean',
-    workingStatus: (currentExitComponent.workingStatus as ComponentWorkingStatus) || 'not_applicable',
-    testStatus: (currentExitComponent.testStatus as ComponentTestStatus) || 'not_applicable',
-    defects: (currentExitComponent.defects || []).map(sanitizeProhibitedCausation),
+    conditionCategory: current.conditionCategory,
+    cleanlinessCategory: current.cleanlinessCategory,
+    workingStatus: current.workingStatus,
+    testStatus: current.testStatus,
+    defects: current.defects,
     maintenanceRequired:
-      currentExitComponent.conditionCategory === 'repair_required' ||
-      currentExitComponent.conditionCategory === 'replacement_recommended' ||
-      currentExitComponent.cleanlinessCategory === 'requires_cleaning' ||
-      currentExitComponent.cleanlinessCategory === 'stained' ||
-      currentExitComponent.workingStatus === 'not_working',
-    commentary: sanitizeProhibitedCausation(currentExitComponent.commentary || ''),
+      current.conditionCategory === 'repair_required' ||
+      current.conditionCategory === 'replacement_recommended' ||
+      current.cleanlinessCategory === 'requires_cleaning' ||
+      current.cleanlinessCategory === 'stained' ||
+      current.workingStatus === 'not_working',
+    commentary: current.commentary,
     evidencePhotoIds: validEvidence,
-    aiConfidence: compResult.comparisonConfidence,
+    aiConfidence: comparison.comparisonConfidence,
     reviewStatus: 'ai_generated',
-    comparisonStatus: compResult.comparisonStatus as ComponentComparisonStatus,
-    presenceComparison: compResult.presenceComparison,
-    conditionComparison: compResult.conditionComparison,
-    cleanlinessComparison: compResult.cleanlinessComparison,
-    workingComparison: compResult.workingComparison,
-    comparisonCommentary: compResult.comparisonCommentary,
-    baselineComponentData: baselineComponent as any,
-    evidencePairs: compResult.evidencePairs,
-    ...(compResult.comparisonUncertainty ? { comparisonUncertainty: compResult.comparisonUncertainty } : {}),
+    comparisonStatus: comparison.comparisonStatus as ComponentComparisonStatus,
+    presenceComparison: comparison.presenceComparison,
+    conditionComparison: comparison.conditionComparison,
+    cleanlinessComparison: comparison.cleanlinessComparison,
+    workingComparison: comparison.workingComparison,
+    comparisonCommentary: comparison.comparisonCommentary,
+    baselineComponentData: baseline,
+    evidencePairs: comparison.evidencePairs,
+    ...(comparison.comparisonUncertainty ? { comparisonUncertainty: comparison.comparisonUncertainty } : {}),
   };
 }
-
