@@ -1,217 +1,151 @@
 import type {
   ClientApproval,
-  ExternalAccessGrant,
   ExternalContact,
   MaintenanceCandidate,
   MaintenanceItem,
   TenantInstruction,
   WorkRequest,
 } from '../../types/platform';
+import { apiRequest } from '../apiClient';
 
-// Helper for agency header
-function getAgencyId(): string {
-  return localStorage.getItem('pcr_agency_id') || 'agency-1';
+function agencyId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined;
 }
 
-function getHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
-  return {
-    'x-agency-id': getAgencyId(),
-    'content-type': 'application/json',
-    ...extraHeaders,
-  };
+async function externalRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (!baseUrl) throw new Error('VITE_API_BASE_URL is required for external portal operations.');
+  const response = await fetch(`${baseUrl.replace(/\/$/u, '')}${path}`, init);
+  const payload = await response.json().catch(() => ({})) as { data?: T; error?: { message?: string } };
+  if (!response.ok) throw new Error(payload.error?.message || `External portal request failed with ${response.status}.`);
+  if (payload.data === undefined) throw new Error('External portal response did not contain data.');
+  return payload.data;
 }
 
-async function handleFetch(url: string, init?: RequestInit) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '';
-  const fullUrl = url.startsWith('/') ? `${baseUrl.replace(/\/$/u, '')}${url}` : url;
-  const res = await fetch(fullUrl, init);
-  if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({}));
-    throw new Error(errorBody?.error?.message || `API error: ${res.status}`);
-  }
-  return res.json();
-}
-
-// ---------------------------
-// 1. Maintenance Candidates
-// ---------------------------
 export async function listMaintenanceCandidates(): Promise<MaintenanceCandidate[]> {
-  const data = await handleFetch('/api/v1/maintenance-candidates', {
-    headers: getHeaders(),
-  });
-  return data.data || [];
+  return apiRequest<MaintenanceCandidate[]>(agencyId(), '/api/v1/maintenance-candidates');
 }
 
 export async function extractMaintenanceCandidates(reportId: string): Promise<MaintenanceCandidate[]> {
-  const data = await handleFetch('/api/v1/maintenance-candidates/extract', {
+  return apiRequest<MaintenanceCandidate[]>(agencyId(), '/api/v1/maintenance-candidates/extract', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ reportId }),
+    body: { reportId },
   });
-  return data.data || [];
 }
 
 export async function confirmMaintenanceCandidate(
   candidateId: string,
   overrides?: { title?: string; description?: string; category?: string; priority?: string; workInstruction?: string },
 ): Promise<MaintenanceItem> {
-  const data = await handleFetch(`/api/v1/maintenance-candidates/${candidateId}/confirm`, {
+  return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-candidates/${candidateId}/confirm`, {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(overrides || {}),
+    body: overrides || {},
   });
-  return data.data;
 }
 
-export async function dismissMaintenanceCandidate(candidateId: string, reason: string): Promise<MaintenanceCandidate> {
-  const data = await handleFetch(`/api/v1/maintenance-candidates/${candidateId}`, {
+export async function dismissMaintenanceCandidate(
+  candidateId: string,
+  reason: string,
+  expectedVersion = 1,
+): Promise<MaintenanceCandidate> {
+  return apiRequest<MaintenanceCandidate>(agencyId(), `/api/v1/maintenance-candidates/${candidateId}`, {
     method: 'PATCH',
-    headers: getHeaders({ 'idempotency-key': `dismiss-${candidateId}-${Date.now()}` }),
-    body: JSON.stringify({ reviewStatus: 'dismissed', dismissedReason: reason, expectedVersion: 1 }),
+    body: { reviewStatus: 'dismissed', dismissedReason: reason, expectedVersion },
   });
-  return data.data;
 }
 
-// ---------------------------
-// 2. Maintenance Items
-// ---------------------------
 export async function listMaintenanceItems(): Promise<MaintenanceItem[]> {
-  const data = await handleFetch('/api/v1/maintenance-items', {
-    headers: getHeaders(),
-  });
-  return data.data || [];
+  return apiRequest<MaintenanceItem[]>(agencyId(), '/api/v1/maintenance-items');
 }
 
 export async function getMaintenanceItem(id: string): Promise<MaintenanceItem> {
-  const data = await handleFetch(`/api/v1/maintenance-items/${id}`, {
-    headers: getHeaders(),
-  });
-  return data.data;
+  return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-items/${id}`);
 }
 
 export async function createMaintenanceItem(input: Partial<MaintenanceItem>): Promise<MaintenanceItem> {
-  const data = await handleFetch('/api/v1/maintenance-items', {
-    method: 'POST',
-    headers: getHeaders({ 'idempotency-key': `create-item-${Date.now()}` }),
-    body: JSON.stringify(input),
-  });
-  return data.data;
+  return apiRequest<MaintenanceItem>(agencyId(), '/api/v1/maintenance-items', { method: 'POST', body: input });
 }
 
-export async function updateMaintenanceItem(id: string, updates: Partial<MaintenanceItem>, expectedVersion: number): Promise<MaintenanceItem> {
-  const data = await handleFetch(`/api/v1/maintenance-items/${id}`, {
+export async function updateMaintenanceItem(
+  id: string,
+  updates: Partial<MaintenanceItem>,
+  expectedVersion: number,
+): Promise<MaintenanceItem> {
+  return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-items/${id}`, {
     method: 'PATCH',
-    headers: getHeaders({ 'idempotency-key': `update-item-${id}-${Date.now()}` }),
-    body: JSON.stringify({ ...updates, expectedVersion }),
+    body: { ...updates, expectedVersion },
   });
-  return data.data;
 }
 
-// ---------------------------
-// 3. Work Requests & External Contacts
-// ---------------------------
 export async function listExternalContacts(): Promise<ExternalContact[]> {
-  const data = await handleFetch('/api/v1/external-contacts', {
-    headers: getHeaders(),
-  });
-  return data.data || [];
+  return apiRequest<ExternalContact[]>(agencyId(), '/api/v1/external-contacts');
 }
 
 export async function createExternalContact(input: Partial<ExternalContact>): Promise<ExternalContact> {
-  const data = await handleFetch('/api/v1/external-contacts', {
-    method: 'POST',
-    headers: getHeaders({ 'idempotency-key': `create-contact-${Date.now()}` }),
-    body: JSON.stringify(input),
-  });
-  return data.data;
+  return apiRequest<ExternalContact>(agencyId(), '/api/v1/external-contacts', { method: 'POST', body: input });
 }
 
 export async function listWorkRequests(): Promise<WorkRequest[]> {
-  const data = await handleFetch('/api/v1/work-requests', {
-    headers: getHeaders(),
-  });
-  return data.data || [];
+  return apiRequest<WorkRequest[]>(agencyId(), '/api/v1/work-requests');
 }
 
 export async function createWorkRequest(input: Partial<WorkRequest>): Promise<WorkRequest> {
-  const data = await handleFetch('/api/v1/work-requests', {
+  return apiRequest<WorkRequest>(agencyId(), '/api/v1/work-requests', {
     method: 'POST',
-    headers: getHeaders({ 'idempotency-key': `create-workreq-${Date.now()}` }),
-    body: JSON.stringify({ ...input, status: 'issued', issuedAt: new Date().toISOString() }),
+    body: { ...input, status: input.status || 'draft' },
   });
-  return data.data;
 }
 
-// ---------------------------
-// 4. Tenant Instructions
-// ---------------------------
 export async function listTenantInstructions(): Promise<TenantInstruction[]> {
-  const data = await handleFetch('/api/v1/tenant-instructions', {
-    headers: getHeaders(),
-  });
-  return data.data || [];
+  return apiRequest<TenantInstruction[]>(agencyId(), '/api/v1/tenant-instructions');
 }
 
 export async function createTenantInstruction(input: Partial<TenantInstruction>): Promise<TenantInstruction> {
-  const data = await handleFetch('/api/v1/tenant-instructions', {
+  return apiRequest<TenantInstruction>(agencyId(), '/api/v1/tenant-instructions', {
     method: 'POST',
-    headers: getHeaders({ 'idempotency-key': `create-inst-${Date.now()}` }),
-    body: JSON.stringify({ ...input, status: 'approved', approvedAt: new Date().toISOString() }),
+    body: { ...input, status: input.status || 'draft' },
   });
-  return data.data;
 }
 
-export async function updateTenantInstruction(id: string, updates: Partial<TenantInstruction>, expectedVersion: number): Promise<TenantInstruction> {
-  const data = await handleFetch(`/api/v1/tenant-instructions/${id}`, {
+export async function updateTenantInstruction(
+  id: string,
+  updates: Partial<TenantInstruction>,
+  expectedVersion: number,
+): Promise<TenantInstruction> {
+  return apiRequest<TenantInstruction>(agencyId(), `/api/v1/tenant-instructions/${id}`, {
     method: 'PATCH',
-    headers: getHeaders({ 'idempotency-key': `update-inst-${id}-${Date.now()}` }),
-    body: JSON.stringify({ ...updates, expectedVersion }),
+    body: { ...updates, expectedVersion },
   });
-  return data.data;
 }
 
-// ---------------------------
-// 5. Client Approvals
-// ---------------------------
 export async function listClientApprovals(): Promise<ClientApproval[]> {
-  const data = await handleFetch('/api/v1/client-approvals', {
-    headers: getHeaders(),
-  });
-  return data.data || [];
+  return apiRequest<ClientApproval[]>(agencyId(), '/api/v1/client-approvals');
 }
 
 export async function createClientApproval(input: Partial<ClientApproval>): Promise<ClientApproval> {
-  const data = await handleFetch('/api/v1/client-approvals', {
+  return apiRequest<ClientApproval>(agencyId(), '/api/v1/client-approvals', {
     method: 'POST',
-    headers: getHeaders({ 'idempotency-key': `create-clientapp-${Date.now()}` }),
-    body: JSON.stringify({ ...input, status: 'pending' }),
+    body: { ...input, status: input.status || 'pending' },
   });
-  return data.data;
 }
 
-// ---------------------------
-// 6. External Access Grants
-// ---------------------------
 export async function generateAccessGrant(
   resourceType: 'work_request' | 'tenant_instruction' | 'client_approval',
   resourceId: string,
   recipientEmail: string,
   expiresInHours = 72,
 ): Promise<{ grantId: string; grantToken: string; expiresAt: string; accessUrl: string }> {
-  const data = await handleFetch('/api/v1/external-access-grants/generate', {
+  return apiRequest(agencyId(), '/api/v1/external-access-grants/generate', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ resourceType, resourceId, recipientEmail, expiresInHours }),
+    body: { resourceType, resourceId, recipientEmail, expiresInHours },
   });
-  return data.data;
 }
 
-// ---------------------------
-// 7. Scoped External Portal Methods
-// ---------------------------
-export async function getExternalWorkRequest(grantToken: string): Promise<{ workRequest: WorkRequest; maintenanceItem: any; propertyAddress: string }> {
-  const data = await handleFetch(`/api/v1/external/work-requests/${grantToken}`);
-  return data.data;
+export async function getExternalWorkRequest(
+  grantToken: string,
+): Promise<{ workRequest: WorkRequest; maintenanceItem: Partial<MaintenanceItem> | null; propertyAddress: string }> {
+  return externalRequest(`/api/v1/external/work-requests/${encodeURIComponent(grantToken)}`);
 }
 
 export async function submitExternalWorkResponse(
@@ -220,17 +154,15 @@ export async function submitExternalWorkResponse(
   responseNotes?: string,
   completionEvidenceIds?: string[],
 ): Promise<WorkRequest> {
-  const data = await handleFetch(`/api/v1/external/work-requests/${grantToken}`, {
+  return externalRequest(`/api/v1/external/work-requests/${encodeURIComponent(grantToken)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action, responseNotes, completionEvidenceIds }),
   });
-  return data.data;
 }
 
 export async function getExternalTenantInstruction(grantToken: string): Promise<TenantInstruction> {
-  const data = await handleFetch(`/api/v1/external/tenant-instructions/${grantToken}`);
-  return data.data;
+  return externalRequest(`/api/v1/external/tenant-instructions/${encodeURIComponent(grantToken)}`);
 }
 
 export async function submitExternalTenantResponse(
@@ -238,17 +170,15 @@ export async function submitExternalTenantResponse(
   tenantResponseNote: string,
   tenantEvidenceIds?: string[],
 ): Promise<TenantInstruction> {
-  const data = await handleFetch(`/api/v1/external/tenant-instructions/${grantToken}`, {
+  return externalRequest(`/api/v1/external/tenant-instructions/${encodeURIComponent(grantToken)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ tenantResponseNote, tenantEvidenceIds }),
   });
-  return data.data;
 }
 
 export async function getExternalClientApproval(grantToken: string): Promise<ClientApproval> {
-  const data = await handleFetch(`/api/v1/external/client-approvals/${grantToken}`);
-  return data.data;
+  return externalRequest(`/api/v1/external/client-approvals/${encodeURIComponent(grantToken)}`);
 }
 
 export async function submitExternalClientApproval(
@@ -256,10 +186,9 @@ export async function submitExternalClientApproval(
   decision: 'approved' | 'declined' | 'information_requested',
   clientNotes?: string,
 ): Promise<ClientApproval> {
-  const data = await handleFetch(`/api/v1/external/client-approvals/${grantToken}`, {
+  return externalRequest(`/api/v1/external/client-approvals/${encodeURIComponent(grantToken)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ decision, clientNotes }),
   });
-  return data.data;
 }
