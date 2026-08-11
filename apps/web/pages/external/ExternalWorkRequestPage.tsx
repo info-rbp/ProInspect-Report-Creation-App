@@ -1,26 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, Hammer, ShieldAlert, Wrench } from 'lucide-react';
-import type { WorkRequest } from '../../types/platform';
+import { ShieldAlert } from 'lucide-react';
+import type { MaintenanceItem, WorkRequest } from '../../types/platform';
 import { getExternalWorkRequest, submitExternalWorkResponse } from '../../services/platform/maintenanceService';
+
+interface ExternalWorkRequestData {
+  workRequest: WorkRequest;
+  maintenanceItem: Partial<MaintenanceItem> | null;
+  propertyAddress: string;
+}
 
 const ExternalWorkRequestPage: React.FC = () => {
   const { grantToken } = useParams<{ grantToken: string }>();
-
-  const [data, setData] = useState<{ workRequest: WorkRequest; maintenanceItem: any; propertyAddress: string } | null>(null);
+  const [data, setData] = useState<ExternalWorkRequestData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (!grantToken) return;
     getExternalWorkRequest(grantToken)
-      .then((res) => setData(res))
+      .then(setData)
       .catch((err) => {
         console.error('Failed to load work request', err);
-        setError('Invalid or expired token link.');
+        setError('Invalid or expired access link.');
       })
       .finally(() => setLoading(false));
   }, [grantToken]);
@@ -30,9 +34,9 @@ const ExternalWorkRequestPage: React.FC = () => {
     try {
       await submitExternalWorkResponse(grantToken, action, notes);
       setSubmitted(true);
-      const updated = await getExternalWorkRequest(grantToken);
-      setData(updated);
+      setData(await getExternalWorkRequest(grantToken));
     } catch (err) {
+      console.error('Failed to submit contractor response', err);
       alert('Failed to submit response.');
     }
   };
@@ -63,8 +67,8 @@ const ExternalWorkRequestPage: React.FC = () => {
             <div className="text-xs font-bold uppercase text-gray-400">ProInspect Contractor Portal</div>
             <h1 className="text-lg font-bold text-gray-900 mt-1">Work Request #{workRequest.id.slice(0, 8)}</h1>
           </div>
-          <span className="rounded bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 uppercase">
-            Status: {workRequest.status}
+          <span className="rounded bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 uppercase capitalize">
+            {workRequest.status.replaceAll('_', ' ')}
           </span>
         </div>
 
@@ -74,7 +78,7 @@ const ExternalWorkRequestPage: React.FC = () => {
               <span className="text-gray-400">Property Address:</span>
               <div className="font-semibold text-gray-900">{propertyAddress}</div>
             </div>
-            {maintenanceItem && (
+            {maintenanceItem?.title && (
               <div>
                 <span className="text-gray-400">Task Title:</span>
                 <div className="font-semibold text-gray-900">{maintenanceItem.title}</div>
@@ -89,7 +93,7 @@ const ExternalWorkRequestPage: React.FC = () => {
 
           {submitted && (
             <div className="rounded-lg bg-emerald-50 p-4 text-xs text-emerald-800 font-medium">
-              Response submitted successfully!
+              Response submitted successfully.
             </div>
           )}
 
@@ -98,30 +102,16 @@ const ExternalWorkRequestPage: React.FC = () => {
             <textarea
               rows={3}
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(event) => setNotes(event.target.value)}
               placeholder="Enter updates, completion details, or access notes..."
               className="w-full rounded-lg border border-gray-300 p-3 text-xs focus:border-gray-900 focus:outline-none"
             />
 
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                onClick={() => handleAction('acknowledge')}
-                className="flex-1 rounded-lg border border-gray-300 bg-white py-2 text-xs font-medium text-gray-800 hover:bg-gray-100"
-              >
-                Acknowledge Request
-              </button>
-              <button
-                onClick={() => handleAction('in_progress')}
-                className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-medium text-white hover:bg-blue-700"
-              >
-                Mark In Progress
-              </button>
-              <button
-                onClick={() => handleAction('complete')}
-                className="flex-1 rounded-lg bg-emerald-600 py-2 text-xs font-medium text-white hover:bg-emerald-700"
-              >
-                Mark Completed
-              </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button onClick={() => handleAction('acknowledge')} className="rounded-lg border border-gray-300 bg-white py-2 text-xs font-medium text-gray-800 hover:bg-gray-100">Acknowledge Request</button>
+              <button onClick={() => handleAction('in_progress')} className="rounded-lg bg-blue-600 py-2 text-xs font-medium text-white hover:bg-blue-700">Mark In Progress</button>
+              <button onClick={() => handleAction('complete')} className="rounded-lg bg-emerald-600 py-2 text-xs font-medium text-white hover:bg-emerald-700">Submit Completion</button>
+              <button onClick={() => handleAction('unable_to_complete')} className="rounded-lg bg-gray-700 py-2 text-xs font-medium text-white hover:bg-gray-800">Unable to Complete</button>
             </div>
           </div>
         </div>
