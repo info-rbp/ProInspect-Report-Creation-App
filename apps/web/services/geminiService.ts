@@ -5,9 +5,15 @@ import type {
   ComponentTestStatus,
   ComponentReviewStatus,
   ComponentComparisonStatus,
+  PresenceComparison,
+  ConditionComparison,
+  CleanlinessComparison,
+  WorkingComparison,
+  ComponentEvidencePair,
+  BaselineComponentSnapshot,
   ReportPhotoReference,
 } from '@pcr/domain';
-import { Photo, InspectionItem } from '../types';
+import type { Photo, InspectionItem } from '../types';
 import { fileToBase64 } from '../utils';
 import { isOperationalItem } from './platform/propertySeedingService';
 import { apiRequest } from './apiClient';
@@ -24,7 +30,7 @@ export interface PhotoVisualAnalysis {
 }
 
 export interface StructuredComponentAnalysis {
-  id: string; // Component name or ID
+  id: string;
   name?: string;
   conditionCategory: ComponentConditionCategory;
   cleanlinessCategory: ComponentCleanlinessCategory;
@@ -39,6 +45,15 @@ export interface StructuredComponentAnalysis {
   uncertainty?: string;
   reviewStatus?: ComponentReviewStatus;
   comparisonStatus?: ComponentComparisonStatus;
+  presenceComparison?: PresenceComparison;
+  conditionComparison?: ConditionComparison;
+  cleanlinessComparison?: CleanlinessComparison;
+  workingComparison?: WorkingComparison;
+  comparisonCommentary?: string;
+  baselineComponentData?: BaselineComponentSnapshot;
+  evidencePairs?: ComponentEvidencePair[];
+  comparisonConfidence?: number;
+  comparisonUncertainty?: string;
 }
 
 export interface BatchRoomResult {
@@ -62,7 +77,7 @@ interface SerializedPreviousReport {
 }
 
 const preparePhotoPayload = async (photo: Photo): Promise<SerializedPhoto> => {
-  let base64Data: string | undefined = undefined;
+  let base64Data: string | undefined;
   let mimeType = 'image/jpeg';
 
   if (photo.file && photo.file instanceof File) {
@@ -87,11 +102,8 @@ const preparePhotoPayload = async (photo: Photo): Promise<SerializedPhoto> => {
           base64Data = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => {
-              if (typeof reader.result === 'string') {
-                resolve(reader.result.split(',')[1]);
-              } else {
-                reject(new Error('Failed base64 conversion'));
-              }
+              if (typeof reader.result === 'string') resolve(reader.result.split(',')[1]);
+              else reject(new Error('Failed base64 conversion'));
             };
             reader.onerror = reject;
             reader.readAsDataURL(blob);
@@ -114,10 +126,10 @@ const preparePhotoPayload = async (photo: Photo): Promise<SerializedPhoto> => {
 
 const preparePreviousReportPayload = async (
   file?: File,
-  notes?: string
+  notes?: string,
 ): Promise<SerializedPreviousReport | undefined> => {
   if (!file && !notes) return undefined;
-  let base64Data: string | undefined = undefined;
+  let base64Data: string | undefined;
   if (file) {
     try {
       base64Data = await fileToBase64(file);
@@ -134,250 +146,38 @@ const preparePreviousReportPayload = async (
 };
 
 async function callAnalysisApi<T>(endpoint: string, body: unknown): Promise<T> {
-  const agencyId =
-    typeof window !== 'undefined'
-      ? window.localStorage.getItem('agencyId') || 'agency-demo'
-      : 'agency-demo';
-
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-  if (baseUrl) {
-    try {
-      return await apiRequest<T>(agencyId, `/api/v1/analysis/${endpoint}`, {
-        method: 'POST',
-        body,
-      });
-    } catch (e) {
-      console.warn(`apiRequest to /api/v1/analysis/${endpoint} failed, falling back to relative endpoint:`, e);
-    }
-  }
-
-  const res = await fetch(`/api/v1/analysis/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-agency-id': agencyId,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Analysis API /api/v1/analysis/${endpoint} failed with status ${res.status}`);
-  }
-
-  const json = await res.json();
-  return json.data as T;
+  const agencyId = typeof window !== 'undefined'
+    ? window.localStorage.getItem('agencyId') || window.localStorage.getItem('pcr_agency_id') || 'agency-demo'
+    : 'agency-demo';
+  return apiRequest<T>(agencyId, `/api/v1/analysis/${endpoint}`, { method: 'POST', body });
 }
 
-/**
- * Perform HTML5 Canvas analysis on a photo to extract visual properties
- * (brightness, color tone, surface texture variance, aspect ratio).
- */
 export const analyzePhotoCanvas = async (photo: Photo): Promise<PhotoVisualAnalysis> => {
   const filename = photo.file?.name || photo.id;
   const tags = photo.tags || [];
-
-  return new Promise<PhotoVisualAnalysis>((resolve) => {
-    const srcUrl = photo.previewUrl || photo.downloadUrl;
-    if (!srcUrl) {
-      resolve({
-        photoId: photo.id,
-        filename,
-        tags,
-        aspectRatio: 'landscape',
-        brightnessDescription: 'standard indoor lighting',
-        colorToneDescription: 'neutral tones',
-        textureDescription: 'uniform finish',
-        surfaceVarianceDescription: 'clean surface',
-      });
-      return;
-    }
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = srcUrl;
-
-    img.onload = () => {
-      try {
-        const width = img.width || 100;
-        const height = img.height || 100;
-        const aspect = width / height;
-        const aspectRatio: 'landscape' | 'portrait' | 'square' = aspect > 1.15 ? 'landscape' : aspect < 0.85 ? 'portrait' : 'square';
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve({
-            photoId: photo.id,
-            filename,
-            tags,
-            aspectRatio,
-            brightnessDescription: 'well-lit indoor illumination',
-            colorToneDescription: 'neutral white/grey tones',
-            textureDescription: 'smooth finish',
-            surfaceVarianceDescription: 'even presentation',
-          });
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, 64, 64);
-        const imageData = ctx.getImageData(0, 0, 64, 64);
-        const data = imageData.data;
-
-        let totalBrightness = 0;
-        let totalR = 0;
-        let totalG = 0;
-        let totalB = 0;
-        const totalPixels = 64 * 64;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-
-          totalR += r;
-          totalG += g;
-          totalB += b;
-          totalBrightness += (r * 0.299 + g * 0.587 + b * 0.114);
-        }
-
-        const avgBrightness = totalBrightness / totalPixels;
-        const avgR = totalR / totalPixels;
-        const avgG = totalG / totalPixels;
-        const avgB = totalB / totalPixels;
-
-        let brightnessDescription = 'bright, natural illumination';
-        if (avgBrightness > 190) {
-          brightnessDescription = 'high-intensity bright light with strong surface reflection';
-        } else if (avgBrightness < 90) {
-          brightnessDescription = 'dimly lit shadowed area';
-        } else if (avgBrightness < 130) {
-          brightnessDescription = 'moderate ambient lighting';
-        }
-
-        let colorToneDescription = 'cool neutral white and grey tones';
-        if (avgR > avgB + 20 && avgG > avgB + 10) {
-          colorToneDescription = 'warm timber, beige, or golden amber finishes';
-        } else if (avgG > avgR + 15 && avgG > avgB + 15) {
-          colorToneDescription = 'green foliage or garden backdrop elements';
-        } else if (Math.abs(avgR - avgG) < 10 && Math.abs(avgG - avgB) < 10) {
-          if (avgR > 180) {
-            colorToneDescription = 'clean white plaster, ceramic porcelain, or painted surfaces';
-          } else if (avgR < 90) {
-            colorToneDescription = 'dark charcoal or deep tinted surfaces';
-          } else {
-            colorToneDescription = 'metallic silver, stainless steel, or slate grey finishes';
-          }
-        }
-
-        let diffSum = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          diffSum += Math.abs(lum - avgBrightness);
-        }
-        const variance = diffSum / totalPixels;
-
-        let textureDescription = 'smooth, uniform plane';
-        let surfaceVarianceDescription = 'consistent, clean surface presentation';
-        if (variance > 45) {
-          textureDescription = 'highly textured or detailed surface (e.g. tile grout, carpet pile, or fixture detail)';
-          surfaceVarianceDescription = 'notable visual contrast with visible surface highlights or patterns';
-        } else if (variance > 25) {
-          textureDescription = 'standard surface texture with subtle grain';
-          surfaceVarianceDescription = 'clean finish with minor natural surface variations';
-        }
-
-        resolve({
-          photoId: photo.id,
-          filename,
-          tags,
-          aspectRatio,
-          brightnessDescription,
-          colorToneDescription,
-          textureDescription,
-          surfaceVarianceDescription,
-        });
-      } catch {
-        resolve({
-          photoId: photo.id,
-          filename,
-          tags,
-          aspectRatio: 'landscape',
-          brightnessDescription: 'standard indoor lighting',
-          colorToneDescription: 'neutral tones',
-          textureDescription: 'uniform finish',
-          surfaceVarianceDescription: 'clean surface',
-        });
-      }
-    };
-
-    img.onerror = () => {
-      resolve({
-        photoId: photo.id,
-        filename,
-        tags,
-        aspectRatio: 'landscape',
-        brightnessDescription: 'standard indoor lighting',
-        colorToneDescription: 'neutral tones',
-        textureDescription: 'uniform finish',
-        surfaceVarianceDescription: 'clean surface',
-      });
-    };
-  });
+  return {
+    photoId: photo.id,
+    filename,
+    tags,
+    aspectRatio: 'landscape',
+    brightnessDescription: 'visual preview available',
+    colorToneDescription: 'not used for condition assessment',
+    textureDescription: 'not used for condition assessment',
+    surfaceVarianceDescription: 'not used for condition assessment',
+  };
 };
 
 export const generateImageTags = async (photo: Photo): Promise<string[]> => {
-  try {
-    const photoPayload = await preparePhotoPayload(photo);
-    return await callAnalysisApi<string[]>('photo-tags', { photo: photoPayload });
-  } catch (error) {
-    console.warn('Image tagging API failed, falling back to canvas analysis:', error);
-    const canvasAnalysis = await analyzePhotoCanvas(photo);
-    const fallbackTags: string[] = [];
-    if (canvasAnalysis.colorToneDescription.includes('timber')) fallbackTags.push('Timber/Wood');
-    if (canvasAnalysis.colorToneDescription.includes('ceramic') || canvasAnalysis.textureDescription.includes('tile')) fallbackTags.push('Tiled Surface');
-    if (canvasAnalysis.colorToneDescription.includes('metallic')) fallbackTags.push('Metal/Fixtures');
-    if (canvasAnalysis.brightnessDescription.includes('bright')) fallbackTags.push('Natural Light');
-    return fallbackTags.length > 0 ? fallbackTags : ['Room Photo'];
-  }
+  const payload = await preparePhotoPayload(photo);
+  return callAnalysisApi<string[]>('photo-tags', { photo: payload });
 };
 
 export const discoverRoomItems = async (
   roomName: string,
-  photos: Photo[]
+  photos: Photo[],
 ): Promise<StructuredComponentAnalysis[]> => {
-  try {
-    const photoPayloads = await Promise.all(photos.map(preparePhotoPayload));
-    return await callAnalysisApi<StructuredComponentAnalysis[]>('discover-components', {
-      roomName,
-      photos: photoPayloads,
-    });
-  } catch (error) {
-    console.warn('Item discovery API failed, using visual fallback:', error);
-    const visualAnalyses = await Promise.all(photos.map((p) => analyzePhotoCanvas(p)));
-    return visualAnalyses.flatMap((v) => {
-      const tagItems: StructuredComponentAnalysis[] = v.tags.map((tag) => {
-        const operational = isOperationalItem(tag);
-        return {
-          id: tag,
-          conditionCategory: 'intact',
-          cleanlinessCategory: 'clean',
-          workingStatus: operational ? 'untested' : 'not_applicable',
-          testStatus: operational ? 'untested' : 'not_applicable',
-          defects: [],
-          maintenanceRequired: false,
-          commentary: `Visual inspection of photo (${v.filename}) confirms ${tag} is visible in ${v.brightnessDescription}, presenting in clean and undamaged condition with ${v.colorToneDescription}.`,
-          evidencePhotoIds: [v.photoId],
-          aiConfidence: 0.85,
-          reviewStatus: 'ai_generated',
-          comparisonStatus: 'not_compared',
-        };
-      });
-
-      return tagItems;
-    });
-  }
+  const photoPayload = await Promise.all(photos.map(preparePhotoPayload));
+  return callAnalysisApi<StructuredComponentAnalysis[]>('discover-components', { roomName, photos: photoPayload });
 };
 
 export const generateOverallComment = async (
@@ -385,24 +185,16 @@ export const generateOverallComment = async (
   photos: Photo[],
   currentComment: string,
   previousReportFile?: File,
-  previousReportNotes?: string
+  previousReportNotes?: string,
 ): Promise<string> => {
-  try {
-    const photoPayloads = await Promise.all(photos.map(preparePhotoPayload));
-    const previousReport = await preparePreviousReportPayload(previousReportFile, previousReportNotes);
-    return await callAnalysisApi<string>('overall-comment', {
-      roomName,
-      photos: photoPayloads,
-      currentComment,
-      previousReport,
-    });
-  } catch (err) {
-    console.warn('Overall comment generation API failed, using fallback:', err);
-    const photoCount = photos.length;
-    return currentComment
-      ? `${currentComment} Detailed visual inspection of ${photoCount} attached photo(s) confirms the ${roomName} presents in overall clean and well-maintained condition.`
-      : `General condition of the ${roomName} is clean and well-presented based on visual examination of ${photoCount} attached inspection photo(s). Wall, ceiling, and floor surfaces appear structurally sound with no major defects visible.`;
-  }
+  const photoPayload = await Promise.all(photos.map(preparePhotoPayload));
+  const previousReport = await preparePreviousReportPayload(previousReportFile, previousReportNotes);
+  return callAnalysisApi<string>('overall-comment', {
+    roomName,
+    photos: photoPayload,
+    currentComment,
+    previousReport,
+  });
 };
 
 export const generateItemComment = async (
@@ -411,37 +203,18 @@ export const generateItemComment = async (
   photos: Photo[],
   currentComment: string,
   previousReportFile?: File,
-  previousReportNotes?: string
+  previousReportNotes?: string,
 ): Promise<StructuredComponentAnalysis> => {
-  try {
-    const photoPayloads = await Promise.all(photos.map(preparePhotoPayload));
-    const previousReport = await preparePreviousReportPayload(previousReportFile, previousReportNotes);
-    return await callAnalysisApi<StructuredComponentAnalysis>('component', {
-      itemName,
-      roomName,
-      photos: photoPayloads,
-      currentComment,
-      previousReport,
-    });
-  } catch (error) {
-    console.warn(`Item comment generation API failed for ${itemName}:`, error);
-    const operational = isOperationalItem(itemName);
-    const validPhotoIds = photos.map((p) => p.id);
-    return {
-      id: itemName,
-      conditionCategory: 'intact',
-      cleanlinessCategory: 'clean',
-      workingStatus: operational ? 'untested' : 'not_applicable',
-      testStatus: operational ? 'untested' : 'not_applicable',
-      defects: [],
-      maintenanceRequired: false,
-      commentary: `${itemName} inspected in ${roomName}. Clean and undamaged with no visible defects.`,
-      evidencePhotoIds: validPhotoIds,
-      aiConfidence: 0.8,
-      reviewStatus: 'ai_generated',
-      comparisonStatus: 'not_compared',
-    };
-  }
+  const photoPayload = await Promise.all(photos.map(preparePhotoPayload));
+  const previousReport = await preparePreviousReportPayload(previousReportFile, previousReportNotes);
+  const result = await callAnalysisApi<StructuredComponentAnalysis>('component', {
+    itemName,
+    roomName,
+    photos: photoPayload,
+    currentComment,
+    previousReport,
+  });
+  return enforceClientWorkingRules(result, itemName);
 };
 
 export const generateBatchRoomAnalysis = async (
@@ -450,97 +223,55 @@ export const generateBatchRoomAnalysis = async (
   items: InspectionItem[],
   currentOverallComment: string,
   previousReportFile?: File,
-  previousReportNotes?: string
+  previousReportNotes?: string,
 ): Promise<BatchRoomResult> => {
-  try {
-    const photoPayloads = await Promise.all(photos.map(preparePhotoPayload));
-    const previousReport = await preparePreviousReportPayload(previousReportFile, previousReportNotes);
-    const itemsPayload = items.map((it) => ({
-      id: it.name,
-      name: it.name,
-      comment: it.comment,
-    }));
-    return await callAnalysisApi<BatchRoomResult>('batch-room', {
-      roomName,
-      photos: photoPayloads,
-      items: itemsPayload,
-      currentOverallComment,
-      previousReport,
-    });
-  } catch (error) {
-    console.warn('Batch room analysis API failed, using fallback:', error);
-    const generatedOverall = currentOverallComment
-      ? `${currentOverallComment} Visual analysis of ${photos.length} photo(s) confirms ${roomName} is clean and well-maintained.`
-      : `General condition of ${roomName} is clean and well-presented based on visual examination of ${photos.length} attached inspection photo(s).`;
-
-    const generatedItems: StructuredComponentAnalysis[] = items.map((item) => {
-      const operational = isOperationalItem(item.name);
-      return {
-        id: item.name,
-        name: item.name,
-        conditionCategory: 'intact',
-        cleanlinessCategory: 'clean',
-        workingStatus: operational ? 'untested' : 'not_applicable',
-        testStatus: operational ? 'untested' : 'not_applicable',
-        defects: [],
-        maintenanceRequired: false,
-        commentary: `${item.name} inspected in ${roomName}. Clean and undamaged.`,
-        evidencePhotoIds: [],
-        aiConfidence: 0.85,
-        reviewStatus: 'ai_generated',
-        comparisonStatus: 'not_compared',
-      };
-    });
-
-    return {
-      overallComment: generatedOverall,
-      items: generatedItems,
-    };
-  }
+  const photoPayload = await Promise.all(photos.map(preparePhotoPayload));
+  const previousReport = await preparePreviousReportPayload(previousReportFile, previousReportNotes);
+  const result = await callAnalysisApi<BatchRoomResult>('batch-room', {
+    roomName,
+    photos: photoPayload,
+    items: items.map((item) => ({ id: item.id, name: item.name, comment: item.comment })),
+    currentOverallComment,
+    previousReport,
+  });
+  return {
+    ...result,
+    items: result.items.map((item) => enforceClientWorkingRules(item, item.name || item.id)),
+  };
 };
 
-export const generateExitComparison = async (
-  roomName: string,
+function enforceClientWorkingRules(
+  analysis: StructuredComponentAnalysis,
   itemName: string,
-  baselineComponent: any,
-  currentExitComponent: any,
-  photos: Photo[] = []
-): Promise<StructuredComponentAnalysis> => {
-  try {
-    const photoPayloads = await Promise.all(photos.map(preparePhotoPayload));
-    return await callAnalysisApi<StructuredComponentAnalysis>('exit-comparison', {
-      roomName,
-      itemName,
-      baselineComponent,
-      currentExitComponent,
-      photos: photoPayloads,
-    });
-  } catch (error) {
-    console.warn('Exit comparison API failed, using fallback comparison:', error);
-    const { compareComponentEntryToExit } = await import('@pcr/domain');
-    const compResult = compareComponentEntryToExit(baselineComponent, currentExitComponent);
-    return {
-      id: itemName,
-      name: itemName,
-      conditionCategory: currentExitComponent.conditionCategory || 'intact',
-      cleanlinessCategory: currentExitComponent.cleanlinessCategory || 'clean',
-      workingStatus: currentExitComponent.workingStatus || 'not_applicable',
-      testStatus: currentExitComponent.testStatus || 'not_applicable',
-      defects: currentExitComponent.defects || [],
-      maintenanceRequired: currentExitComponent.maintenanceRequired || false,
-      commentary: currentExitComponent.comment || currentExitComponent.commentary || '',
-      evidencePhotoIds: photos.map((p) => p.id),
-      aiConfidence: compResult.comparisonConfidence,
-      reviewStatus: 'ai_generated',
-      comparisonStatus: compResult.comparisonStatus as ComponentComparisonStatus,
-      presenceComparison: compResult.presenceComparison,
-      conditionComparison: compResult.conditionComparison,
-      cleanlinessComparison: compResult.cleanlinessComparison,
-      workingComparison: compResult.workingComparison,
-      comparisonCommentary: compResult.comparisonCommentary,
-      baselineComponentData: baselineComponent,
-      evidencePairs: compResult.evidencePairs,
-    };
+): StructuredComponentAnalysis {
+  if (isOperationalItem(itemName)) {
+    return { ...analysis, workingStatus: 'untested', testStatus: 'untested' };
   }
-};
+  return { ...analysis, workingStatus: 'not_applicable', testStatus: 'not_applicable' };
+}
 
+export async function generateExitComparison(
+  roomName: string,
+  item: InspectionItem,
+  photos: Photo[],
+): Promise<StructuredComponentAnalysis> {
+  if (!item.baselineComponentData) {
+    throw new Error(`No immutable Entry baseline is linked to ${item.name}.`);
+  }
+  const photoPayload = await Promise.all(photos.map(preparePhotoPayload));
+  return callAnalysisApi<StructuredComponentAnalysis>('exit-comparison', {
+    roomName,
+    itemName: item.name,
+    baselineComponent: item.baselineComponentData,
+    currentExitComponent: {
+      conditionCategory: item.conditionCategory,
+      cleanlinessCategory: item.cleanlinessCategory,
+      workingStatus: item.workingStatus,
+      testStatus: item.testStatus,
+      commentary: item.comment,
+      defects: item.defects,
+      photoReferences: item.photoReferences || [],
+    },
+    photos: photoPayload,
+  });
+}
