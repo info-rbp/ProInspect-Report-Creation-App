@@ -1,20 +1,20 @@
 import {
   MAINTENANCE_CATEGORIES,
   MAINTENANCE_CANDIDATE_SOURCES,
-  MAINTENANCE_CANDIDATE_STATUSES,
   MAINTENANCE_ITEM_STATUSES,
   MAINTENANCE_PRIORITIES,
   EXTERNAL_CONTACT_TYPES,
-  WORK_REQUEST_STATUSES,
   TENANT_INSTRUCTION_TYPES,
-  TENANT_INSTRUCTION_STATUSES,
-  CLIENT_APPROVAL_STATUSES,
-  type MaintenanceCandidate,
-  type MaintenanceItem,
-  type WorkRequest,
-  type TenantInstruction,
   type ExternalContact,
-  type ClientApproval,
+  type MaintenanceCandidate,
+  type MaintenanceCategory,
+  type MaintenanceItem,
+  type MaintenancePriority,
+  type MaintenanceCandidateSource,
+  type MaintenanceItemStatus,
+  type TenantInstruction,
+  type TenantInstructionType,
+  type ExternalContactType,
 } from '@pcr/domain';
 import type { ValidationResult, ValidationSchema } from './index.js';
 
@@ -34,20 +34,25 @@ function requireNonEmpty(value: unknown, name: string): ValidationResult<string>
   }
   return {
     ok: false,
-    error: { code: 'VALIDATION_ERROR', message: `${name} is required.`, status: 400, details: { field: name } },
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: `${name} is required.`,
+      status: 400,
+      details: { field: name },
+    },
   };
 }
 
-const categories = new Set(MAINTENANCE_CATEGORIES);
-const priorities = new Set(MAINTENANCE_PRIORITIES);
-const candidateSources = new Set(MAINTENANCE_CANDIDATE_SOURCES);
-const candidateStatuses = new Set(MAINTENANCE_CANDIDATE_STATUSES);
-const itemStatuses = new Set(MAINTENANCE_ITEM_STATUSES);
-const externalContactTypes = new Set(EXTERNAL_CONTACT_TYPES);
-const workRequestStatuses = new Set(WORK_REQUEST_STATUSES);
-const tenantInstructionTypes = new Set(TENANT_INSTRUCTION_TYPES);
-const tenantInstructionStatuses = new Set(TENANT_INSTRUCTION_STATUSES);
-const clientApprovalStatuses = new Set(CLIENT_APPROVAL_STATUSES);
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+const categories = new Set<string>(MAINTENANCE_CATEGORIES);
+const priorities = new Set<string>(MAINTENANCE_PRIORITIES);
+const candidateSources = new Set<string>(MAINTENANCE_CANDIDATE_SOURCES);
+const itemStatuses = new Set<string>(MAINTENANCE_ITEM_STATUSES);
+const externalContactTypes = new Set<string>(EXTERNAL_CONTACT_TYPES);
+const tenantInstructionTypes = new Set<string>(TENANT_INSTRUCTION_TYPES);
 
 export const createMaintenanceCandidateSchema: ValidationSchema<Partial<MaintenanceCandidate>> = {
   parse(value) {
@@ -57,24 +62,31 @@ export const createMaintenanceCandidateSchema: ValidationSchema<Partial<Maintena
 
     const propertyId = requireNonEmpty(body.propertyId, 'propertyId');
     if (!propertyId.ok) return propertyId;
-
     const title = requireNonEmpty(body.title, 'title');
     if (!title.ok) return title;
 
-    const description = typeof body.description === 'string' ? body.description.trim() : '';
-    const category = typeof body.category === 'string' && categories.has(body.category as any) ? body.category : 'General Maintenance';
-    const suggestedPriority = typeof body.suggestedPriority === 'string' && priorities.has(body.suggestedPriority as any) ? body.suggestedPriority : 'routine';
-    const source = typeof body.source === 'string' && candidateSources.has(body.source as any) ? body.source : 'inspector';
+    const category: MaintenanceCategory =
+      typeof body.category === 'string' && categories.has(body.category)
+        ? body.category as MaintenanceCategory
+        : 'General Maintenance';
+    const suggestedPriority: MaintenancePriority =
+      typeof body.suggestedPriority === 'string' && priorities.has(body.suggestedPriority)
+        ? body.suggestedPriority as MaintenancePriority
+        : 'routine';
+    const source: MaintenanceCandidateSource =
+      typeof body.source === 'string' && candidateSources.has(body.source)
+        ? body.source as MaintenanceCandidateSource
+        : 'inspector';
 
     return {
       ok: true,
       value: {
         propertyId: propertyId.value,
         title: title.value,
-        description,
-        category: category as any,
-        suggestedPriority: suggestedPriority as any,
-        source: source as any,
+        description: typeof body.description === 'string' ? body.description.trim() : '',
+        category,
+        suggestedPriority,
+        source,
         tenancyId: typeof body.tenancyId === 'string' ? body.tenancyId : undefined,
         inspectionJobId: typeof body.inspectionJobId === 'string' ? body.inspectionJobId : undefined,
         reportId: typeof body.reportId === 'string' ? body.reportId : undefined,
@@ -82,7 +94,7 @@ export const createMaintenanceCandidateSchema: ValidationSchema<Partial<Maintena
         areaId: typeof body.areaId === 'string' ? body.areaId : undefined,
         componentId: typeof body.componentId === 'string' ? body.componentId : undefined,
         observationId: typeof body.observationId === 'string' ? body.observationId : undefined,
-        evidencePhotoIds: Array.isArray(body.evidencePhotoIds) ? body.evidencePhotoIds.filter((id): id is string => typeof id === 'string') : [],
+        evidencePhotoIds: stringArray(body.evidencePhotoIds),
       },
     };
   },
@@ -96,12 +108,21 @@ export const createMaintenanceItemSchema: ValidationSchema<Partial<MaintenanceIt
 
     const propertyId = requireNonEmpty(body.propertyId, 'propertyId');
     if (!propertyId.ok) return propertyId;
-
     const title = requireNonEmpty(body.title, 'title');
     if (!title.ok) return title;
 
-    const category = typeof body.category === 'string' && categories.has(body.category as any) ? body.category : 'General Maintenance';
-    const priority = typeof body.priority === 'string' && priorities.has(body.priority as any) ? body.priority : 'routine';
+    const category: MaintenanceCategory =
+      typeof body.category === 'string' && categories.has(body.category)
+        ? body.category as MaintenanceCategory
+        : 'General Maintenance';
+    const priority: MaintenancePriority =
+      typeof body.priority === 'string' && priorities.has(body.priority)
+        ? body.priority as MaintenancePriority
+        : 'routine';
+    const status: MaintenanceItemStatus =
+      typeof body.status === 'string' && itemStatuses.has(body.status)
+        ? body.status as MaintenanceItemStatus
+        : 'triage_required';
 
     return {
       ok: true,
@@ -109,14 +130,14 @@ export const createMaintenanceItemSchema: ValidationSchema<Partial<MaintenanceIt
         propertyId: propertyId.value,
         title: title.value,
         description: typeof body.description === 'string' ? body.description : '',
-        category: category as any,
-        priority: priority as any,
-        status: typeof body.status === 'string' && itemStatuses.has(body.status as any) ? (body.status as any) : 'triage_required',
+        category,
+        priority,
+        status,
         approvalRequired: Boolean(body.approvalRequired),
         approvalStatus: body.approvalRequired ? 'pending' : 'not_required',
         workInstruction: typeof body.workInstruction === 'string' ? body.workInstruction : undefined,
         dueDate: typeof body.dueDate === 'string' ? body.dueDate : undefined,
-        sourceEvidenceIds: Array.isArray(body.sourceEvidenceIds) ? body.sourceEvidenceIds.filter((id): id is string => typeof id === 'string') : [],
+        sourceEvidenceIds: stringArray(body.sourceEvidenceIds),
       },
     };
   },
@@ -130,29 +151,29 @@ export const createTenantInstructionSchema: ValidationSchema<Partial<TenantInstr
 
     const propertyId = requireNonEmpty(body.propertyId, 'propertyId');
     if (!propertyId.ok) return propertyId;
-
     const tenancyId = requireNonEmpty(body.tenancyId, 'tenancyId');
     if (!tenancyId.ok) return tenancyId;
-
     const title = requireNonEmpty(body.title, 'title');
     if (!title.ok) return title;
-
     const instruction = requireNonEmpty(body.instruction, 'instruction');
     if (!instruction.ok) return instruction;
 
-    const type = typeof body.type === 'string' && tenantInstructionTypes.has(body.type as any) ? body.type : 'general_followup';
+    const type: TenantInstructionType =
+      typeof body.type === 'string' && tenantInstructionTypes.has(body.type)
+        ? body.type as TenantInstructionType
+        : 'general_followup';
 
     return {
       ok: true,
       value: {
         propertyId: propertyId.value,
         tenancyId: tenancyId.value,
-        type: type as any,
+        type,
         title: title.value,
         instruction: instruction.value,
         responseRequired: body.responseRequired !== false,
         dueDate: typeof body.dueDate === 'string' ? body.dueDate : undefined,
-        sourceEvidenceIds: Array.isArray(body.sourceEvidenceIds) ? body.sourceEvidenceIds.filter((id): id is string => typeof id === 'string') : [],
+        sourceEvidenceIds: stringArray(body.sourceEvidenceIds),
       },
     };
   },
@@ -166,11 +187,13 @@ export const createExternalContactSchema: ValidationSchema<Partial<ExternalConta
 
     const name = requireNonEmpty(body.name, 'name');
     if (!name.ok) return name;
-
     const email = requireNonEmpty(body.email, 'email');
     if (!email.ok) return email;
 
-    const type = typeof body.type === 'string' && externalContactTypes.has(body.type as any) ? body.type : 'contractor';
+    const type: ExternalContactType =
+      typeof body.type === 'string' && externalContactTypes.has(body.type)
+        ? body.type as ExternalContactType
+        : 'contractor';
 
     return {
       ok: true,
@@ -179,7 +202,7 @@ export const createExternalContactSchema: ValidationSchema<Partial<ExternalConta
         email: email.value,
         businessName: typeof body.businessName === 'string' ? body.businessName : undefined,
         phone: typeof body.phone === 'string' ? body.phone : undefined,
-        type: type as any,
+        type,
         status: 'active',
       },
     };
