@@ -437,7 +437,11 @@ export async function routeApiRequest(
 
     let resolvedTaskInput = input as Record<string, unknown>;
     if (resourceName === 'pdf-jobs') {
-      const report = await dependencies.reports.load(agencyId, input.reportId);
+      const rawTaskInput = input as Record<string, unknown>;
+      const reportId = typeof rawTaskInput.reportId === 'string' ? rawTaskInput.reportId : '';
+      if (!reportId) throw new ApiError(400, 'REPORT_ID_REQUIRED', 'reportId is required for PDF generation.');
+      const requestedVersionId = typeof rawTaskInput.reportVersionId === 'string' ? rawTaskInput.reportVersionId : undefined;
+      const report = await dependencies.reports.load(agencyId, reportId);
       if (!report) throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report not found.');
       if (report.report.lifecycleStatus !== 'finalisation_ready') {
         throw new ApiError(
@@ -454,15 +458,15 @@ export async function routeApiRequest(
           'An immutable current report version is required before final PDF generation.',
         );
       }
-      if (input.reportVersionId && input.reportVersionId !== currentVersionId) {
+      if (requestedVersionId && requestedVersionId !== currentVersionId) {
         throw new ApiError(
           409,
           'REPORT_VERSION_SUPERSEDED',
           'The requested report version is no longer the current immutable version.',
-          { requestedVersionId: input.reportVersionId, currentVersionId },
+          { requestedVersionId, currentVersionId },
         );
       }
-      resolvedTaskInput = { ...input, reportVersionId: currentVersionId, requestedBy: principal.uid };
+      resolvedTaskInput = { ...rawTaskInput, reportId, reportVersionId: currentVersionId, requestedBy: principal.uid };
     }
 
     return idempotent(dependencies, req, agencyId, `${resourceName}.create`, body, async () => {
