@@ -1,23 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import type { ClientApproval } from '../../types/platform';
 import { getExternalClientApproval, submitExternalClientApproval } from '../../services/platform/maintenanceService';
 
 const ExternalClientApprovalPage: React.FC = () => {
   const { grantToken } = useParams<{ grantToken: string }>();
-
   const [approval, setApproval] = useState<ClientApproval | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (!grantToken) return;
     getExternalClientApproval(grantToken)
-      .then((res) => setApproval(res))
+      .then(setApproval)
       .catch((err) => {
         console.error('Failed to load approval request', err);
         setError('Invalid or expired link.');
@@ -28,10 +26,10 @@ const ExternalClientApprovalPage: React.FC = () => {
   const handleDecision = async (decision: 'approved' | 'declined' | 'information_requested') => {
     if (!grantToken) return;
     try {
-      const updated = await submitExternalClientApproval(grantToken, decision, notes);
-      setApproval(updated);
+      setApproval(await submitExternalClientApproval(grantToken, decision, notes));
       setSubmitted(true);
     } catch (err) {
+      console.error('Failed to submit client decision', err);
       alert('Failed to submit decision.');
     }
   };
@@ -61,59 +59,46 @@ const ExternalClientApprovalPage: React.FC = () => {
             <h1 className="text-lg font-bold text-gray-900 mt-1">Maintenance Approval Request</h1>
           </div>
           <span className="rounded bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 uppercase capitalize">
-            Status: {approval.status}
+            Status: {approval.status.replaceAll('_', ' ')}
           </span>
         </div>
 
         <div className="space-y-4 text-xs">
-          <div className="rounded-lg bg-gray-50 p-4 space-y-2">
+          <div className="rounded-lg bg-gray-50 p-4 space-y-3">
             <div>
-              <span className="text-gray-400">Proposed Work / Instruction:</span>
-              <p className="mt-1 font-medium text-gray-800">{approval.instructions || 'Review requested maintenance item.'}</p>
+              <span className="text-gray-400">Summary:</span>
+              <p className="mt-1 font-medium text-gray-800">{approval.summary}</p>
             </div>
-            {approval.estimatedCost !== undefined && (
-              <div>
-                <span className="text-gray-400">Estimated Cost:</span>
-                <span className="ml-2 font-bold text-gray-900">${approval.estimatedCost.toFixed(2)}</span>
-              </div>
-            )}
+            <div>
+              <span className="text-gray-400">Recommended Action:</span>
+              <p className="mt-1 font-medium text-gray-800">{approval.recommendedAction}</p>
+            </div>
+            <div>
+              <span className="text-gray-400">Priority:</span>
+              <span className="ml-2 font-semibold text-gray-900 capitalize">{approval.priority}</span>
+            </div>
           </div>
 
           {submitted && (
             <div className="rounded-lg bg-emerald-50 p-4 text-xs text-emerald-800 font-medium">
-              Decision recorded. Thank you!
+              Decision recorded. Thank you.
             </div>
           )}
 
           <div className="space-y-3 border-t border-gray-100 pt-4">
-            <label className="block text-xs font-semibold text-gray-700">Landlord Comments / Instructions</label>
+            <label className="block text-xs font-semibold text-gray-700">Comments</label>
             <textarea
               rows={3}
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Enter any comments or preferred contractor instructions..."
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Enter any comments or request further information..."
               className="w-full rounded-lg border border-gray-300 p-3 text-xs focus:border-gray-900 focus:outline-none"
             />
 
             <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                onClick={() => handleDecision('approved')}
-                className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-xs font-medium text-white hover:bg-emerald-700"
-              >
-                Approve Maintenance
-              </button>
-              <button
-                onClick={() => handleDecision('information_requested')}
-                className="flex-1 rounded-lg border border-gray-300 bg-white py-2.5 text-xs font-medium text-gray-800 hover:bg-gray-100"
-              >
-                Request Info
-              </button>
-              <button
-                onClick={() => handleDecision('declined')}
-                className="flex-1 rounded-lg bg-red-600 py-2.5 text-xs font-medium text-white hover:bg-red-700"
-              >
-                Decline
-              </button>
+              <button onClick={() => handleDecision('approved')} className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-xs font-medium text-white hover:bg-emerald-700">Approve Maintenance</button>
+              <button onClick={() => handleDecision('information_requested')} className="flex-1 rounded-lg border border-gray-300 bg-white py-2.5 text-xs font-medium text-gray-800 hover:bg-gray-100">Request Info</button>
+              <button onClick={() => handleDecision('declined')} className="flex-1 rounded-lg bg-red-600 py-2.5 text-xs font-medium text-white hover:bg-red-700">Decline</button>
             </div>
           </div>
         </div>
