@@ -39,6 +39,11 @@ export interface SecurityAuditEvent {
   correlationId: string;
   sourceIp?: string;
   userAgent?: string;
+  /** Optional domain-event fields used by lifecycle commands and immutable archive references. */
+  eventType?: string;
+  entityType?: string;
+  entityId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SecurityDependencies {

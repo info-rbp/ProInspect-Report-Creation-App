@@ -1,5 +1,6 @@
 import type { InspectionJobStatus, ReportLifecycleStatus, UserRole } from './platform.js';
-import type { ReportAggregate } from './reportModel.js';
+import type { ReportAggregate, ReportComponentRecord } from './reportModel.js';
+import { inspectionPolicy } from './inspectionPolicy.js';
 
 export interface WorkflowGateContext {
   requiredEvidenceComplete: boolean;
@@ -20,72 +21,194 @@ export interface GateBlocker {
   field?: string;
 }
 
+function componentField(areaId: string, componentId: string): string {
+  return `${areaId}.${componentId}`;
+}
+
+function hasEvidence(component: Pick<ReportComponentRecord, 'photoReferences'>): boolean {
+  return Array.isArray(component.photoReferences) && component.photoReferences.length > 0;
+}
+
+function isException(component: ReportAggregate['areas'][number]['components'][number]): boolean {
+  return Boolean(
+    component.maintenanceRequired ||
+    component.defects?.length ||
+    component.conditionCategory === 'repair_required' ||
+    component.conditionCategory === 'replacement_recommended' ||
+    component.cleanlinessCategory === 'requires_cleaning' ||
+    component.cleanlinessCategory === 'stained' ||
+    component.workingStatus === 'not_working' ||
+    component.testStatus === 'tested_failed'
+  );
+}
+
+function isUnassessed(component: ReportAggregate['areas'][number]['components'][number]): boolean {
+  return Boolean(
+    !component.conditionCategory ||
+    !component.cleanlinessCategory ||
+    !component.workingStatus ||
+    !component.testStatus ||
+    component.conditionCategory === 'unable_to_confirm' ||
+    component.cleanlinessCategory === 'unable_to_confirm' ||
+    component.workingStatus === 'unable_to_confirm' ||
+    component.testStatus === 'unable_to_confirm'
+  );
+}
+
+function comparisonNeedsHumanReview(status: string | undefined): boolean {
+  return [
+    'material_change',
+    'deteriorated',
+    'improved',
+    'new_item',
+    'missing_item',
+    'unable_to_compare',
+    'review_required',
+  ].includes(status ?? '');
+}
+
+function evaluateInspectionContent(reportAggregate: ReportAggregate | null | undefined): {
+  requiredEvidenceComplete: boolean;
+  requiredComponentsComplete: boolean;
+  blockers: GateBlocker[];
+} {
+  const blockers: GateBlocker[] = [];
+  if (!reportAggregate?.areas?.length) {
+    return {
+      requiredEvidenceComplete: false,
+      requiredComponentsComplete: false,
+      blockers: [{
+        gate: 'requiredEvidenceComplete',
+        code: 'NO_AREAS_OR_COMPONENTS',
+        message: 'Inspection report must contain areas and components.',
+      }],
+    };
+  }
+
+  const policy = inspectionPolicy(reportAggregate.report.reportType || 'entry');
+  let requiredEvidenceComplete = true;
+  let requiredComponentsComplete = true;
+
+  if (policy.requiresBaseline) {
+    const baselineBound = Boolean(
+      reportAggregate.report.baselineReportId?.trim() &&
+      reportAggregate.report.baselineReportVersionId?.trim(),
+    );
+    if (!baselineBound) {
+      requiredComponentsComplete = false;
+      blockers.push({
+        gate: 'requiredComponentsComplete',
+        code: policy.inspectionType === 'exit' ? 'ENTRY_BASELINE_REQUIRED' : 'BASELINE_REQUIRED',
+        message: policy.inspectionType === 'exit'
+          ? 'Exit Inspection requires an immutable Entry Property Condition Report baseline for the same tenancy.'
+          : `${policy.displayName} requires an immutable baseline report version.`,
+      });
+    }
+  }
+
+  for (const area of reportAggregate.areas) {
+    if (!area.components?.length) {
+      requiredEvidenceComplete = false;
+      requiredComponentsComplete = false;
+      blockers.push({
+        gate: 'requiredEvidenceComplete',
+        code: 'AREA_EMPTY',
+        message: `Area "${area.name}" contains no inspection components.`,
+        field: area.id,
+      });
+      continue;
+    }
+
+    if (policy.areaOverviewEvidenceRequired && (!area.photoReferences || area.photoReferences.length === 0)) {
+      requiredEvidenceComplete = false;
+      blockers.push({
+        gate: 'requiredEvidenceComplete',
+        code: 'AREA_OVERVIEW_EVIDENCE_REQUIRED',
+        message: `${policy.displayName} requires area overview evidence for "${area.name}".`,
+        field: area.id,
+      });
+    }
+
+    for (const component of area.components) {
+      const field = componentField(area.id, component.id);
+      const exception = isException(component);
+
+      if (exception && !hasEvidence(component)) {
+        requiredEvidenceComplete = false;
+        blockers.push({
+          gate: 'requiredEvidenceComplete',
+          code: 'EVIDENCE_REQUIRED',
+          message: `Evidence photograph required for the exception recorded on "${area.name} - ${component.component}".`,
+          field,
+        });
+      }
+
+      if (isUnassessed(component)) {
+        requiredComponentsComplete = false;
+        blockers.push({
+          gate: 'requiredComponentsComplete',
+          code: 'COMPONENT_UNASSESSED',
+          message: `Component assessment incomplete for "${area.name} - ${component.component}".`,
+          field,
+        });
+      }
+
+      const commentary = component.commentary?.trim() ?? '';
+      if (policy.ordinaryComponentCommentaryRequired && !commentary) {
+        requiredComponentsComplete = false;
+        blockers.push({
+          gate: 'requiredComponentsComplete',
+          code: 'COMPONENT_COMMENTARY_REQUIRED',
+          message: `${policy.displayName} requires component commentary for "${area.name} - ${component.component}".`,
+          field,
+        });
+      }
+
+      if (policy.inspectionType === 'routine' && exception && !commentary) {
+        requiredComponentsComplete = false;
+        blockers.push({
+          gate: 'requiredComponentsComplete',
+          code: 'ROUTINE_EXCEPTION_INCOMPLETE',
+          message: `Routine exception requires specific commentary for "${area.name} - ${component.component}".`,
+          field,
+        });
+      }
+
+      if (policy.comparisonRequired) {
+        const comparisonStatus = component.comparisonStatus;
+        if (!comparisonStatus || comparisonStatus === 'not_compared') {
+          requiredComponentsComplete = false;
+          blockers.push({
+            gate: 'requiredComponentsComplete',
+            code: policy.inspectionType === 'exit' ? 'EXIT_COMPARISON_REQUIRED' : 'COMPARISON_REQUIRED',
+            message: `Comparison must be completed for "${area.name} - ${component.component}" before submission.`,
+            field,
+          });
+        } else if (
+          comparisonNeedsHumanReview(comparisonStatus) &&
+          !['confirmed', 'edited'].includes(component.comparisonReviewStatus ?? '')
+        ) {
+          requiredComponentsComplete = false;
+          blockers.push({
+            gate: 'requiredComponentsComplete',
+            code: policy.inspectionType === 'exit' ? 'EXIT_COMPARISON_REVIEW_REQUIRED' : 'COMPARISON_REVIEW_REQUIRED',
+            message: `Comparison for "${area.name} - ${component.component}" requires human confirmation.`,
+            field,
+          });
+        }
+      }
+    }
+  }
+
+  return { requiredEvidenceComplete, requiredComponentsComplete, blockers };
+}
+
 export function calculateWorkflowGateContext(
   reportAggregate?: ReportAggregate | null,
   jobRecord?: Record<string, unknown> | null,
 ): { context: WorkflowGateContext; blockers: GateBlocker[] } {
-  const blockers: GateBlocker[] = [];
-
-  let requiredEvidenceComplete = true;
-  if (!reportAggregate?.areas?.length) {
-    requiredEvidenceComplete = false;
-    blockers.push({
-      gate: 'requiredEvidenceComplete',
-      code: 'NO_AREAS_OR_COMPONENTS',
-      message: 'Inspection report must contain areas and components.',
-    });
-  } else {
-    for (const area of reportAggregate.areas) {
-      if (!area.components?.length) {
-        requiredEvidenceComplete = false;
-        blockers.push({
-          gate: 'requiredEvidenceComplete',
-          code: 'AREA_EMPTY',
-          message: `Area "${area.name}" contains no inspection components.`,
-          field: area.id,
-        });
-        continue;
-      }
-
-      for (const component of area.components) {
-        const hasPhotos = Array.isArray(component.photoReferences) && component.photoReferences.length > 0;
-        const requiresPhotos =
-          component.maintenanceRequired ||
-          (Array.isArray(component.defects) && component.defects.length > 0) ||
-          component.conditionCategory === 'repair_required' ||
-          component.conditionCategory === 'replacement_recommended';
-
-        if (requiresPhotos && !hasPhotos) {
-          requiredEvidenceComplete = false;
-          blockers.push({
-            gate: 'requiredEvidenceComplete',
-            code: 'EVIDENCE_REQUIRED',
-            message: `Evidence photograph required for defect or maintenance on "${area.name} - ${component.component}".`,
-            field: `${area.id}.${component.id}`,
-          });
-        }
-      }
-    }
-  }
-
-  let requiredComponentsComplete = true;
-  if (!reportAggregate?.areas?.length) {
-    requiredComponentsComplete = false;
-  } else {
-    for (const area of reportAggregate.areas) {
-      for (const component of area.components) {
-        if (!component.conditionCategory || !component.cleanlinessCategory || !component.workingStatus) {
-          requiredComponentsComplete = false;
-          blockers.push({
-            gate: 'requiredComponentsComplete',
-            code: 'COMPONENT_UNASSESSED',
-            message: `Component assessment incomplete for "${area.name} - ${component.component}".`,
-            field: `${area.id}.${component.id}`,
-          });
-        }
-      }
-    }
-  }
+  const content = evaluateInspectionContent(reportAggregate);
+  const blockers = [...content.blockers];
 
   const templateVersionAssigned = Boolean(
     reportAggregate?.report?.reportType?.trim() &&
@@ -204,8 +327,8 @@ export function calculateWorkflowGateContext(
 
   return {
     context: {
-      requiredEvidenceComplete,
-      requiredComponentsComplete,
+      requiredEvidenceComplete: content.requiredEvidenceComplete,
+      requiredComponentsComplete: content.requiredComponentsComplete,
       templateVersionAssigned,
       analysisComplete,
       analystApproved,

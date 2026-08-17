@@ -1,5 +1,5 @@
 import React from 'react';
-import { InspectionItem, Photo, PreviousReportAttachment, Room } from '../../types';
+import type { InspectionItem, Photo, PreviousReportAttachment, Room } from '../../types';
 import { AreaHeader } from './AreaHeader';
 import { PhotoUploadManager } from './evidence/PhotoUploadManager';
 import { EvidenceGallery } from './evidence/EvidenceGallery';
@@ -18,6 +18,24 @@ interface AreaWorkspaceProps {
   agencyId?: string;
   inspectionType?: string;
   readOnly?: boolean;
+}
+
+function isRoutineType(inspectionType?: string): boolean {
+  const value = inspectionType?.trim().toLowerCase() ?? '';
+  return value === 'routine' || value === 'routine inspection';
+}
+
+function isException(item: InspectionItem): boolean {
+  return Boolean(
+    item.maintenanceRequired ||
+    item.defects?.length ||
+    item.conditionCategory === 'repair_required' ||
+    item.conditionCategory === 'replacement_recommended' ||
+    item.cleanlinessCategory === 'requires_cleaning' ||
+    item.cleanlinessCategory === 'stained' ||
+    item.workingStatus === 'not_working' ||
+    item.testStatus === 'tested_failed'
+  );
 }
 
 export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
@@ -45,10 +63,10 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
   };
 
   const handleRemovePhoto = (photoId: string) => {
-    const remainingPhotos = area.photos.filter((p) => p.id !== photoId);
+    const remainingPhotos = area.photos.filter((photo) => photo.id !== photoId);
     const updatedItems = area.items.map((item) => ({
       ...item,
-      photoReferences: (item.photoReferences || []).filter((ref) => ref.photoId !== photoId),
+      photoReferences: (item.photoReferences || []).filter((reference) => reference.photoId !== photoId),
     }));
     onUpdateArea({ ...area, photos: remainingPhotos, items: updatedItems });
   };
@@ -90,40 +108,56 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
     if (comment) onUpdateArea({ ...area, overallComment: comment });
   };
 
+  const handleMarkRoutineOrdinary = () => {
+    if (!isRoutineType(inspectionType) || area.photos.length === 0) return;
+    onUpdateArea({
+      ...area,
+      items: area.items.map((item) => {
+        if (isException(item)) return item;
+        return {
+          ...item,
+          conditionCategory: item.conditionCategory === 'unable_to_confirm' ? 'intact' : item.conditionCategory,
+          cleanlinessCategory: item.cleanlinessCategory === 'unable_to_confirm' ? 'clean' : item.cleanlinessCategory,
+          // Deliberately preserve workingStatus and testStatus. An overview photograph is not an operational test.
+        };
+      }),
+    });
+  };
+
   const handleFocusBlocker = (componentId: string) => {
-    const el = document.getElementById(`component-${componentId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const element = document.getElementById(`component-${componentId}`);
+    if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
     <div className="space-y-6">
       <AreaHeader area={area} onDeleteArea={onDeleteArea} disabled={readOnly} />
 
-      {analysisError && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200 flex items-center justify-between">
+      {analysisError ? (
+        <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
           <span>{analysisError}</span>
           <button onClick={clearAnalysisError} className="font-bold underline">Dismiss</button>
         </div>
-      )}
+      ) : null}
 
-      {!readOnly && (
+      {!readOnly ? (
         <AreaActionBar
           onAnalyseArea={handleRunAreaAnalysis}
           onGenerateSummary={handleGenerateAreaSummary}
+          onMarkRoutineOrdinary={isRoutineType(inspectionType) ? handleMarkRoutineOrdinary : undefined}
+          routineQuickActionDisabled={area.photos.length === 0}
           isAnalyzing={isBulkGenerating}
           disabled={readOnly}
         />
-      )}
+      ) : null}
 
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
         <PhotoUploadManager existingPhotos={area.photos} onPhotosAdded={handlePhotosAdded} disabled={readOnly} />
         <EvidenceGallery photos={area.photos} areaItems={area.items} onRemovePhoto={handleRemovePhoto} readOnly={readOnly} />
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900 space-y-3">
-        <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-          Structured Component Assessments ({area.items.length})
-        </h3>
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Structured Component Assessments ({area.items.length})</h3>
         <ComponentAssessmentList
           areaName={area.name}
           items={area.items}
@@ -142,9 +176,9 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
         overallComment={area.overallComment}
         items={area.items}
         photos={area.photos}
-        onChange={(val) => onUpdateArea({ ...area, overallComment: val })}
+        onChange={(value) => onUpdateArea({ ...area, overallComment: value })}
         onGenerateOverall={handleGenerateAreaSummary}
-        isGenerating={!!generatingOverall}
+        isGenerating={Boolean(generatingOverall)}
         disabled={readOnly}
       />
 

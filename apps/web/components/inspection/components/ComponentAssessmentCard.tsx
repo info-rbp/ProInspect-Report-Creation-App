@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { InspectionItem, Photo } from '../../../types';
+import type { InspectionItem, Photo } from '../../../types';
 import { ConditionAssessment } from './ConditionAssessment';
 import { CleanlinessAssessment } from './CleanlinessAssessment';
 import { WorkingStatusAssessment } from './WorkingStatusAssessment';
@@ -24,7 +24,7 @@ interface ComponentAssessmentCardProps {
 
 export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = ({
   item,
-  areaName: _areaName,
+  areaName,
   areaPhotos,
   onChange,
   onRemove,
@@ -39,7 +39,10 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
   const isComplete =
     item.conditionCategory !== 'unable_to_confirm' &&
     item.cleanlinessCategory !== 'unable_to_confirm' &&
-    (!isOperational || item.workingStatus !== 'untested');
+    (!isOperational || (
+      item.workingStatus !== 'unable_to_confirm' &&
+      item.testStatus !== 'unable_to_confirm'
+    ));
 
   const isDamaged =
     item.conditionCategory === 'repair_required' ||
@@ -56,159 +59,69 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
         hasMaterialChange
           ? 'border-amber-300 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/30'
           : isDamaged
-          ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/40 dark:bg-amber-950/20'
-          : isComplete
-          ? 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
-          : 'border-slate-200 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50'
+            ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/40 dark:bg-amber-950/20'
+            : isComplete
+              ? 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
+              : 'border-slate-200 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50'
       } shadow-2xs overflow-hidden`}
     >
-      {/* Compact Header Bar */}
-      <div className="flex items-center justify-between p-3.5 gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-          >
+      <div className="flex items-center justify-between gap-3 p-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <button type="button" onClick={() => setIsExpanded(!isExpanded)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                {item.name}
-              </h4>
-              {isComplete ? (
-                <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-              ) : (
-                <span className="text-[10px] font-bold text-slate-400 shrink-0">○ Pending</span>
-              )}
+              <h4 className="truncate text-xs font-bold text-slate-900 dark:text-white">{item.name}</h4>
+              {isComplete ? <CheckCircle2 size={13} className="shrink-0 text-emerald-500" /> : <span className="shrink-0 text-[10px] font-bold text-slate-400">○ Pending</span>}
             </div>
-
-            {/* Sub-label badges */}
-            <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px]">
-              <span className="capitalize font-semibold text-slate-600 dark:text-slate-300">
-                Cond: {item.conditionCategory?.replace('_', ' ') || 'unconfirmed'}
-              </span>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span className="font-semibold capitalize text-slate-600 dark:text-slate-300">Cond: {item.conditionCategory?.replaceAll('_', ' ') || 'unconfirmed'}</span>
               <span className="text-slate-300">•</span>
-              <span className="capitalize text-slate-600 dark:text-slate-300">
-                Clean: {item.cleanlinessCategory?.replace('_', ' ') || 'unconfirmed'}
-              </span>
-              {isOperational && (
+              <span className="capitalize text-slate-600 dark:text-slate-300">Clean: {item.cleanlinessCategory?.replaceAll('_', ' ') || 'unconfirmed'}</span>
+              {isOperational ? (
                 <>
                   <span className="text-slate-300">•</span>
-                  <span
-                    className={`capitalize font-semibold ${
-                      item.workingStatus === 'operation_confirmed' || item.workingStatus === 'appears_operational'
-                        ? 'text-emerald-600'
-                        : item.workingStatus === 'not_working'
-                        ? 'text-rose-600'
-                        : 'text-amber-600'
-                    }`}
-                  >
-                    Status: {item.workingStatus?.replace('_', ' ') || 'untested'}
+                  <span className={`font-semibold capitalize ${item.workingStatus === 'operation_confirmed' || item.workingStatus === 'appears_operational' ? 'text-emerald-600' : item.workingStatus === 'not_working' ? 'text-rose-600' : 'text-amber-600'}`}>
+                    Status: {item.workingStatus?.replaceAll('_', ' ') || 'untested'}
                   </span>
                 </>
-              )}
+              ) : null}
+              {item.comparisonStatus && item.comparisonStatus !== 'not_compared' ? (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="font-semibold capitalize text-indigo-600">Compare: {item.comparisonStatus.replaceAll('_', ' ')}</span>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
 
-        {/* Right Badges & Controls */}
-        <div className="flex items-center gap-2 shrink-0">
-          {linkedPhotosCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
-              <Link2 size={11} />
-              {linkedPhotosCount} photo{linkedPhotosCount > 1 ? 's' : ''}
-            </span>
-          )}
-
-          {item.aiConfidence && item.aiConfidence > 0 ? (
-            <span
-              className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 dark:bg-purple-950 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:text-purple-300"
-              title={`AI Confidence Score: ${Math.round(item.aiConfidence * 100)}%`}
-            >
-              <Sparkles size={10} />
-              {Math.round(item.aiConfidence * 100)}%
-            </span>
-          ) : null}
-
-          {!disabled && onRemove && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-              title="Remove component"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200"
-          >
-            {isExpanded ? 'Collapse' : 'Edit'}
-          </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {linkedPhotosCount > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300"><Link2 size={11} />{linkedPhotosCount} photo{linkedPhotosCount > 1 ? 's' : ''}</span> : null}
+          {item.aiConfidence && item.aiConfidence > 0 ? <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-950 dark:text-purple-300" title={`AI Confidence Score: ${Math.round(item.aiConfidence * 100)}%`}><Sparkles size={10} />{Math.round(item.aiConfidence * 100)}%</span> : null}
+          {!disabled && onRemove ? <button type="button" onClick={onRemove} className="p-1 text-slate-400 transition-colors hover:text-rose-600" title="Remove component"><Trash2 size={14} /></button> : null}
+          <button type="button" onClick={() => setIsExpanded(!isExpanded)} className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">{isExpanded ? 'Collapse' : 'Edit'}</button>
         </div>
       </div>
 
-      {/* Expanded Details Panel */}
-      {isExpanded && (
-        <div className="p-4 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3.5 bg-white dark:bg-slate-900">
-          {/* Exit Comparison Panel */}
-          {(item.baselineComponentData || (item.comparisonStatus && item.comparisonStatus !== 'not_compared')) && (
-            <ExitComponentComparisonPanel
-              item={item}
-              areaPhotos={areaPhotos}
-              onChange={onChange}
-              disabled={disabled}
-            />
-          )}
+      {isExpanded ? (
+        <div className="space-y-3.5 border-t border-slate-100 bg-white p-4 pt-2 dark:border-slate-800 dark:bg-slate-900">
+          {(item.baselineComponentData || (item.comparisonStatus && item.comparisonStatus !== 'not_compared')) ? (
+            <ExitComponentComparisonPanel item={item} areaName={areaName} areaPhotos={areaPhotos} onChange={onChange} disabled={disabled} />
+          ) : null}
 
-          {/* Assessment Controls Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <ConditionAssessment
-              value={item.conditionCategory}
-              onChange={(val) => onChange({ conditionCategory: val })}
-              disabled={disabled}
-            />
-            <CleanlinessAssessment
-              value={item.cleanlinessCategory}
-              onChange={(val) => onChange({ cleanlinessCategory: val })}
-              disabled={disabled}
-            />
-            {isOperational && (
-              <WorkingStatusAssessment
-                value={item.workingStatus}
-                onChange={(val) => onChange({ workingStatus: val })}
-                disabled={disabled}
-              />
-            )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ConditionAssessment value={item.conditionCategory} onChange={(value) => onChange({ conditionCategory: value })} disabled={disabled} />
+            <CleanlinessAssessment value={item.cleanlinessCategory} onChange={(value) => onChange({ cleanlinessCategory: value })} disabled={disabled} />
+            {isOperational ? <WorkingStatusAssessment value={item.workingStatus} onChange={(value) => onChange({ workingStatus: value })} disabled={disabled} /> : null}
           </div>
 
-          {/* Description Fields */}
           <ComponentDescriptionFields item={item} onChange={onChange} disabled={disabled} />
-
-          {/* Evidence Panel */}
-          <ComponentEvidencePanel
-            item={item}
-            areaPhotos={areaPhotos}
-            onChange={onChange}
-            disabled={disabled}
-          />
-
-          {/* Commentary Panel */}
-          <ComponentCommentaryPanel
-            item={item}
-            onChange={onChange}
-            onRegenerateComment={onRegenerateComment}
-            isGenerating={isGeneratingComment}
-            disabled={disabled}
-          />
+          <ComponentEvidencePanel item={item} areaPhotos={areaPhotos} onChange={onChange} disabled={disabled} />
+          <ComponentCommentaryPanel item={item} onChange={onChange} onRegenerateComment={onRegenerateComment} isGenerating={isGeneratingComment} disabled={disabled} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

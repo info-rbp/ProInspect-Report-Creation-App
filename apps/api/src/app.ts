@@ -4,6 +4,8 @@ import type { AuthorisationTarget, DomainErrorShape, SecurityCapability } from '
 import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeAnalysisRequest } from './backend/analysisRoutes.js';
+import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.js';
+import { routeMaintenanceCommandRequest } from './backend/maintenanceCommandRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
@@ -106,6 +108,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         return;
       }
 
+      const inspectionReportResponse = await routeInspectionReportRequest(req, dependencies, correlationId);
+      if (inspectionReportResponse) {
+        send(res, inspectionReportResponse, correlationId);
+        return;
+      }
+
       const specialReportRoute = reportRoute(req.url);
       if (specialReportRoute) {
         const agencyId = req.headers['x-agency-id']?.toString().trim();
@@ -127,6 +135,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId);
       if (analysisResponse) {
         send(res, analysisResponse, correlationId);
+        return;
+      }
+
+      const maintenanceCommandResponse = await routeMaintenanceCommandRequest(req, dependencies, correlationId);
+      if (maintenanceCommandResponse) {
+        send(res, maintenanceCommandResponse, correlationId);
         return;
       }
 
