@@ -89,6 +89,41 @@ function deduplicatePhotoIds(areas: Array<Record<string, unknown>>): string[] {
   return [...ids].sort();
 }
 
+function tenantEvidenceIds(response: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+  const add = (value: unknown) => {
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      const id = text(item);
+      if (id) ids.add(id);
+    }
+  };
+  for (const key of ['photoIds', 'evidenceIds', 'photoEvidenceIds', 'evidencePhotoIds', 'responsePhotoIds', 'tenantEvidenceIds']) {
+    add(response[key]);
+  }
+  for (const itemValue of [
+    ...(Array.isArray(response.items) ? response.items : []),
+    ...(Array.isArray(response.componentResponses) ? response.componentResponses : []),
+  ]) {
+    const item = asRecord(itemValue);
+    for (const key of ['photoIds', 'evidenceIds', 'photoEvidenceIds', 'evidencePhotoIds']) add(item[key]);
+  }
+  return [...ids].sort();
+}
+
+async function loadTenantResponses(agencyId: string, reportId: string): Promise<Array<Record<string, unknown>>> {
+  const database = getFirestore(adminApp());
+  const nested = await database.collection(`agencies/${agencyId}/reports/${reportId}/tenantResponses`).get();
+  const agencyScoped = await database.collection(`agencies/${agencyId}/tenantResponses`)
+    .where('reportId', '==', reportId)
+    .get();
+  const combined = new Map<string, Record<string, unknown>>();
+  for (const document of [...nested.docs, ...agencyScoped.docs]) {
+    combined.set(document.id, { id: document.id, ...(document.data() as Record<string, unknown>) });
+  }
+  return [...combined.values()].sort((left, right) => text(left.id).localeCompare(text(right.id)));
+}
+
 async function loadApprovedInput(task: PdfGenerationTask): Promise<{
   renderInput: RenderInput;
   imageBytes: Map<string, Uint8Array>;
@@ -147,7 +182,12 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     throw new PdfWorkerError('REPORT_VERSION_EMPTY', 'The immutable report version contains no inspection areas.');
   }
 
-  const photoIds = deduplicatePhotoIds(areas);
+  const tenantResponses = await loadTenantResponses(task.agencyId, task.reportId);
+  const photoIdSet = new Set(deduplicatePhotoIds(areas));
+  for (const response of tenantResponses) {
+    for (const photoId of tenantEvidenceIds(response)) photoIdSet.add(photoId);
+  }
+  const photoIds = [...photoIdSet].sort();
   const assets: RenderAsset[] = [];
   const imageBytes = new Map<string, Uint8Array>();
   const uploadBucketName = process.env.UPLOAD_BUCKET?.trim() || `${projectId}-uploads`;
@@ -222,6 +262,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     report: structuredClone(report),
     areas: structuredClone(areas),
     assets,
+    ...(tenantResponses.length ? { tenantResponses: structuredClone(tenantResponses) } : {}),
   };
 
   return {
@@ -458,6 +499,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
           pdfSha256,
           renderManifestObjectPath: manifestObjectPath,
           renderManifestSha256: manifestSha256,
+          tenantResponseCount: approved.renderInput.tenantResponses?.length ?? 0,
         },
       });
       return 'completed' as const;

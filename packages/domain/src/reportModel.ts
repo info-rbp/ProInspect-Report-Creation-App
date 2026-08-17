@@ -191,6 +191,7 @@ export interface ReportMetadataRecord {
   baselineTemplateId?: string;
   baselineTemplateVersion?: number;
   baselineQuality?: 'structured' | 'legacy_unstructured' | 'none';
+  sourceMaintenanceItemIds?: string[];
   finalPdfReportVersionId?: string;
   finalPdfObjectPath?: string;
   finalPdfSha256?: string;
