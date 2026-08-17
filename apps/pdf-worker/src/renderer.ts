@@ -71,7 +71,9 @@ export function pdfSafeText(value: string): string {
     .replace(/\u00A0/g, ' ')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '?');
+    .replace(/[^\x20-\x7E]/g, (character) => (
+      character === '\t' || character === '\n' || character === '\r' ? character : '?'
+    ));
 }
 
 function splitLongToken(font: PDFFont, token: string, size: number, maxWidth: number): string[] {
