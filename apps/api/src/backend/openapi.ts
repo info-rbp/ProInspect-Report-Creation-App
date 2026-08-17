@@ -106,7 +106,7 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Property Condition Report API',
-      version: '1.2.0',
+      version: '1.1.0',
       description: 'Server-authoritative Cloud Run API for agency-scoped property inspection operations.',
     },
     servers: [{ url: '/', description: 'Current Cloud Run service' }],
