@@ -28,6 +28,29 @@ function operation(resource: string, method: 'get' | 'post' | 'patch' | 'put', c
   };
 }
 
+function commandOperation(resource: 'maintenance-items' | 'work-requests' | 'tenant-instructions', operationId: string, description: string) {
+  const policy = ROUTE_POLICIES[resource];
+  return {
+    operationId,
+    tags: [resource],
+    description,
+    security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+    parameters: [
+      { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+      { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } },
+    ],
+    requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } },
+    responses: {
+      '200': { description: 'Idempotent command replayed or completed' },
+      '201': { description: 'Resource created' },
+      '400': { $ref: '#/components/responses/Error' },
+      '403': { $ref: '#/components/responses/Error' },
+      '409': { $ref: '#/components/responses/Error' },
+    },
+    'x-required-capability': policy?.readCapability,
+  };
+}
+
 export function buildOpenApiDocument() {
   const paths: Record<string, unknown> = {};
   for (const resource of API_ROUTE_NAMES) {
@@ -40,6 +63,23 @@ export function buildOpenApiDocument() {
     paths[`/api/v1/${resource}/{id}`] = {
       get: operation(resource, 'get', false),
       ...(policy.writeCapability ? { patch: operation(resource, 'patch', false) } : {}),
+    };
+  }
+
+  for (const resource of ['maintenance-items', 'work-requests', 'tenant-instructions'] as const) {
+    paths[`/api/v1/${resource}/create`] = {
+      post: commandOperation(resource, `create${resource.replace(/-([a-z])/gu, (_match, letter: string) => letter.toUpperCase())}`, `Creates a ${resource} record in its safe initial lifecycle state. Caller-supplied lifecycle status is ignored.`),
+    };
+    paths[`/api/v1/${resource}/{id}/actions/{action}`] = {
+      post: {
+        ...commandOperation(resource, `transition${resource.replace(/-([a-z])/gu, (_match, letter: string) => letter.toUpperCase())}`, 'Executes a versioned, idempotent lifecycle business command.'),
+        parameters: [
+          { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+          { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } },
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'action', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+      },
     };
   }
 

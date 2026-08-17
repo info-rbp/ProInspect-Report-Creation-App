@@ -23,6 +23,19 @@ async function externalRequest<T>(path: string, init: RequestInit = {}): Promise
   return payload.data;
 }
 
+async function lifecycleAction<T>(
+  resource: 'maintenance-items' | 'work-requests' | 'tenant-instructions',
+  id: string,
+  action: string,
+  expectedVersion: number,
+  body: Record<string, unknown> = {},
+): Promise<T> {
+  return apiRequest<T>(agencyId(), `/api/v1/${resource}/${encodeURIComponent(id)}/actions/${encodeURIComponent(action)}`, {
+    method: 'POST',
+    body: { expectedVersion, ...body },
+  });
+}
+
 export async function listMaintenanceCandidates(): Promise<MaintenanceCandidate[]> {
   return apiRequest<MaintenanceCandidate[]>(agencyId(), '/api/v1/maintenance-candidates');
 }
@@ -64,18 +77,16 @@ export async function getMaintenanceItem(id: string): Promise<MaintenanceItem> {
 }
 
 export async function createMaintenanceItem(input: Partial<MaintenanceItem>): Promise<MaintenanceItem> {
-  return apiRequest<MaintenanceItem>(agencyId(), '/api/v1/maintenance-items', { method: 'POST', body: input });
+  return apiRequest<MaintenanceItem>(agencyId(), '/api/v1/maintenance-items/create', { method: 'POST', body: input });
 }
 
-export async function updateMaintenanceItem(
+export async function transitionMaintenanceItem(
   id: string,
-  updates: Partial<MaintenanceItem>,
+  action: 'approve' | 'assign' | 'start' | 'await_evidence' | 'submit_completion' | 'verify' | 'close' | 'reopen' | 'cancel' | 'dismiss' | 'duplicate' | 'not_actionable',
   expectedVersion: number,
+  body: Record<string, unknown> = {},
 ): Promise<MaintenanceItem> {
-  return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-items/${id}`, {
-    method: 'PATCH',
-    body: { ...updates, expectedVersion },
-  });
+  return lifecycleAction<MaintenanceItem>('maintenance-items', id, action, expectedVersion, body);
 }
 
 export async function listExternalContacts(): Promise<ExternalContact[]> {
@@ -91,10 +102,19 @@ export async function listWorkRequests(): Promise<WorkRequest[]> {
 }
 
 export async function createWorkRequest(input: Partial<WorkRequest>): Promise<WorkRequest> {
-  return apiRequest<WorkRequest>(agencyId(), '/api/v1/work-requests', {
+  return apiRequest<WorkRequest>(agencyId(), '/api/v1/work-requests/create', {
     method: 'POST',
-    body: { ...input, status: input.status || 'draft' },
+    body: input,
   });
+}
+
+export async function transitionWorkRequest(
+  id: string,
+  action: 'issue' | 'accept' | 'cancel',
+  expectedVersion: number,
+  body: Record<string, unknown> = {},
+): Promise<WorkRequest> {
+  return lifecycleAction<WorkRequest>('work-requests', id, action, expectedVersion, body);
 }
 
 export async function listTenantInstructions(): Promise<TenantInstruction[]> {
@@ -102,21 +122,19 @@ export async function listTenantInstructions(): Promise<TenantInstruction[]> {
 }
 
 export async function createTenantInstruction(input: Partial<TenantInstruction>): Promise<TenantInstruction> {
-  return apiRequest<TenantInstruction>(agencyId(), '/api/v1/tenant-instructions', {
+  return apiRequest<TenantInstruction>(agencyId(), '/api/v1/tenant-instructions/create', {
     method: 'POST',
-    body: { ...input, status: input.status || 'draft' },
+    body: input,
   });
 }
 
-export async function updateTenantInstruction(
+export async function transitionTenantInstruction(
   id: string,
-  updates: Partial<TenantInstruction>,
+  action: 'request_approval' | 'approve' | 'issue' | 'await_action' | 'review_response' | 'resolve' | 'close' | 'withdraw' | 'cancel',
   expectedVersion: number,
+  body: Record<string, unknown> = {},
 ): Promise<TenantInstruction> {
-  return apiRequest<TenantInstruction>(agencyId(), `/api/v1/tenant-instructions/${id}`, {
-    method: 'PATCH',
-    body: { ...updates, expectedVersion },
-  });
+  return lifecycleAction<TenantInstruction>('tenant-instructions', id, action, expectedVersion, body);
 }
 
 export async function listClientApprovals(): Promise<ClientApproval[]> {

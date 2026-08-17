@@ -1,12 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type {
-  MaintenanceItem,
-  MaintenanceItemStatus,
-  TenantInstruction,
-  TenantInstructionStatus,
-  WorkRequest,
-  WorkRequestStatus,
+import {
+  canTransitionMaintenanceItem,
+  canTransitionTenantInstruction,
+  canTransitionWorkRequest,
+  type MaintenanceItem,
+  type MaintenanceItemStatus,
+  type TenantInstruction,
+  type TenantInstructionStatus,
+  type WorkRequest,
+  type WorkRequestStatus,
 } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
@@ -50,7 +53,7 @@ function expectedVersion(body: Record<string, unknown>): number {
 function idempotencyKey(req: IncomingMessage): string {
   const key = req.headers['idempotency-key']?.toString().trim();
   if (!key || key.length < 8 || key.length > 200) {
-    throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'A valid Idempotency-Key is required for maintenance commands.');
+    throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'A valid Idempotency-Key is required for lifecycle commands.');
   }
   return key;
 }
@@ -96,6 +99,7 @@ function reason(body: Record<string, unknown>, action: string): string {
 async function appendAudit(
   dependencies: ApiDependencies,
   principal: { uid: string; role: string; agencyId: string },
+  capability: 'maintenance.manage' | 'tenant_instruction.manage',
   eventType: string,
   entityType: string,
   entityId: string,
@@ -108,7 +112,7 @@ async function appendAudit(
     actorId: principal.uid,
     actorRole: principal.role,
     agencyId: principal.agencyId,
-    capability: 'maintenance.manage',
+    capability,
     outcome: 'allowed',
     reason: eventType,
     target: { agencyId: principal.agencyId },
@@ -120,66 +124,7 @@ async function appendAudit(
   });
 }
 
-function assertMaintenanceTransition(current: MaintenanceItemStatus, next: MaintenanceItemStatus): void {
-  const matrix: Record<MaintenanceItemStatus, readonly MaintenanceItemStatus[]> = {
-    suggested: ['triage_required', 'dismissed', 'duplicate', 'not_actionable', 'cancelled'],
-    triage_required: ['approved', 'dismissed', 'duplicate', 'not_actionable', 'cancelled'],
-    approved: ['assigned', 'in_progress', 'cancelled'],
-    assigned: ['in_progress', 'verification_required', 'cancelled'],
-    in_progress: ['awaiting_completion_evidence', 'verification_required', 'cancelled'],
-    awaiting_completion_evidence: ['verification_required', 'in_progress', 'cancelled'],
-    completed: ['verification_required', 'closed'],
-    verification_required: ['verified', 'in_progress', 'cancelled'],
-    verified: ['closed', 'in_progress'],
-    closed: ['triage_required'],
-    dismissed: ['triage_required'],
-    cancelled: ['triage_required'],
-    duplicate: ['triage_required'],
-    not_actionable: ['triage_required'],
-  };
-  if (!matrix[current].includes(next)) {
-    throw new ApiError(409, 'INVALID_MAINTENANCE_TRANSITION', `Cannot transition maintenance from ${current} to ${next}.`);
-  }
-}
-
-function assertWorkRequestTransition(current: WorkRequestStatus, next: WorkRequestStatus): void {
-  const matrix: Record<WorkRequestStatus, readonly WorkRequestStatus[]> = {
-    draft: ['issued', 'cancelled'],
-    issued: ['acknowledged', 'declined', 'unable_to_complete', 'cancelled'],
-    acknowledged: ['in_progress', 'declined', 'unable_to_complete', 'cancelled'],
-    in_progress: ['completed', 'unable_to_complete', 'cancelled'],
-    completed: ['accepted'],
-    accepted: [],
-    declined: [],
-    unable_to_complete: [],
-    cancelled: [],
-  };
-  if (!matrix[current].includes(next)) {
-    throw new ApiError(409, 'INVALID_WORK_REQUEST_TRANSITION', `Cannot transition work request from ${current} to ${next}.`);
-  }
-}
-
-function assertTenantInstructionTransition(current: TenantInstructionStatus, next: TenantInstructionStatus): void {
-  const matrix: Record<TenantInstructionStatus, readonly TenantInstructionStatus[]> = {
-    draft: ['approval_required', 'approved', 'cancelled'],
-    approval_required: ['approved', 'cancelled'],
-    approved: ['issued', 'cancelled'],
-    issued: ['viewed', 'awaiting_action', 'withdrawn'],
-    viewed: ['awaiting_action', 'tenant_responded', 'withdrawn'],
-    awaiting_action: ['tenant_responded', 'withdrawn'],
-    tenant_responded: ['review_required', 'resolved'],
-    review_required: ['resolved', 'awaiting_action'],
-    resolved: ['closed'],
-    closed: [],
-    cancelled: [],
-    withdrawn: [],
-  };
-  if (!matrix[current].includes(next)) {
-    throw new ApiError(409, 'INVALID_TENANT_INSTRUCTION_TRANSITION', `Cannot transition tenant instruction from ${current} to ${next}.`);
-  }
-}
-
-async function routeMaintenanceItemAction(
+async function maintenanceItemAction(
   req: IncomingMessage,
   dependencies: ApiDependencies,
   correlationId: string,
@@ -187,7 +132,7 @@ async function routeMaintenanceItemAction(
   id: string,
   action: string,
   body: Record<string, unknown>,
-): Promise<ApiResponse> {
+): Promise<IdempotencyResult> {
   const item = await load<MaintenanceItem>(dependencies, 'maintenanceItems', agencyId, id);
   const principal = await authenticateAndAuthorise(
     req,
@@ -202,24 +147,27 @@ async function routeMaintenanceItemAction(
   let next: MaintenanceItemStatus;
   let patch: Record<string, unknown> = {};
   const now = new Date().toISOString();
-
   switch (action) {
     case 'approve':
+      if (item.approvalRequired && item.approvalStatus !== 'approved') {
+        throw new ApiError(409, 'CLIENT_APPROVAL_REQUIRED', 'Required client approval must be recorded before maintenance approval.');
+      }
       next = 'approved';
-      patch = { approvalStatus: 'approved' };
+      patch = { approvalStatus: item.approvalRequired ? 'approved' : 'not_required' };
       break;
     case 'assign': {
       next = 'assigned';
       const externalContactId = typeof body.externalContactId === 'string' ? body.externalContactId.trim() : '';
       const assignedInternalUserId = typeof body.assignedInternalUserId === 'string' ? body.assignedInternalUserId.trim() : '';
       if (!externalContactId && !assignedInternalUserId) throw new ApiError(400, 'ASSIGNEE_REQUIRED', 'An internal or external assignee is required.');
-      if (!item.workInstruction?.trim() && !(typeof body.workInstruction === 'string' && body.workInstruction.trim())) {
-        throw new ApiError(400, 'WORK_INSTRUCTION_REQUIRED', 'Approved work instruction is required before assignment.');
-      }
+      const workInstruction = typeof body.workInstruction === 'string' && body.workInstruction.trim()
+        ? body.workInstruction.trim()
+        : item.workInstruction?.trim() ?? '';
+      if (!workInstruction) throw new ApiError(400, 'WORK_INSTRUCTION_REQUIRED', 'Approved work instruction is required before assignment.');
       patch = {
         ...(externalContactId ? { externalContactId } : {}),
         ...(assignedInternalUserId ? { assignedInternalUserId } : {}),
-        ...(typeof body.workInstruction === 'string' && body.workInstruction.trim() ? { workInstruction: body.workInstruction.trim() } : {}),
+        workInstruction,
       };
       break;
     }
@@ -233,24 +181,17 @@ async function routeMaintenanceItemAction(
       next = 'verification_required';
       const completionNote = typeof body.completionNote === 'string' ? body.completionNote.trim() : '';
       const completionEvidenceIds = Array.isArray(body.completionEvidenceIds)
-        ? body.completionEvidenceIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        ? [...new Set(body.completionEvidenceIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0))]
         : [];
-      if (!completionNote && completionEvidenceIds.length === 0) {
-        throw new ApiError(400, 'COMPLETION_EVIDENCE_REQUIRED', 'Completion note or evidence is required.');
-      }
-      patch = {
-        completionNote,
-        completionEvidenceIds,
-        completionDate: now,
-        verificationStatus: 'verification_required',
-      };
+      if (!completionNote && completionEvidenceIds.length === 0) throw new ApiError(400, 'COMPLETION_EVIDENCE_REQUIRED', 'Completion note or evidence is required.');
+      patch = { completionNote, completionEvidenceIds, completionDate: now, verificationStatus: 'verification_required' };
       break;
     }
     case 'verify': {
       next = 'verified';
-      const verificationMethod = typeof body.verificationMethod === 'string' ? body.verificationMethod : 'completion_evidence_review';
       const verificationNote = typeof body.verificationNote === 'string' ? body.verificationNote.trim() : '';
       if (!verificationNote) throw new ApiError(400, 'VERIFICATION_NOTE_REQUIRED', 'Verification note is required.');
+      const verificationMethod = typeof body.verificationMethod === 'string' ? body.verificationMethod : 'completion_evidence_review';
       patch = { verificationStatus: 'verified', verificationMethod, verificationNote };
       break;
     }
@@ -272,7 +213,7 @@ async function routeMaintenanceItemAction(
       break;
     case 'duplicate':
       next = 'duplicate';
-      patch = { closureReason: reason(body, action), duplicateOfItemId: typeof body.duplicateOfItemId === 'string' ? body.duplicateOfItemId : undefined };
+      patch = { closureReason: reason(body, action), ...(typeof body.duplicateOfItemId === 'string' ? { duplicateOfItemId: body.duplicateOfItemId } : {}) };
       break;
     case 'not_actionable':
       next = 'not_actionable';
@@ -282,15 +223,13 @@ async function routeMaintenanceItemAction(
       throw new ApiError(404, 'UNKNOWN_MAINTENANCE_ACTION', `Unknown maintenance action ${action}.`);
   }
 
-  assertMaintenanceTransition(item.status, next);
-  return idempotent(dependencies, req, agencyId, `maintenance:${id}:${action}`, body, async () => {
-    const updated = await dependencies.repository.update('maintenanceItems', agencyId, id, { status: next, ...patch }, version, principal.uid);
-    await appendAudit(dependencies, principal, `maintenance.${action}`, 'maintenance_item', id, correlationId, { from: item.status, to: next });
-    return { status: 200, body: { data: updated, meta: { correlationId } } };
-  });
+  if (!canTransitionMaintenanceItem(item.status, next)) throw new ApiError(409, 'INVALID_MAINTENANCE_TRANSITION', `Cannot transition maintenance from ${item.status} to ${next}.`);
+  const updated = await dependencies.repository.update('maintenanceItems', agencyId, id, { status: next, ...patch }, version, principal.uid);
+  await appendAudit(dependencies, principal, 'maintenance.manage', `maintenance.${action}`, 'maintenance_item', id, correlationId, { from: item.status, to: next });
+  return { status: 200, body: { data: updated, meta: { correlationId } } };
 }
 
-async function routeWorkRequestAction(
+async function workRequestAction(
   req: IncomingMessage,
   dependencies: ApiDependencies,
   correlationId: string,
@@ -298,7 +237,7 @@ async function routeWorkRequestAction(
   id: string,
   action: string,
   body: Record<string, unknown>,
-): Promise<ApiResponse> {
+): Promise<IdempotencyResult> {
   const request = await load<WorkRequest>(dependencies, 'workRequests', agencyId, id);
   const maintenance = await load<MaintenanceItem>(dependencies, 'maintenanceItems', agencyId, request.maintenanceItemId);
   const principal = await authenticateAndAuthorise(req, dependencies, 'maintenance.manage', { agencyId, propertyId: maintenance.propertyId }, correlationId);
@@ -323,15 +262,13 @@ async function routeWorkRequestAction(
     default:
       throw new ApiError(404, 'UNKNOWN_WORK_REQUEST_ACTION', `Unknown work request action ${action}.`);
   }
-  assertWorkRequestTransition(request.status, next);
-  return idempotent(dependencies, req, agencyId, `work-request:${id}:${action}`, body, async () => {
-    const updated = await dependencies.repository.update('workRequests', agencyId, id, { status: next, ...patch }, version, principal.uid);
-    await appendAudit(dependencies, principal, `work_request.${action}`, 'work_request', id, correlationId, { from: request.status, to: next });
-    return { status: 200, body: { data: updated, meta: { correlationId } } };
-  });
+  if (!canTransitionWorkRequest(request.status, next)) throw new ApiError(409, 'INVALID_WORK_REQUEST_TRANSITION', `Cannot transition work request from ${request.status} to ${next}.`);
+  const updated = await dependencies.repository.update('workRequests', agencyId, id, { status: next, ...patch }, version, principal.uid);
+  await appendAudit(dependencies, principal, 'maintenance.manage', `work_request.${action}`, 'work_request', id, correlationId, { from: request.status, to: next });
+  return { status: 200, body: { data: updated, meta: { correlationId } } };
 }
 
-async function routeTenantInstructionAction(
+async function tenantInstructionAction(
   req: IncomingMessage,
   dependencies: ApiDependencies,
   correlationId: string,
@@ -339,7 +276,7 @@ async function routeTenantInstructionAction(
   id: string,
   action: string,
   body: Record<string, unknown>,
-): Promise<ApiResponse> {
+): Promise<IdempotencyResult> {
   const instruction = await load<TenantInstruction>(dependencies, 'tenantInstructions', agencyId, id);
   const principal = await authenticateAndAuthorise(req, dependencies, 'tenant_instruction.manage', { agencyId, propertyId: instruction.propertyId, tenancyId: instruction.tenancyId }, correlationId);
   const version = expectedVersion(body);
@@ -385,15 +322,13 @@ async function routeTenantInstructionAction(
     default:
       throw new ApiError(404, 'UNKNOWN_TENANT_INSTRUCTION_ACTION', `Unknown tenant instruction action ${action}.`);
   }
-  assertTenantInstructionTransition(instruction.status, next);
-  return idempotent(dependencies, req, agencyId, `tenant-instruction:${id}:${action}`, body, async () => {
-    const updated = await dependencies.repository.update('tenantInstructions', agencyId, id, { status: next, ...patch }, version, principal.uid);
-    await appendAudit(dependencies, principal, `tenant_instruction.${action}`, 'tenant_instruction', id, correlationId, { from: instruction.status, to: next });
-    return { status: 200, body: { data: updated, meta: { correlationId } } };
-  });
+  if (!canTransitionTenantInstruction(instruction.status, next)) throw new ApiError(409, 'INVALID_TENANT_INSTRUCTION_TRANSITION', `Cannot transition tenant instruction from ${instruction.status} to ${next}.`);
+  const updated = await dependencies.repository.update('tenantInstructions', agencyId, id, { status: next, ...patch }, version, principal.uid);
+  await appendAudit(dependencies, principal, 'tenant_instruction.manage', `tenant_instruction.${action}`, 'tenant_instruction', id, correlationId, { from: instruction.status, to: next });
+  return { status: 200, body: { data: updated, meta: { correlationId } } };
 }
 
-export async function routeMaintenanceCommandRequest(
+export async function routeMaintenanceActionRequest(
   req: IncomingMessage,
   dependencies: ApiDependencies,
   correlationId: string,
@@ -408,10 +343,11 @@ export async function routeMaintenanceCommandRequest(
   if (!id || commandSegment !== 'actions' || !action) return undefined;
   if (!['maintenance-items', 'work-requests', 'tenant-instructions'].includes(resource)) return undefined;
   if (req.method !== 'POST') throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Lifecycle commands require POST.');
-
   const agencyId = agencyHeader(req);
   const body = await readJson(req);
-  if (resource === 'maintenance-items') return routeMaintenanceItemAction(req, dependencies, correlationId, agencyId, id, action, body);
-  if (resource === 'work-requests') return routeWorkRequestAction(req, dependencies, correlationId, agencyId, id, action, body);
-  return routeTenantInstructionAction(req, dependencies, correlationId, agencyId, id, action, body);
+  return idempotent(dependencies, req, agencyId, `${resource}:${id}:${action}`, body, async () => {
+    if (resource === 'maintenance-items') return maintenanceItemAction(req, dependencies, correlationId, agencyId, id, action, body);
+    if (resource === 'work-requests') return workRequestAction(req, dependencies, correlationId, agencyId, id, action, body);
+    return tenantInstructionAction(req, dependencies, correlationId, agencyId, id, action, body);
+  });
 }
