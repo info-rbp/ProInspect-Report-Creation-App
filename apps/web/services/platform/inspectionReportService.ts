@@ -10,12 +10,16 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
     name: room.name,
     sequence: index + 1,
     overallCommentary: room.overallComment || '',
-    photoReferences: (room.photos || []).map((photo, photoIndex) => ({
-      photoId: photo.id,
-      objectPath: photo.objectPath || `pending/${photo.id}`,
-      ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}),
-      sequence: photoIndex + 1,
-    })),
+    photoReferences: (room.photos || []).flatMap((photo, photoIndex) => {
+      const objectPath = photo.objectPath || photo.downloadUrl;
+      if (!objectPath) return [];
+      return [{
+        photoId: photo.id,
+        objectPath,
+        ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}),
+        sequence: photoIndex + 1,
+      }];
+    }),
     components: room.items.map((item) => ({
       id: item.id,
       component: item.name,
@@ -35,12 +39,26 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
       ...(typeof item.aiConfidence === 'number' ? { aiConfidence: item.aiConfidence } : {}),
       reviewStatus: item.reviewStatus || 'draft',
       comparisonStatus: item.comparisonStatus || 'not_compared',
+      ...(item.presenceComparison ? { presenceComparison: item.presenceComparison } : {}),
+      ...(item.conditionComparison ? { conditionComparison: item.conditionComparison } : {}),
+      ...(item.cleanlinessComparison ? { cleanlinessComparison: item.cleanlinessComparison } : {}),
+      ...(item.workingComparison ? { workingComparison: item.workingComparison } : {}),
+      ...(item.comparisonCommentary ? { comparisonCommentary: item.comparisonCommentary } : {}),
+      ...(item.baselineComponentId ? { baselineComponentId: item.baselineComponentId } : {}),
+      ...(item.baselineComponentData ? { baselineComponentData: item.baselineComponentData } : {}),
+      ...(item.baselineEvidencePhotoIds ? { baselineEvidencePhotoIds: item.baselineEvidencePhotoIds } : {}),
+      ...(item.currentEvidencePhotoIds ? { currentEvidencePhotoIds: item.currentEvidencePhotoIds } : {}),
+      ...(item.evidencePairs ? { evidencePairs: item.evidencePairs } : {}),
+      ...(typeof item.comparisonConfidence === 'number' ? { comparisonConfidence: item.comparisonConfidence } : {}),
+      ...(item.comparisonUncertainty ? { comparisonUncertainty: item.comparisonUncertainty } : {}),
+      ...(item.comparisonReviewStatus ? { comparisonReviewStatus: item.comparisonReviewStatus } : {}),
+      ...(item.comparisonMethod ? { comparisonMethod: item.comparisonMethod } : {}),
     })),
   }));
 }
 
 export async function createInspectionReportForJob(
-  job: InspectionJob & { version?: number },
+  job: InspectionJob,
   property: PropertyRecord,
   options: { clientName?: string; inspectionDate?: string } = {},
 ): Promise<ReportAggregate> {
@@ -108,6 +126,11 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
         aiConfidence: component.aiConfidence,
         reviewStatus: component.reviewStatus,
         comparisonStatus: component.comparisonStatus,
+        presenceComparison: component.presenceComparison,
+        conditionComparison: component.conditionComparison,
+        cleanlinessComparison: component.cleanlinessComparison,
+        workingComparison: component.workingComparison,
+        comparisonCommentary: component.comparisonCommentary,
         baselineComponentId: component.baselineComponentId,
         baselineComponentData: component.baselineComponentData,
         baselineEvidencePhotoIds: component.baselineEvidencePhotoIds,
