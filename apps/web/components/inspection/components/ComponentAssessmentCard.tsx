@@ -39,7 +39,10 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
   const isComplete =
     item.conditionCategory !== 'unable_to_confirm' &&
     item.cleanlinessCategory !== 'unable_to_confirm' &&
-    (!isOperational || item.workingStatus !== 'untested');
+    (!isOperational || (
+      item.workingStatus !== 'unable_to_confirm' &&
+      item.testStatus !== 'unable_to_confirm'
+    ));
 
   const isDamaged =
     item.conditionCategory === 'repair_required' ||
