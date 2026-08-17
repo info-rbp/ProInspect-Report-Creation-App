@@ -6,7 +6,7 @@ import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeAnalysisRequest } from './backend/analysisRoutes.js';
 import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
-import { routeMaintenanceCommandRequest } from './backend/maintenanceCommandRoutes.js';
+import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
@@ -145,9 +145,9 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         return;
       }
 
-      const maintenanceCommandResponse = await routeMaintenanceCommandRequest(req, dependencies, correlationId);
-      if (maintenanceCommandResponse) {
-        send(res, maintenanceCommandResponse, correlationId);
+      const maintenanceActionResponse = await routeMaintenanceActionRequest(req, dependencies, correlationId);
+      if (maintenanceActionResponse) {
+        send(res, maintenanceActionResponse, correlationId);
         return;
       }
 
