@@ -7,8 +7,7 @@ import {
 } from '../src/services/geminiAnalysisService.js';
 
 describe('Gemini Analysis Server Rules', () => {
-  it('enforces working status untested for operational items and not_applicable for static items', () => {
-    // Operational items must be forced to untested
+  it('keeps operational items untested during photo analysis and marks static items not applicable', () => {
     const switchRule = enforceWorkingStatusRules('Light Switch', 'operation_confirmed', 'tested_passed');
     expect(switchRule.workingStatus).toBe('untested');
     expect(switchRule.testStatus).toBe('untested');
@@ -17,23 +16,24 @@ describe('Gemini Analysis Server Rules', () => {
     expect(ovenRule.workingStatus).toBe('untested');
     expect(ovenRule.testStatus).toBe('untested');
 
-    // Static items must be forced to not_applicable
     const wallRule = enforceWorkingStatusRules('Walls', 'operation_confirmed', 'tested_passed');
     expect(wallRule.workingStatus).toBe('not_applicable');
     expect(wallRule.testStatus).toBe('not_applicable');
 
-    // Broken operational items preserve failure state
-    const brokenSwitch = enforceWorkingStatusRules('Light Switch', 'not_working', 'tested_failed');
-    expect(brokenSwitch.workingStatus).toBe('not_working');
-    expect(brokenSwitch.testStatus).toBe('tested_failed');
+    // A photo-only model response is not a physical operational test, even if the
+    // model attempts to return a failure state. Tested failure belongs to the
+    // inspector/test workflow, not visual analysis.
+    const photoOnlyFailure = enforceWorkingStatusRules('Light Switch', 'not_working', 'tested_failed');
+    expect(photoOnlyFailure.workingStatus).toBe('untested');
+    expect(photoOnlyFailure.testStatus).toBe('untested');
   });
 
-  it('sanitizes prohibited causation claims alleging tenant fault', () => {
+  it('sanitizes prohibited causation claims alleging tenant fault while retaining the visible issue', () => {
     const rawInput = 'Tenant caused damage to wall surface near doorway due to misuse.';
     const sanitized = sanitizeProhibitedCausation(rawInput);
     expect(sanitized).not.toMatch(/tenant caused/i);
     expect(sanitized).not.toMatch(/misuse/i);
-    expect(sanitized).toContain('visible wear/damage observed');
+    expect(sanitized.toLowerCase()).toContain('damage to wall surface near doorway');
   });
 
   it('validates evidence photo provenance against request photo set', () => {
