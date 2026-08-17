@@ -152,7 +152,7 @@ export function buildOpenApiDocument() {
     post: {
       ...operation('inspection-jobs', 'post', false),
       operationId: 'createInspectionReportForJob',
-      description: 'Creates or safely reuses the server-authoritative report linked to an inspection job. The server resolves the canonical Entry, Routine, Exit, Comparison or Maintenance policy, binds a published template version, and for Exit binds the eligible immutable Entry baseline for the same property and tenancy.',
+      description: 'Creates or safely reuses the server-authoritative report linked to an inspection job. The server resolves the canonical Entry, Routine, Exit, Comparison or Maintenance policy, binds a published template version, and for Exit binds an eligible immutable Entry baseline when available or requires the explicit legacy mapping workflow.',
       requestBody: {
         required: true,
         content: {
@@ -166,6 +166,7 @@ export function buildOpenApiDocument() {
                 reportType: { type: 'string' },
                 clientName: { type: 'string' },
                 inspectionDate: { type: 'string', format: 'date' },
+                allowLegacyBaseline: { type: 'boolean', description: 'Permits a clearly marked legacy_unstructured Entry placeholder only when no eligible immutable structured Entry exists.' },
                 areas: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: true } },
               },
             },
@@ -179,6 +180,72 @@ export function buildOpenApiDocument() {
         '409': { $ref: '#/components/responses/Error' },
         '422': { $ref: '#/components/responses/Error' },
       },
+    },
+  };
+  paths['/api/v1/reports/{id}/legacy-baseline'] = {
+    post: {
+      ...operation('reports', 'post', false),
+      operationId: 'saveReviewedLegacyEntryBaselineMapping',
+      description: 'Saves a human-reviewed mapping from an older unstructured Entry source to stable Exit area/component IDs. Confidence is capped for legacy sources and operational status cannot be confirmed without explicit tested evidence.',
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['expectedVersion', 'source', 'mappings'], properties: { expectedVersion: { type: 'integer', minimum: 1 }, source: { type: 'object', additionalProperties: true }, mappings: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: true } } } } } } },
+      responses: { '200': { description: 'Legacy mapping updated' }, '201': { description: 'Legacy mapping created' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'report.edit',
+    },
+  };
+  paths['/api/v1/maintenance-reports/create'] = {
+    post: {
+      operationId: 'createMaintenanceFollowUpReport',
+      tags: ['maintenance-items', 'reports'],
+      description: 'Creates or reuses a targeted Maintenance / Follow-Up report and linked inspection job for one or more Maintenance Items from the same property/tenancy context. Source facts become baseline only; the current assessment starts unconfirmed and operational components start untested.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [
+        { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+        { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } },
+      ],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['maintenanceItemIds'], properties: { maintenanceItemIds: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'string' } }, inspectionDate: { type: 'string', format: 'date' } } } } } },
+      responses: { '200': { description: 'Existing deterministic follow-up report reused' }, '201': { description: 'Targeted follow-up report created' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'maintenance.manage',
+    },
+  };
+  paths['/api/v1/properties/{id}/history'] = {
+    get: {
+      operationId: 'getImmutablePropertyComponentHistory',
+      tags: ['properties', 'reports', 'maintenance-items'],
+      description: 'Projects read-only property/component history from immutable report versions and linked Maintenance records. Historical report content is never mutated.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [
+        { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      responses: { '200': { description: 'Immutable property/component history' }, '404': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'property.read',
+    },
+  };
+  paths['/api/v1/external/evidence/{grantToken}/upload-session'] = {
+    post: {
+      operationId: 'createScopedExternalEvidenceUploadSession',
+      tags: ['external-access-grants', 'uploads'],
+      description: 'Creates a resumable immutable evidence upload session scoped by a valid, unexpired Work Request or Tenant Instruction access grant. This does not yet create authoritative photoEvidence metadata.',
+      security: [],
+      parameters: [{ name: 'grantToken', in: 'path', required: true, schema: { type: 'string', minLength: 16 } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['fileName', 'contentType', 'size', 'sha256'], properties: { fileName: { type: 'string' }, contentType: { type: 'string', enum: ['image/jpeg', 'image/png', 'image/heic', 'image/heif'] }, size: { type: 'integer', minimum: 1, maximum: 26214400 }, sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } } } },
+      responses: { '201': { description: 'Scoped resumable evidence upload session' }, '400': { $ref: '#/components/responses/Error' }, '401': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' } },
+      'x-authorisation': 'external-grant-token',
+    },
+  };
+  paths['/api/v1/external/evidence/{grantToken}/upload-session/{uploadId}/complete'] = {
+    post: {
+      operationId: 'completeScopedExternalEvidenceUpload',
+      tags: ['external-access-grants', 'uploads'],
+      description: 'Completes a grant-scoped evidence upload by reloading the exact upload session, verifying the stored object size and SHA-256, recording the exact Cloud Storage generation, and creating the canonical photoEvidence record idempotently.',
+      security: [],
+      parameters: [
+        { name: 'grantToken', in: 'path', required: true, schema: { type: 'string', minLength: 16 } },
+        { name: 'uploadId', in: 'path', required: true, schema: { type: 'string' } },
+      ],
+      requestBody: { required: false, content: { 'application/json': { schema: { type: 'object', additionalProperties: false } } } },
+      responses: { '200': { description: 'Canonical evidence record already existed or was completed' }, '201': { description: 'Canonical photoEvidence record created' }, '400': { $ref: '#/components/responses/Error' }, '401': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } },
+      'x-authorisation': 'external-grant-token',
     },
   };
   paths['/api/v1/reports/{id}/aggregate'] = {
@@ -212,7 +279,7 @@ export function buildOpenApiDocument() {
     post: {
       ...operation('reports', 'post', false),
       operationId: 'createReportArchiveArtifact',
-      description: 'Creates or reuses the immutable, version-bound archive manifest for a finalised report. This command does not itself transition the report to archived.',
+      description: 'Creates or reuses the immutable, version-bound archive manifest for a finalised report. The canonical manifest binds the immutable report version, final PDF, render manifest, report and tenant-response evidence, tenant responses, linked Maintenance records and audit references. This command does not itself transition the report to archived.',
       requestBody: {
         required: true,
         content: {
@@ -239,7 +306,7 @@ export function buildOpenApiDocument() {
     openapi: '3.1.0',
     info: {
       title: 'Property Condition Report API',
-      version: '1.1.0',
+      version: '1.2.0',
       description: 'Server-authoritative Cloud Run API for agency-scoped property inspection operations.',
     },
     servers: [{ url: '/', description: 'Current Cloud Run service' }],
