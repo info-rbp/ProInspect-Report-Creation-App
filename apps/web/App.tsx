@@ -12,7 +12,7 @@ import AdminHomePage from './pages/admin/AdminHomePage';
 import InspectionJobDetailPage from './pages/admin/InspectionJobDetailPage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
 import PropertiesPage from './pages/admin/PropertiesPage';
-import PropertyDetailPage from './pages/admin/PropertyDetailPage';
+import PropertyDetailWithHistoryPage from './pages/admin/PropertyDetailWithHistoryPage';
 import ReportDetailPage from './pages/admin/ReportDetailPage';
 import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
@@ -24,7 +24,7 @@ import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
 import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
-import ReportEditPage from './pages/reports/ReportEditPage';
+import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
 
 const App: React.FC = () => (
@@ -48,7 +48,7 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="properties" />}>
               <Route path="admin/properties" element={<PropertiesPage />} />
-              <Route path="admin/properties/:propertyId" element={<PropertyDetailPage />} />
+              <Route path="admin/properties/:propertyId" element={<PropertyDetailWithHistoryPage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="jobs" />}>
               <Route path="admin/jobs" element={<InspectionJobsPage />} />
@@ -57,7 +57,7 @@ const App: React.FC = () => (
             <Route element={<RoleProtectedRoute section="reports" />}>
               <Route path="admin/reports" element={<ReportsPage />} />
               <Route path="admin/reports/:reportId" element={<ReportDetailPage />} />
-              <Route path="admin/reports/:reportId/edit" element={<ReportEditPage />} />
+              <Route path="admin/reports/:reportId/edit" element={<ReportEditWithLegacyBaselinePage />} />
               <Route path="admin/reports/:reportId/preview" element={<ReportPreviewPage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="maintenance" />}>
