@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Copy, Play, RotateCcw, Send, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Copy, FileText, Play, RotateCcw, Send, ShieldCheck, XCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ExternalContact, MaintenanceItem, WorkRequest } from '../../types/platform';
+import { createMaintenanceFollowUpReport } from '../../services/platform/maintenanceReportService';
 import {
   createWorkRequest,
   generateAccessGrant,
@@ -148,6 +149,19 @@ const MaintenanceDetailPage: React.FC = () => {
     await runItemAction('cancel', { reason: reason.trim() });
   };
 
+  const handleCreateFollowUpReport = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const aggregate = await createMaintenanceFollowUpReport([item.id]);
+      navigate(`/app/admin/reports/${encodeURIComponent(aggregate.report.id)}/edit`);
+    } catch (err) {
+      setError(message(err, 'Maintenance Follow-Up report could not be created.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleWorkRequestAction = async (request: WorkRequest, action: 'accept' | 'cancel') => {
     const reason = action === 'cancel' ? window.prompt('Reason for cancelling this work request:') : undefined;
     if (action === 'cancel' && !reason?.trim()) return;
@@ -164,12 +178,14 @@ const MaintenanceDetailPage: React.FC = () => {
   };
 
   const terminal = ['closed', 'dismissed', 'cancelled', 'duplicate', 'not_actionable'].includes(item.status);
+  const followUpEligible = ['verification_required', 'verified', 'completed', 'closed'].includes(item.status);
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button onClick={() => navigate('/app/admin/maintenance')} className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900"><ArrowLeft size={16} /> Back to Maintenance</button>
         <div className="flex flex-wrap gap-2">
+          {followUpEligible && <button disabled={busy} onClick={() => void handleCreateFollowUpReport()} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 disabled:opacity-50"><FileText size={16} /> Create Follow-Up Report</button>}
           {item.status === 'triage_required' && <button disabled={busy} onClick={() => void runItemAction('approve')} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"><ShieldCheck size={16} /> Approve</button>}
           {item.status === 'approved' && <button disabled={busy} onClick={() => setShowAssignModal(true)} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"><Send size={16} /> Assign & Issue Work Request</button>}
           {item.status === 'assigned' && <button disabled={busy} onClick={() => void runItemAction('start')} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"><Play size={16} /> Start Work</button>}
@@ -197,7 +213,7 @@ const MaintenanceDetailPage: React.FC = () => {
 
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-bold text-gray-900">External Work Requests</h2>
-            {workRequests.length === 0 ? <p className="mt-3 text-xs text-gray-500">No work requests issued.</p> : <div className="mt-3 space-y-3">{workRequests.map((request) => <div key={request.id} className="rounded-lg border border-gray-200 p-4 text-xs"><div className="flex justify-between gap-2"><span className="font-semibold capitalize">{request.status.replaceAll('_', ' ')}</span><span className="text-gray-400">{request.issuedAt ? new Date(request.issuedAt).toLocaleDateString() : ''}</span></div><p className="mt-2 text-gray-600">{request.instructions}</p>{request.responseNotes && <p className="mt-2 rounded bg-emerald-50 p-2 text-emerald-800">Contractor response: {request.responseNotes}</p>}<div className="mt-3 flex justify-end gap-2">{request.status === 'completed' && <button disabled={busy} onClick={() => void handleWorkRequestAction(request, 'accept')} className="rounded bg-emerald-600 px-2.5 py-1 text-white disabled:opacity-50">Accept Work</button>}{['draft', 'issued', 'acknowledged', 'in_progress'].includes(request.status) && <button disabled={busy} onClick={() => void handleWorkRequestAction(request, 'cancel')} className="rounded border border-rose-200 px-2.5 py-1 text-rose-700 disabled:opacity-50">Cancel Request</button>}</div></div>)}</div>}
+            {workRequests.length === 0 ? <p className="mt-3 text-xs text-gray-500">No work requests issued.</p> : <div className="mt-3 space-y-3">{workRequests.map((request) => <div key={request.id} className="rounded-lg border border-gray-200 p-4 text-xs"><div className="flex justify-between gap-2"><span className="font-semibold capitalize">{request.status.replaceAll('_', ' ')}</span><span className="text-gray-400">{request.issuedAt ? new Date(request.issuedAt).toLocaleDateString() : ''}</span></div><p className="mt-2 text-gray-600">{request.instructions}</p>{request.responseNotes && <p className="mt-2 rounded bg-emerald-50 p-2 text-emerald-800">Contractor response: {request.responseNotes}</p>}{request.completionEvidenceIds?.length ? <div className="mt-2 text-[11px] text-gray-400">Completion evidence IDs: {request.completionEvidenceIds.join(', ')}</div> : null}<div className="mt-3 flex justify-end gap-2">{request.status === 'completed' && <button disabled={busy} onClick={() => void handleWorkRequestAction(request, 'accept')} className="rounded bg-emerald-600 px-2.5 py-1 text-white disabled:opacity-50">Accept Work</button>}{['draft', 'issued', 'acknowledged', 'in_progress'].includes(request.status) && <button disabled={busy} onClick={() => void handleWorkRequestAction(request, 'cancel')} className="rounded border border-rose-200 px-2.5 py-1 text-rose-700 disabled:opacity-50">Cancel Request</button>}</div></div>)}</div>}
           </section>
 
           {generatedLink && <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900"><div className="font-bold">Scoped contractor link</div><div className="mt-2 flex items-center gap-2 rounded border border-emerald-200 bg-white p-2 font-mono text-gray-800"><span className="min-w-0 flex-1 break-all">{generatedLink}</span><button onClick={() => void navigator.clipboard.writeText(generatedLink)} title="Copy link" className="text-emerald-700"><Copy size={16} /></button></div><p className="mt-2 text-emerald-700">The link is time-limited and scoped only to this work request.</p></section>}
