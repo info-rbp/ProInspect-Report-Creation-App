@@ -7,6 +7,7 @@ export * from './comparisonEngine.js';
 export * from './maintenance.js';
 export * from './maintenanceWorkflow.js';
 export * from './inspectionPolicy.js';
+export * from './legacyBaseline.js';
 
 export type InspectionType = 'entry' | 'routine' | 'exit' | 'comparison' | 'maintenance';
 
