@@ -15,6 +15,9 @@ import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
 
+const VERSION_COLLECTION = 'templateVersions';
+const POINTER_COLLECTION = 'templates';
+
 type StoredTemplate = StoredRecord & {
   templateId: string;
   templateVersion: number;
@@ -92,17 +95,31 @@ function recordData(template: InspectionTypeTemplate, extras: { immutable?: bool
     templateCreatedAt: template.createdAt,
     ...(template.publishedAt ? { publishedAt: template.publishedAt } : {}),
     ...(template.retiredAt ? { retiredAt: template.retiredAt } : {}),
-    immutable: extras.immutable ?? template.status === 'published',
+    immutable: extras.immutable ?? template.status !== 'draft',
     ...(extras.systemDefault ? { systemDefault: true } : {}),
+  };
+}
+
+function pointerData(template: InspectionTypeTemplate, versionRecordId: string, systemDefault = false): Record<string, unknown> {
+  return {
+    templateId: template.id,
+    templateVersion: template.version,
+    inspectionType: template.inspectionType,
+    reportType: template.inspectionType,
+    propertyType: template.propertyType,
+    status: template.status,
+    versionRecordId,
+    immutable: true,
+    ...(template.publishedAt ? { publishedAt: template.publishedAt } : {}),
+    ...(template.retiredAt ? { retiredAt: template.retiredAt } : {}),
+    ...(systemDefault ? { systemDefault: true } : {}),
   };
 }
 
 function templateFromBody(value: unknown): InspectionTypeTemplate {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(400, 'TEMPLATE_REQUIRED', 'A template object is required.');
   const candidate = structuredClone(value) as InspectionTypeTemplate;
-  try {
-    validateTemplate(candidate);
-  } catch (error) {
+  try { validateTemplate(candidate); } catch (error) {
     throw new ApiError(400, 'TEMPLATE_INVALID', error instanceof Error ? error.message : 'Template is invalid.');
   }
   return candidate;
@@ -165,25 +182,56 @@ async function appendAudit(
 }
 
 async function loadTemplate(dependencies: ApiDependencies, agencyId: string, templateId: string, version: number): Promise<StoredTemplate> {
-  const record = await dependencies.repository.get('templates', agencyId, storageId(templateId, version));
+  const record = await dependencies.repository.get(VERSION_COLLECTION, agencyId, storageId(templateId, version));
   if (!record) throw new ApiError(404, 'TEMPLATE_NOT_FOUND', 'Template version not found.');
   return record as StoredTemplate;
 }
 
+async function upsertPublishedPointer(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  template: InspectionTypeTemplate,
+  actorId: string,
+  versionRecordId: string,
+  systemDefault = false,
+): Promise<void> {
+  const existing = await dependencies.repository.get(POINTER_COLLECTION, agencyId, template.id);
+  const data = pointerData(template, versionRecordId, systemDefault);
+  if (existing) {
+    await dependencies.repository.update(POINTER_COLLECTION, agencyId, template.id, data, existing.version, actorId);
+  } else {
+    await dependencies.repository.create(POINTER_COLLECTION, agencyId, template.id, data, actorId);
+  }
+}
+
+function defaults(): InspectionTypeTemplate[] {
+  const createdAt = new Date().toISOString();
+  return [
+    { ...createInitialPcrTemplate(), id: 'system-entry-v1', version: 1, status: 'draft', createdAt },
+    { ...createRoutineInspectionTemplate(), id: 'system-routine-v1', version: 1, status: 'draft', createdAt },
+    { ...createExitInspectionTemplate(), id: 'system-exit-v1', version: 1, status: 'draft', createdAt },
+  ];
+}
+
 async function ensureSystemDefaults(dependencies: ApiDependencies, agencyId: string, actorId: string): Promise<void> {
-  const defaults = [createInitialPcrTemplate(), createRoutineInspectionTemplate(), createExitInspectionTemplate()];
-  for (const draft of defaults) {
+  for (const draft of defaults()) {
     const published = publishTemplate(draft);
     const id = storageId(published.id, published.version);
-    if (await dependencies.repository.get('templates', agencyId, id)) continue;
-    await dependencies.repository.create('templates', agencyId, id, recordData(published, { immutable: true, systemDefault: true }), actorId);
+    const existingVersion = await dependencies.repository.get(VERSION_COLLECTION, agencyId, id);
+    if (!existingVersion) {
+      await dependencies.repository.create(VERSION_COLLECTION, agencyId, id, recordData(published, { immutable: true, systemDefault: true }), actorId);
+    }
+    const pointer = await dependencies.repository.get(POINTER_COLLECTION, agencyId, published.id);
+    if (!pointer || pointer.status !== 'published' || pointer.templateVersion !== published.version) {
+      await upsertPublishedPointer(dependencies, agencyId, published, actorId, id, true);
+    }
   }
 }
 
 async function listTemplates(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, agencyId: string): Promise<ApiResponse> {
   const principal = await authenticateAndAuthorise(req, dependencies, 'report.read', { agencyId }, correlationId);
   await ensureSystemDefaults(dependencies, agencyId, principal.uid);
-  const page = await dependencies.repository.list('templates', agencyId, 100);
+  const page = await dependencies.repository.list(VERSION_COLLECTION, agencyId, 100);
   const templates = page.items
     .filter((record) => typeof record.templateId === 'string' && typeof record.templateVersion === 'number')
     .map((record) => view(record as StoredTemplate))
@@ -197,8 +245,8 @@ async function createDraft(req: IncomingMessage, dependencies: ApiDependencies, 
   if (template.status !== 'draft') throw new ApiError(400, 'DRAFT_REQUIRED', 'New template versions must be created as drafts.');
   const id = storageId(template.id, template.version);
   return idempotent(dependencies, req, agencyId, `template:${id}:create`, body, async () => {
-    if (await dependencies.repository.get('templates', agencyId, id)) throw new ApiError(409, 'TEMPLATE_VERSION_EXISTS', 'This template version already exists.');
-    const created = await dependencies.repository.create('templates', agencyId, id, recordData(template), principal.uid) as StoredTemplate;
+    if (await dependencies.repository.get(VERSION_COLLECTION, agencyId, id)) throw new ApiError(409, 'TEMPLATE_VERSION_EXISTS', 'This template version already exists.');
+    const created = await dependencies.repository.create(VERSION_COLLECTION, agencyId, id, recordData(template), principal.uid) as StoredTemplate;
     await appendAudit(dependencies, principal, 'template.created', template.id, correlationId, { version: template.version });
     return { status: 201, body: { data: view(created), meta: { correlationId } } };
   });
@@ -212,10 +260,8 @@ async function updateDraft(req: IncomingMessage, dependencies: ApiDependencies, 
     const recordVersion = expectedRecordVersion(body);
     if (recordVersion !== existing.version) throw new ApiError(409, 'VERSION_CONFLICT', 'Template changed. Reload and retry.');
     const template = templateFromBody(body.template);
-    if (template.id !== templateId || template.version !== version || template.status !== 'draft') {
-      throw new ApiError(400, 'TEMPLATE_IDENTITY_MISMATCH', 'Template identity, version and draft status cannot be changed by an edit.');
-    }
-    const updated = await dependencies.repository.update('templates', agencyId, existing.id, recordData(template), existing.version, principal.uid) as StoredTemplate;
+    if (template.id !== templateId || template.version !== version || template.status !== 'draft') throw new ApiError(400, 'TEMPLATE_IDENTITY_MISMATCH', 'Template identity, version and draft status cannot be changed by an edit.');
+    const updated = await dependencies.repository.update(VERSION_COLLECTION, agencyId, existing.id, recordData(template), existing.version, principal.uid) as StoredTemplate;
     await appendAudit(dependencies, principal, 'template.updated', templateId, correlationId, { version });
     return { status: 200, body: { data: view(updated), meta: { correlationId } } };
   });
@@ -231,7 +277,8 @@ async function publish(req: IncomingMessage, dependencies: ApiDependencies, corr
     assertTemplateEditable(current);
     let published: InspectionTypeTemplate;
     try { published = publishTemplate(current); } catch (error) { throw new ApiError(400, 'TEMPLATE_INVALID', error instanceof Error ? error.message : 'Template cannot be published.'); }
-    const updated = await dependencies.repository.update('templates', agencyId, existing.id, recordData(published, { immutable: true, systemDefault: existing.systemDefault }), existing.version, principal.uid) as StoredTemplate;
+    const updated = await dependencies.repository.update(VERSION_COLLECTION, agencyId, existing.id, recordData(published, { immutable: true, systemDefault: existing.systemDefault }), existing.version, principal.uid) as StoredTemplate;
+    await upsertPublishedPointer(dependencies, agencyId, published, principal.uid, existing.id, Boolean(existing.systemDefault));
     await appendAudit(dependencies, principal, 'template.published', templateId, correlationId, { version });
     return { status: 200, body: { data: view(updated), meta: { correlationId } } };
   });
@@ -245,7 +292,18 @@ async function retire(req: IncomingMessage, dependencies: ApiDependencies, corre
     if (recordVersion !== existing.version) throw new ApiError(409, 'VERSION_CONFLICT', 'Template changed. Reload and retry.');
     let retired: InspectionTypeTemplate;
     try { retired = retireTemplate(view(existing)); } catch (error) { throw new ApiError(409, 'TEMPLATE_NOT_PUBLISHED', error instanceof Error ? error.message : 'Only published templates can be retired.'); }
-    const updated = await dependencies.repository.update('templates', agencyId, existing.id, recordData(retired, { immutable: true, systemDefault: existing.systemDefault }), existing.version, principal.uid) as StoredTemplate;
+    const updated = await dependencies.repository.update(VERSION_COLLECTION, agencyId, existing.id, recordData(retired, { immutable: true, systemDefault: existing.systemDefault }), existing.version, principal.uid) as StoredTemplate;
+
+    const versions = await dependencies.repository.list(VERSION_COLLECTION, agencyId, 100);
+    const fallback = versions.items
+      .filter((record) => record.templateId === templateId && record.status === 'published' && record.templateVersion !== version)
+      .sort((left, right) => Number(right.templateVersion ?? 0) - Number(left.templateVersion ?? 0))[0] as StoredTemplate | undefined;
+    if (fallback) {
+      await upsertPublishedPointer(dependencies, agencyId, view(fallback), principal.uid, fallback.id, Boolean(fallback.systemDefault));
+    } else {
+      const pointer = await dependencies.repository.get(POINTER_COLLECTION, agencyId, templateId);
+      if (pointer) await dependencies.repository.update(POINTER_COLLECTION, agencyId, templateId, pointerData(retired, existing.id, Boolean(existing.systemDefault)), pointer.version, principal.uid);
+    }
     await appendAudit(dependencies, principal, 'template.retired', templateId, correlationId, { version });
     return { status: 200, body: { data: view(updated), meta: { correlationId } } };
   });
@@ -255,19 +313,22 @@ async function duplicate(req: IncomingMessage, dependencies: ApiDependencies, co
   const principal = await authenticateAndAuthorise(req, dependencies, 'template.manage', { agencyId }, correlationId);
   return idempotent(dependencies, req, agencyId, `template:${templateId}:${version}:duplicate`, body, async () => {
     const source = await loadTemplate(dependencies, agencyId, templateId, version);
-    const page = await dependencies.repository.list('templates', agencyId, 100);
+    const page = await dependencies.repository.list(VERSION_COLLECTION, agencyId, 100);
     const maxVersion = Math.max(0, ...page.items.filter((record) => record.templateId === templateId).map((record) => Number(record.templateVersion ?? 0)));
+    const sourceView = view(source);
     const draft: InspectionTypeTemplate = {
-      ...view(source),
+      id: sourceView.id,
       version: maxVersion + 1,
+      inspectionType: sourceView.inspectionType,
+      propertyType: sourceView.propertyType,
       status: 'draft',
+      areas: structuredClone(sourceView.areas),
+      commentaryBank: structuredClone(sourceView.commentaryBank),
       createdAt: new Date().toISOString(),
-      publishedAt: undefined,
-      retiredAt: undefined,
     };
     validateTemplate(draft);
     const id = storageId(draft.id, draft.version);
-    const created = await dependencies.repository.create('templates', agencyId, id, recordData(draft), principal.uid) as StoredTemplate;
+    const created = await dependencies.repository.create(VERSION_COLLECTION, agencyId, id, recordData(draft), principal.uid) as StoredTemplate;
     await appendAudit(dependencies, principal, 'template.duplicated', templateId, correlationId, { sourceVersion: version, version: draft.version });
     return { status: 201, body: { data: view(created), meta: { correlationId } } };
   });
@@ -280,9 +341,7 @@ export async function routeTemplateRequest(req: IncomingMessage, dependencies: A
   const agencyId = agencyHeader(req);
 
   if (parts.length === 3 && req.method === 'GET') return listTemplates(req, dependencies, correlationId, agencyId);
-  if (parts.length === 4 && parts[3] === 'drafts' && req.method === 'POST') {
-    return createDraft(req, dependencies, correlationId, agencyId, await readJson(req));
-  }
+  if (parts.length === 4 && parts[3] === 'drafts' && req.method === 'POST') return createDraft(req, dependencies, correlationId, agencyId, await readJson(req));
 
   const templateId = parts[3] ? decodeURIComponent(parts[3]) : '';
   const version = parts[4] === 'versions' && parts[5] ? Number(parts[5]) : NaN;
