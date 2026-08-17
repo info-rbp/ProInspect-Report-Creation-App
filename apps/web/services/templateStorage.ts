@@ -2,150 +2,118 @@ import {
   type InspectionTypeTemplate,
   type ImportRow,
   type ImportValidationResult,
-  publishTemplate as publishTemplateCore,
-  retireTemplate as retireTemplateCore,
   importCommentaryBank,
   assertTemplateEditable,
   validateTemplate,
   createInitialPcrTemplate,
-  createRoutineInspectionTemplate,
-  createExitInspectionTemplate,
 } from '@pcr/templates';
+import { apiRequest } from './apiClient';
 
-const TEMPLATES_STORAGE_KEY = 'proinspect_templates_v2';
+type ServerTemplate = InspectionTypeTemplate & {
+  recordVersion: number;
+  systemDefault?: boolean;
+};
 
-export function loadTemplatesFromStorage(): InspectionTypeTemplate[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(TEMPLATES_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed as InspectionTypeTemplate[];
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to parse stored templates, initializing defaults:', err);
-  }
+const recordVersions = new Map<string, number>();
 
-  // Initial default presets
-  const defaults = [
-    publishTemplateCore(createInitialPcrTemplate()),
-    publishTemplateCore(createRoutineInspectionTemplate()),
-    publishTemplateCore(createExitInspectionTemplate()),
-  ];
-  saveTemplatesToStorage(defaults);
-  return defaults;
+function key(id: string, version: number): string {
+  return `${id}@${version}`;
 }
 
-export function saveTemplatesToStorage(templates: InspectionTypeTemplate[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
-  } catch (err) {
-    console.error('Failed to save templates to storage:', err);
-  }
+function remember(template: ServerTemplate): ServerTemplate {
+  recordVersions.set(key(template.id, template.version), template.recordVersion);
+  return template;
+}
+
+async function versionFor(id: string, version: number): Promise<number> {
+  const cached = recordVersions.get(key(id, version));
+  if (cached) return cached;
+  const templates = await getTemplates();
+  const found = templates.find((template) => template.id === id && template.version === version) as ServerTemplate | undefined;
+  if (!found?.recordVersion) throw new Error('Template version not found or missing its server record version.');
+  return found.recordVersion;
+}
+
+function versionPath(id: string, version: number): string {
+  return `/api/v1/templates/${encodeURIComponent(id)}/versions/${version}`;
 }
 
 export async function getTemplates(): Promise<InspectionTypeTemplate[]> {
-  return loadTemplatesFromStorage();
+  const templates = await apiRequest<ServerTemplate[]>(undefined, '/api/v1/templates');
+  return templates.map(remember);
 }
 
-export async function getActiveTemplateForType(
-  type: string = 'entry'
-): Promise<InspectionTypeTemplate> {
-  const templates = loadTemplatesFromStorage();
-  const matched = templates.find(
-    (t) => t.inspectionType === type && (t.status === 'published' || t.status === 'draft')
-  );
-  if (matched) return matched;
-  return templates[0] || createInitialPcrTemplate();
+export async function getActiveTemplateForType(type: string = 'entry'): Promise<InspectionTypeTemplate> {
+  const templates = await getTemplates();
+  const matches = templates
+    .filter((template) => template.inspectionType === type)
+    .sort((left, right) => right.version - left.version);
+  const published = matches.find((template) => template.status === 'published');
+  const draft = matches.find((template) => template.status === 'draft');
+  return published || draft || templates[0] || createInitialPcrTemplate();
 }
 
 export async function saveTemplate(template: InspectionTypeTemplate): Promise<void> {
   validateTemplate(template);
-  const templates = loadTemplatesFromStorage();
-  const index = templates.findIndex((t) => t.id === template.id && t.version === template.version);
-  if (index >= 0) {
-    templates[index] = template;
-  } else {
-    templates.push(template);
+  if (template.status !== 'draft') throw new Error('Published and retired template versions are immutable. Duplicate to a new draft before editing.');
+
+  const knownVersion = recordVersions.get(key(template.id, template.version)) || (template as Partial<ServerTemplate>).recordVersion;
+  if (knownVersion) {
+    const updated = await apiRequest<ServerTemplate>(undefined, versionPath(template.id, template.version), {
+      method: 'PUT',
+      body: { expectedRecordVersion: knownVersion, template },
+    });
+    remember(updated);
+    return;
   }
-  saveTemplatesToStorage(templates);
+
+  const created = await apiRequest<ServerTemplate>(undefined, '/api/v1/templates/drafts', {
+    method: 'POST',
+    body: { template },
+  });
+  remember(created);
 }
 
-export async function publishTemplateVersion(
-  id: string,
-  version: number
-): Promise<InspectionTypeTemplate> {
-  const templates = loadTemplatesFromStorage();
-  const index = templates.findIndex((t) => t.id === id && t.version === version);
-  if (index === -1) throw new Error('Template version not found.');
-
-  const published = publishTemplateCore(templates[index]);
-  templates[index] = published;
-  saveTemplatesToStorage(templates);
-  return published;
+export async function publishTemplateVersion(id: string, version: number): Promise<InspectionTypeTemplate> {
+  const recordVersion = await versionFor(id, version);
+  const published = await apiRequest<ServerTemplate>(undefined, `${versionPath(id, version)}/actions/publish`, {
+    method: 'POST',
+    body: { expectedRecordVersion: recordVersion },
+  });
+  return remember(published);
 }
 
-export async function duplicateTemplateToNewDraft(
-  id: string,
-  version: number
-): Promise<InspectionTypeTemplate> {
-  const templates = loadTemplatesFromStorage();
-  const source = templates.find((t) => t.id === id && t.version === version);
-  if (!source) throw new Error('Source template not found.');
-
-  const existingVersions = templates
-    .filter((t) => t.id === id)
-    .map((t) => t.version);
-  const maxVersion = Math.max(...existingVersions, 0);
-
-  const newDraft: InspectionTypeTemplate = {
-    ...structuredClone(source),
-    version: maxVersion + 1,
-    status: 'draft',
-    createdAt: new Date().toISOString(),
-    publishedAt: undefined,
-    retiredAt: undefined,
-  };
-
-  templates.push(newDraft);
-  saveTemplatesToStorage(templates);
-  return newDraft;
+export async function duplicateTemplateToNewDraft(id: string, version: number): Promise<InspectionTypeTemplate> {
+  const sourceRecordVersion = await versionFor(id, version);
+  const draft = await apiRequest<ServerTemplate>(undefined, `${versionPath(id, version)}/actions/duplicate`, {
+    method: 'POST',
+    body: { expectedRecordVersion: sourceRecordVersion },
+  });
+  return remember(draft);
 }
 
-export async function retireTemplateVersion(
-  id: string,
-  version: number
-): Promise<InspectionTypeTemplate> {
-  const templates = loadTemplatesFromStorage();
-  const index = templates.findIndex((t) => t.id === id && t.version === version);
-  if (index === -1) throw new Error('Template version not found.');
-
-  const retired = retireTemplateCore(templates[index]);
-  templates[index] = retired;
-  saveTemplatesToStorage(templates);
-  return retired;
+export async function retireTemplateVersion(id: string, version: number): Promise<InspectionTypeTemplate> {
+  const recordVersion = await versionFor(id, version);
+  const retired = await apiRequest<ServerTemplate>(undefined, `${versionPath(id, version)}/actions/retire`, {
+    method: 'POST',
+    body: { expectedRecordVersion: recordVersion },
+  });
+  return remember(retired);
 }
 
 export async function importBankToTemplate(
   id: string,
   version: number,
-  rows: ImportRow[]
+  rows: ImportRow[],
 ): Promise<ImportValidationResult> {
-  const templates = loadTemplatesFromStorage();
-  const index = templates.findIndex((t) => t.id === id && t.version === version);
-  if (index === -1) throw new Error('Template version not found.');
-
-  const template = templates[index];
+  const templates = await getTemplates();
+  const template = templates.find((candidate) => candidate.id === id && candidate.version === version);
+  if (!template) throw new Error('Template version not found.');
   assertTemplateEditable(template);
 
   const result = importCommentaryBank(rows, template.commentaryBank);
   if (result.entries.length > 0) {
-    template.commentaryBank = [...template.commentaryBank, ...result.entries];
-    templates[index] = template;
-    saveTemplatesToStorage(templates);
+    await saveTemplate({ ...template, commentaryBank: [...template.commentaryBank, ...result.entries] });
   }
   return result;
 }
