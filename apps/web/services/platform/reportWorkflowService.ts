@@ -13,12 +13,23 @@ export interface ReportWorkflowRecord {
   finalPdfGeneration?: string;
   renderManifestObjectPath?: string;
   renderManifestSha256?: string;
+  pdfGeneratedAt?: string;
   archiveReportVersionId?: string;
   archiveManifestObjectPath?: string;
   archiveManifestSha256?: string;
   archiveCreatedAt?: string;
   finalisedAt?: string;
   archivedAt?: string;
+}
+
+export async function getReportWorkflowRecord(
+  agencyId: string,
+  reportId: string,
+): Promise<ReportWorkflowRecord> {
+  return apiRequest<ReportWorkflowRecord>(
+    agencyId,
+    `/api/v1/reports/${encodeURIComponent(reportId)}`,
+  );
 }
 
 export async function transitionReportLifecycle(
