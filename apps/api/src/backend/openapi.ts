@@ -75,12 +75,38 @@ export function buildOpenApiDocument() {
       responses: { '200': { description: 'Report transition completed' }, '409': { $ref: '#/components/responses/Error' } },
     },
   };
+  paths['/api/v1/reports/{id}/archive-artifact'] = {
+    post: {
+      ...operation('reports', 'post', false),
+      operationId: 'createReportArchiveArtifact',
+      description: 'Creates or reuses the immutable, version-bound archive manifest for a finalised report. This command does not itself transition the report to archived.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['expectedVersion'],
+              properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+            },
+          },
+        },
+      },
+      responses: {
+        '200': { description: 'Existing immutable archive artifact reused' },
+        '201': { description: 'Immutable archive artifact created' },
+        '409': { $ref: '#/components/responses/Error' },
+        '422': { $ref: '#/components/responses/Error' },
+      },
+    },
+  };
 
   return {
     openapi: '3.1.0',
     info: {
       title: 'Property Condition Report API',
-      version: '1.1.0',
+      version: '1.2.0',
       description: 'Server-authoritative Cloud Run API for agency-scoped property inspection operations.',
     },
     servers: [{ url: '/', description: 'Current Cloud Run service' }],
