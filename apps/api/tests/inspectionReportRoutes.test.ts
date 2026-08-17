@@ -85,7 +85,7 @@ class MemoryReportStore implements ReportAggregateStore {
     this.reports.set(key, stored);
     return stored;
   }
-  async transition(_agencyId: string, _command: ReportTransitionCommand) {
+  async transition(_agencyId: string, _command: ReportTransitionCommand): Promise<Record<string, unknown>> {
     throw new Error('Not required by inspection creation tests.');
   }
 }
