@@ -1,17 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { CheckCircle2, Edit2, FileCheck2, Loader2, Printer, TriangleAlert } from 'lucide-react';
+import { Archive, CheckCircle2, Edit2, FileCheck2, Loader2, Printer, TriangleAlert } from 'lucide-react';
 import PDFPreview from '../../components/PDFPreview';
 import type { ReportData } from '../../types';
 import { loadReportFromDB } from '../../services/storageService';
+import { archiveFinalisedReport } from '../../services/platform/archiveService';
 import {
   getPdfJob,
   queueFinalPdf,
   type PdfJobRecord,
 } from '../../services/platform/pdfJobService';
+import {
+  getReportWorkflowRecord,
+  transitionReportLifecycle,
+  type ReportWorkflowRecord,
+} from '../../services/platform/reportWorkflowService';
 
 interface PreviewLocationState {
   report?: ReportData;
+}
+
+function sha256(value?: string): boolean {
+  return Boolean(value && /^[a-f0-9]{64}$/iu.test(value));
 }
 
 const ReportPreviewPage: React.FC = () => {
@@ -22,7 +32,21 @@ const ReportPreviewPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(!state?.report);
   const [pdfJob, setPdfJob] = useState<PdfJobRecord | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [isQueueingPdf, setIsQueueingPdf] = useState(false);
+  const [isFinalising, setIsFinalising] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  const applyWorkflowRecord = useCallback((record: ReportWorkflowRecord) => {
+    setReport((current) => current ? { ...current, ...record } : current);
+  }, []);
+
+  const refreshWorkflowRecord = useCallback(async (): Promise<ReportWorkflowRecord | undefined> => {
+    if (!report?.agencyId || !report.id) return undefined;
+    const latest = await getReportWorkflowRecord(report.agencyId, report.id);
+    applyWorkflowRecord(latest);
+    return latest;
+  }, [applyWorkflowRecord, report?.agencyId, report?.id]);
 
   useEffect(() => {
     const loadReport = async () => {
@@ -43,6 +67,13 @@ const ReportPreviewPage: React.FC = () => {
   }, [reportId, state?.report]);
 
   useEffect(() => {
+    if (!report?.agencyId || !report.id) return;
+    void refreshWorkflowRecord().catch((error) => {
+      setLifecycleError(error instanceof Error ? error.message : 'Report lifecycle could not be refreshed.');
+    });
+  }, [refreshWorkflowRecord, report?.agencyId, report?.id]);
+
+  useEffect(() => {
     if (!pdfJob || !report?.agencyId || !['queued', 'running'].includes(pdfJob.status)) return;
 
     let cancelled = false;
@@ -55,6 +86,9 @@ const ReportPreviewPage: React.FC = () => {
           setPdfError(latest.errorMessage || 'Final PDF generation failed.');
         } else if (latest.status === 'superseded') {
           setPdfError('This PDF job was superseded by a newer immutable report version. Queue a new final PDF.');
+        } else if (latest.status === 'completed') {
+          setPdfError(null);
+          await refreshWorkflowRecord();
         }
       } catch (error) {
         if (!cancelled) {
@@ -69,19 +103,74 @@ const ReportPreviewPage: React.FC = () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [pdfJob?.id, pdfJob?.status, report?.agencyId]);
+  }, [pdfJob?.id, pdfJob?.status, refreshWorkflowRecord, report?.agencyId]);
 
   const handleGenerateFinalPdf = async () => {
     if (!report) return;
     setIsQueueingPdf(true);
     setPdfError(null);
+    setLifecycleError(null);
     try {
-      const job = await queueFinalPdf(report);
+      const latest = await refreshWorkflowRecord();
+      const authoritativeReport = latest ? { ...report, ...latest } : report;
+      const job = await queueFinalPdf(authoritativeReport);
       setPdfJob(job);
     } catch (error) {
       setPdfError(error instanceof Error ? error.message : 'Final PDF generation could not be queued.');
     } finally {
       setIsQueueingPdf(false);
+    }
+  };
+
+  const handleFinalise = async () => {
+    if (!report?.agencyId) return;
+    setIsFinalising(true);
+    setLifecycleError(null);
+    try {
+      const latest = await getReportWorkflowRecord(report.agencyId, report.id);
+      if (latest.lifecycleStatus !== 'finalisation_ready') {
+        throw new Error('The report is no longer finalisation ready. Refresh the workflow before retrying.');
+      }
+      const finalised = await transitionReportLifecycle(
+        report.agencyId,
+        report.id,
+        'finalised',
+        latest.version,
+      );
+      applyWorkflowRecord(finalised);
+    } catch (error) {
+      setLifecycleError(error instanceof Error ? error.message : 'The report could not be finalised.');
+    } finally {
+      setIsFinalising(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!report?.agencyId) return;
+    setIsArchiving(true);
+    setLifecycleError(null);
+    try {
+      const latest = await getReportWorkflowRecord(report.agencyId, report.id);
+      if (latest.lifecycleStatus !== 'finalised') {
+        throw new Error('Only a finalised report can be archived. Refresh the workflow before retrying.');
+      }
+      const result = await archiveFinalisedReport(
+        report.agencyId,
+        report.id,
+        latest.version,
+      );
+      setReport((current) => current ? {
+        ...current,
+        ...result.archivedReport,
+        archiveReportVersionId: result.artifact.reportVersionId,
+        archiveManifestObjectPath: result.artifact.objectPath,
+        archiveManifestSha256: result.artifact.sha256,
+        archiveCreatedAt: result.artifact.createdAt,
+      } : current);
+    } catch (error) {
+      setLifecycleError(error instanceof Error ? error.message : 'The report could not be archived.');
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -112,6 +201,22 @@ const ReportPreviewPage: React.FC = () => {
   }
 
   const finalPdfReady = report.lifecycleStatus === 'finalisation_ready' && Boolean(report.currentVersionId);
+  const storedPdfForCurrentVersion = Boolean(
+    report.currentVersionId &&
+    report.finalPdfReportVersionId === report.currentVersionId &&
+    report.finalPdfObjectPath &&
+    report.finalPdfGeneration &&
+    sha256(report.finalPdfSha256) &&
+    report.renderManifestObjectPath &&
+    sha256(report.renderManifestSha256),
+  );
+  const archiveForCurrentVersion = Boolean(
+    report.currentVersionId &&
+    report.archiveReportVersionId === report.currentVersionId &&
+    report.archiveManifestObjectPath &&
+    sha256(report.archiveManifestSha256) &&
+    report.archiveCreatedAt,
+  );
   const finalPdfTitle = !report.currentVersionId
     ? 'An immutable report version must exist first.'
     : report.lifecycleStatus !== 'finalisation_ready'
@@ -120,7 +225,9 @@ const ReportPreviewPage: React.FC = () => {
   const pdfActive = pdfJob?.status === 'queued' || pdfJob?.status === 'running';
   const pdfCompleted = pdfJob?.status === 'completed';
   const pdfFailed = pdfJob?.status === 'failed' || pdfJob?.status === 'superseded';
-  const generateDisabled = isQueueingPdf || !finalPdfReady || pdfActive || pdfCompleted;
+  const generateDisabled = isQueueingPdf || !finalPdfReady || pdfActive || storedPdfForCurrentVersion;
+  const canFinalise = report.lifecycleStatus === 'finalisation_ready' && storedPdfForCurrentVersion;
+  const canArchive = report.lifecycleStatus === 'finalised';
 
   const buttonLabel = isQueueingPdf
     ? 'Queueing Final PDF...'
@@ -128,8 +235,8 @@ const ReportPreviewPage: React.FC = () => {
       ? 'Final PDF Queued'
       : pdfJob?.status === 'running'
         ? 'Generating Final PDF...'
-        : pdfCompleted
-          ? 'Final PDF Generated'
+        : storedPdfForCurrentVersion
+          ? 'Final PDF Stored'
           : pdfFailed
             ? 'Retry Final PDF'
             : 'Generate Final PDF';
@@ -151,7 +258,7 @@ const ReportPreviewPage: React.FC = () => {
         >
           {isQueueingPdf || pdfActive ? (
             <Loader2 size={20} className="animate-spin" />
-          ) : pdfCompleted ? (
+          ) : storedPdfForCurrentVersion ? (
             <CheckCircle2 size={20} />
           ) : pdfFailed ? (
             <TriangleAlert size={20} />
@@ -160,23 +267,52 @@ const ReportPreviewPage: React.FC = () => {
           )}
           {buttonLabel}
         </button>
+        {report.lifecycleStatus === 'finalisation_ready' && (
+          <button
+            onClick={handleFinalise}
+            disabled={!canFinalise || isFinalising}
+            title={!storedPdfForCurrentVersion ? 'Generate and verify the immutable final PDF first.' : undefined}
+            className="bg-violet-600 hover:bg-violet-700 disabled:bg-violet-800/70 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium"
+          >
+            {isFinalising ? <Loader2 size={20} className="animate-spin" /> : <FileCheck2 size={20} />}
+            {isFinalising ? 'Finalising...' : 'Finalise Report'}
+          </button>
+        )}
+        {report.lifecycleStatus === 'finalised' && (
+          <button
+            onClick={handleArchive}
+            disabled={!canArchive || isArchiving}
+            className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium"
+          >
+            {isArchiving ? <Loader2 size={20} className="animate-spin" /> : <Archive size={20} />}
+            {isArchiving ? 'Creating Archive...' : 'Create Archive & Archive Report'}
+          </button>
+        )}
         <Link
           to={`/app/admin/reports/${report.id}/edit`}
           className="bg-white hover:bg-gray-100 text-gray-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium"
         >
-          <Edit2 size={20} /> Back to edit
+          <Edit2 size={20} /> Back to report
         </Link>
-        {(pdfJob || pdfError) && (
+        {(pdfJob || pdfError || lifecycleError || report.lifecycleStatus === 'archived') && (
           <div
             className={`w-full max-w-xl rounded-lg px-3 py-2 text-xs shadow-lg ${
-              pdfError || pdfFailed ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
+              pdfError || lifecycleError || pdfFailed ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
             }`}
           >
-            {pdfError
-              ? pdfError
-              : pdfCompleted
-                ? `Final PDF generated from immutable version ${pdfJob?.reportVersionId || report.currentVersionId}. SHA-256: ${pdfJob?.pdfSha256}. The workflow can now be finalised.`
-                : `Final PDF job ${pdfJob?.id} is ${pdfJob?.status}. The workflow remains blocked from finalisation until the immutable PDF and render manifest are stored and verified.`}
+            {lifecycleError
+              ? lifecycleError
+              : pdfError
+                ? pdfError
+                : report.lifecycleStatus === 'archived'
+                  ? `Report archived against immutable version ${report.archiveReportVersionId || report.currentVersionId}. Archive SHA-256: ${report.archiveManifestSha256 || 'stored'}.`
+                  : report.lifecycleStatus === 'finalised' && archiveForCurrentVersion
+                    ? `Archive manifest created for immutable version ${report.currentVersionId}. The canonical archive transition can now complete.`
+                    : storedPdfForCurrentVersion
+                      ? `Final PDF is stored and verified against immutable version ${report.currentVersionId}. SHA-256: ${report.finalPdfSha256}.`
+                      : pdfCompleted
+                        ? `PDF worker completed job ${pdfJob?.id}. Refreshing authoritative artifact provenance before finalisation.`
+                        : `Final PDF job ${pdfJob?.id} is ${pdfJob?.status}. The workflow remains blocked from finalisation until the immutable PDF and render manifest are stored and verified.`}
           </div>
         )}
       </div>
