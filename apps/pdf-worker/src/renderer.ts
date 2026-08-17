@@ -184,7 +184,7 @@ function tenantEvidenceIds(response: Record<string, unknown>): string[] {
     response.tenantEvidenceIds,
   ]
     .flatMap((value) => asArray(value))
-    .map(valueText)
+    .map((value) => valueText(value))
     .filter(Boolean);
   const componentSources = [...asArray(response.componentResponses), ...asArray(response.items)];
   const components = componentSources
@@ -197,7 +197,7 @@ function tenantEvidenceIds(response: Record<string, unknown>): string[] {
         component.evidencePhotoIds,
       ].flatMap((item) => asArray(item));
     })
-    .map(valueText)
+    .map((value) => valueText(value))
     .filter(Boolean);
   return [...new Set([...direct, ...components])];
 }
@@ -456,8 +456,10 @@ export async function renderReportPdf(
           { font: italic, size: 7.5, leading: 10.5 },
         );
       }
-      const text = responseText(response);
-      if (text) state = drawLines(state, text, { size: 8.5, leading: 11.5, indent: 8 });
+      const responseBody = responseText(response);
+      if (responseBody) {
+        state = drawLines(state, responseBody, { size: 8.5, leading: 11.5, indent: 8 });
+      }
       for (const rawComponentResponse of [
         ...asArray(response.componentResponses),
         ...asArray(response.items),
