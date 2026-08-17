@@ -42,7 +42,9 @@ const BODY_SIZE = 9;
 const BODY_LEADING = 12;
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function asArray(value: unknown): unknown[] {
@@ -65,7 +67,9 @@ export function pdfSafeText(value: string): string {
     .replace(/\u00A0/g, ' ')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7E]/g, (character) => character === '\t' || character === '\n' || character === '\r' ? character : '?');
+    .replace(/[^\x20-\x7E]/g, (character) =>
+      character === '\t' || character === '\n' || character === '\r' ? character : '?',
+    );
 }
 
 function splitLongToken(font: PDFFont, token: string, size: number, maxWidth: number): string[] {
@@ -77,7 +81,9 @@ function splitLongToken(font: PDFFont, token: string, size: number, maxWidth: nu
     if (current && font.widthOfTextAtSize(candidate, size) > maxWidth) {
       chunks.push(current);
       current = character;
-    } else current = candidate;
+    } else {
+      current = candidate;
+    }
   }
   if (current) chunks.push(current);
   return chunks;
@@ -99,7 +105,9 @@ export function wrapText(font: PDFFont, source: string, size: number, maxWidth: 
         if (line && font.widthOfTextAtSize(candidate, size) > maxWidth) {
           output.push(line);
           line = token;
-        } else line = candidate;
+        } else {
+          line = candidate;
+        }
       }
     }
     if (line) output.push(line);
@@ -112,7 +120,12 @@ function formatDate(value: unknown): string {
   if (!raw) return '';
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
-  return new Intl.DateTimeFormat('en-AU', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Australia/Perth' }).format(date);
+  return new Intl.DateTimeFormat('en-AU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Australia/Perth',
+  }).format(date);
 }
 
 function titleFor(reportType: string): string {
@@ -120,20 +133,31 @@ function titleFor(reportType: string): string {
   if (lower.includes('routine')) return 'Routine Inspection Report';
   if (lower.includes('exit')) return 'Exit Inspection Report';
   if (lower.includes('comparison')) return 'Inspection Comparison Report';
-  if (lower.includes('maintenance') || lower.includes('follow')) return 'Maintenance / Follow-Up Report';
+  if (lower.includes('maintenance') || lower.includes('follow')) {
+    return 'Maintenance / Follow-Up Report';
+  }
   return 'Property Condition Report';
 }
 
 function statusSummary(component: Record<string, unknown>): string {
   const condition = valueText(component.conditionCategory, 'unable_to_confirm').replaceAll('_', ' ');
-  const cleanliness = valueText(component.cleanlinessCategory, 'unable_to_confirm').replaceAll('_', ' ');
+  const cleanliness = valueText(component.cleanlinessCategory, 'unable_to_confirm').replaceAll(
+    '_',
+    ' ',
+  );
   const working = valueText(component.workingStatus, 'unable_to_confirm').replaceAll('_', ' ');
   const test = valueText(component.testStatus, 'unable_to_confirm').replaceAll('_', ' ');
   return `Condition: ${condition} | Cleanliness: ${cleanliness} | Working: ${working} | Test: ${test}`;
 }
 
 function evidenceIds(record: Record<string, unknown>): string[] {
-  return [...new Set(asArray(record.photoReferences).map((reference) => valueText(asRecord(reference).photoId)).filter(Boolean))];
+  return [
+    ...new Set(
+      asArray(record.photoReferences)
+        .map((reference) => valueText(asRecord(reference).photoId))
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function routineException(component: Record<string, unknown>): boolean {
@@ -166,8 +190,12 @@ function tenantEvidenceIds(response: Record<string, unknown>): string[] {
   const components = componentSources
     .flatMap((value) => {
       const component = asRecord(value);
-      return [component.photoIds, component.evidenceIds, component.photoEvidenceIds, component.evidencePhotoIds]
-        .flatMap((item) => asArray(item));
+      return [
+        component.photoIds,
+        component.evidenceIds,
+        component.photoEvidenceIds,
+        component.evidencePhotoIds,
+      ].flatMap((item) => asArray(item));
     })
     .map(valueText)
     .filter(Boolean);
@@ -177,16 +205,33 @@ function tenantEvidenceIds(response: Record<string, unknown>): string[] {
 function responseText(response: Record<string, unknown>): string {
   return valueText(
     response.responseNote,
-    valueText(response.tenantResponseNote, valueText(response.commentary, valueText(response.notes, valueText(response.responseText)))),
+    valueText(
+      response.tenantResponseNote,
+      valueText(response.commentary, valueText(response.notes, valueText(response.responseText))),
+    ),
   );
 }
 
 function drawFooter(page: PDFPage, font: PDFFont, reportId: string, pageNumber: number): void {
-  page.drawLine({ start: { x: MARGIN, y: 28 }, end: { x: PAGE_WIDTH - MARGIN, y: 28 }, thickness: 0.5, color: rgb(0.75, 0.75, 0.75) });
-  page.drawText(pdfSafeText(`Report ${reportId} | Page ${pageNumber}`), { x: MARGIN, y: 15, size: 7, font, color: rgb(0.4, 0.4, 0.4) });
+  page.drawLine({
+    start: { x: MARGIN, y: 28 },
+    end: { x: PAGE_WIDTH - MARGIN, y: 28 },
+    thickness: 0.5,
+    color: rgb(0.75, 0.75, 0.75),
+  });
+  page.drawText(pdfSafeText(`Report ${reportId} | Page ${pageNumber}`), {
+    x: MARGIN,
+    y: 15,
+    size: 7,
+    font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
 }
 
-export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMap<string, Uint8Array> = new Map()): Promise<Uint8Array> {
+export async function renderReportPdf(
+  input: RenderInput,
+  imageBytes: ReadonlyMap<string, Uint8Array> = new Map(),
+): Promise<Uint8Array> {
   const document = await PDFDocument.create();
   const regular = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
@@ -210,11 +255,18 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     drawFooter(page, regular, input.reportId, pageNumber);
     return { page, y: PAGE_HEIGHT - MARGIN };
   };
-  const ensureSpace = (state: PageState, required: number): PageState => state.y - required < 42 ? newPage() : state;
+  const ensureSpace = (state: PageState, required: number): PageState =>
+    state.y - required < 42 ? newPage() : state;
   const drawLines = (
     initialState: PageState,
     text: string,
-    options: { font?: PDFFont; size?: number; leading?: number; indent?: number; color?: ReturnType<typeof rgb> } = {},
+    options: {
+      font?: PDFFont;
+      size?: number;
+      leading?: number;
+      indent?: number;
+      color?: ReturnType<typeof rgb>;
+    } = {},
   ): PageState => {
     const font = options.font ?? regular;
     const size = options.size ?? BODY_SIZE;
@@ -223,13 +275,24 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     let state = initialState;
     for (const line of wrapText(font, text, size, CONTENT_WIDTH - indent)) {
       state = ensureSpace(state, leading + 2);
-      state.page.drawText(line, { x: MARGIN + indent, y: state.y, size, font, color: options.color ?? rgb(0.08, 0.08, 0.08) });
+      state.page.drawText(line, {
+        x: MARGIN + indent,
+        y: state.y,
+        size,
+        font,
+        color: options.color ?? rgb(0.08, 0.08, 0.08),
+      });
       state.y -= leading;
     }
     return state;
   };
   const drawRule = (state: PageState): PageState => {
-    state.page.drawLine({ start: { x: MARGIN, y: state.y }, end: { x: PAGE_WIDTH - MARGIN, y: state.y }, thickness: 0.7, color: rgb(0.72, 0.72, 0.72) });
+    state.page.drawLine({
+      start: { x: MARGIN, y: state.y },
+      end: { x: PAGE_WIDTH - MARGIN, y: state.y },
+      thickness: 0.7,
+      color: rgb(0.72, 0.72, 0.72),
+    });
     state.y -= 10;
     return state;
   };
@@ -242,46 +305,119 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
   state.y -= 38;
   state = drawLines(state, titleFor(reportType), { font: bold, size: 23, leading: 30 });
   state.y -= 12;
-  state = drawLines(state, valueText(input.report.propertyAddress, 'Property address not recorded'), { font: bold, size: 14, leading: 19 });
+  state = drawLines(state, valueText(input.report.propertyAddress, 'Property address not recorded'), {
+    font: bold,
+    size: 14,
+    leading: 19,
+  });
   state.y -= 36;
-  state = drawLines(state, `Inspection date: ${formatDate(input.report.inspectionDate) || 'Not recorded'}`, { size: 10, leading: 15 });
-  state = drawLines(state, `Prepared by: ${valueText(input.report.agentName, input.approvedBy) || 'Not recorded'}`, { size: 10, leading: 15 });
-  state = drawLines(state, `Approved: ${formatDate(input.approvedAt) || input.approvedAt}`, { size: 10, leading: 15 });
+  state = drawLines(
+    state,
+    `Inspection date: ${formatDate(input.report.inspectionDate) || 'Not recorded'}`,
+    { size: 10, leading: 15 },
+  );
+  state = drawLines(
+    state,
+    `Prepared by: ${valueText(input.report.agentName, input.approvedBy) || 'Not recorded'}`,
+    { size: 10, leading: 15 },
+  );
+  state = drawLines(state, `Approved: ${formatDate(input.approvedAt) || input.approvedAt}`, {
+    size: 10,
+    leading: 15,
+  });
   state = drawLines(state, `Approved by: ${input.approvedBy}`, { size: 10, leading: 15 });
   state.y -= 28;
-  state = drawLines(state, `Immutable report version: ${input.reportVersionId}`, { font: italic, size: 8, leading: 12, color: rgb(0.35, 0.35, 0.35) });
+  state = drawLines(state, `Immutable report version: ${input.reportVersionId}`, {
+    font: italic,
+    size: 8,
+    leading: 12,
+    color: rgb(0.35, 0.35, 0.35),
+  });
 
   state = newPage();
-  state = drawLines(state, routine ? 'Routine Inspection Findings' : 'Inspection Findings', { font: bold, size: 16, leading: 23 });
-  if (routine) state = drawLines(state, 'Routine presentation is exception-focused. The immutable structured report retains all assessed components, including ordinary items omitted from this concise view.', { font: italic, size: 8, leading: 11, color: rgb(0.35, 0.35, 0.35) });
+  state = drawLines(state, routine ? 'Routine Inspection Findings' : 'Inspection Findings', {
+    font: bold,
+    size: 16,
+    leading: 23,
+  });
+  if (routine) {
+    state = drawLines(
+      state,
+      'Routine presentation is exception-focused. The immutable structured report retains all assessed components, including ordinary items omitted from this concise view.',
+      { font: italic, size: 8, leading: 11, color: rgb(0.35, 0.35, 0.35) },
+    );
+  }
   state = drawRule(state);
 
   for (const rawArea of input.areas) {
     const area = asRecord(rawArea);
     state = ensureSpace(state, 54);
-    state = drawLines(state, valueText(area.name, valueText(area.id, 'Area')), { font: bold, size: 13, leading: 18 });
+    state = drawLines(state, valueText(area.name, valueText(area.id, 'Area')), {
+      font: bold,
+      size: 13,
+      leading: 18,
+    });
     const overall = valueText(area.overallCommentary);
     if (overall) {
       state = drawLines(state, 'Overall commentary', { font: bold, size: 8, leading: 11 });
       state = drawLines(state, overall, { size: 9, leading: 12, indent: 8 });
     }
     const areaEvidence = evidenceIds(area);
-    if (areaEvidence.length) state = drawLines(state, `Area evidence: ${areaEvidence.join(', ')}`, { font: italic, size: 7, leading: 10, color: rgb(0.35, 0.35, 0.35) });
+    if (areaEvidence.length) {
+      state = drawLines(state, `Area evidence: ${areaEvidence.join(', ')}`, {
+        font: italic,
+        size: 7,
+        leading: 10,
+        color: rgb(0.35, 0.35, 0.35),
+      });
+    }
 
     const allComponents = asArray(area.components).map(asRecord);
     const components = routine ? allComponents.filter(routineException) : allComponents;
     if (routine) {
       const omitted = allComponents.length - components.length;
-      state = drawLines(state, components.length ? `${components.length} exception component${components.length === 1 ? '' : 's'} shown; ${omitted} ordinary component${omitted === 1 ? '' : 's'} retained in structured report.` : `No material component exception recorded; ${omitted} ordinary component${omitted === 1 ? '' : 's'} retained in structured report.`, { font: italic, size: 7.5, leading: 10.5, indent: 8, color: rgb(0.35, 0.35, 0.35) });
+      const routineSummary = components.length
+        ? `${components.length} exception component${components.length === 1 ? '' : 's'} shown; ${omitted} ordinary component${omitted === 1 ? '' : 's'} retained in structured report.`
+        : `No material component exception recorded; ${omitted} ordinary component${omitted === 1 ? '' : 's'} retained in structured report.`;
+      state = drawLines(state, routineSummary, {
+        font: italic,
+        size: 7.5,
+        leading: 10.5,
+        indent: 8,
+        color: rgb(0.35, 0.35, 0.35),
+      });
     }
 
     for (const component of components) {
       state = ensureSpace(state, 42);
-      state = drawLines(state, valueText(component.component, valueText(component.id, 'Component')), { font: bold, size: 9, leading: 12, indent: 8 });
-      state = drawLines(state, statusSummary(component), { font: italic, size: 7, leading: 10, indent: 16, color: rgb(0.35, 0.35, 0.35) });
-      state = drawLines(state, valueText(component.commentary, 'No component commentary recorded.'), { size: 8.5, leading: 11.5, indent: 16 });
+      state = drawLines(state, valueText(component.component, valueText(component.id, 'Component')), {
+        font: bold,
+        size: 9,
+        leading: 12,
+        indent: 8,
+      });
+      state = drawLines(state, statusSummary(component), {
+        font: italic,
+        size: 7,
+        leading: 10,
+        indent: 16,
+        color: rgb(0.35, 0.35, 0.35),
+      });
+      state = drawLines(
+        state,
+        valueText(component.commentary, 'No component commentary recorded.'),
+        { size: 8.5, leading: 11.5, indent: 16 },
+      );
       const ids = evidenceIds(component);
-      if (ids.length) state = drawLines(state, `Evidence: ${ids.join(', ')}`, { font: italic, size: 7, leading: 10, indent: 16, color: rgb(0.35, 0.35, 0.35) });
+      if (ids.length) {
+        state = drawLines(state, `Evidence: ${ids.join(', ')}`, {
+          font: italic,
+          size: 7,
+          leading: 10,
+          indent: 16,
+          color: rgb(0.35, 0.35, 0.35),
+        });
+      }
       state.y -= 4;
     }
     state.y -= 8;
@@ -291,32 +427,84 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
   if (input.tenantResponses?.length) {
     state = newPage();
     state = drawLines(state, 'Tenant Responses', { font: bold, size: 16, leading: 23 });
-    state = drawLines(state, 'Tenant responses are reproduced separately from the approved inspection findings. They do not alter the original component assessment unless a later reviewed report version explicitly changes that assessment.', { font: italic, size: 8, leading: 11, color: rgb(0.35, 0.35, 0.35) });
+    state = drawLines(
+      state,
+      'Tenant responses are reproduced separately from the approved inspection findings. They do not alter the original component assessment unless a later reviewed report version explicitly changes that assessment.',
+      { font: italic, size: 8, leading: 11, color: rgb(0.35, 0.35, 0.35) },
+    );
     state = drawRule(state);
     for (const response of input.tenantResponses) {
       const id = valueText(response.id, 'response');
       state = ensureSpace(state, 55);
       state = drawLines(state, `Response ${id}`, { font: bold, size: 10, leading: 14 });
       const submittedAt = formatDate(response.submittedAt ?? response.createdAt ?? response.updatedAt);
-      const respondent = valueText(response.respondentName, valueText(response.tenantName, valueText(response.submittedBy)));
-      const status = valueText(response.status);
-      if (submittedAt || respondent || status) state = drawLines(state, [respondent ? `Respondent: ${respondent}` : '', submittedAt ? `Date: ${submittedAt}` : '', status ? `Status: ${status.replaceAll('_', ' ')}` : ''].filter(Boolean).join(' | '), { font: italic, size: 7.5, leading: 10.5 });
+      const respondent = valueText(
+        response.respondentName,
+        valueText(response.tenantName, valueText(response.submittedBy)),
+      );
+      const responseStatus = valueText(response.status);
+      if (submittedAt || respondent || responseStatus) {
+        state = drawLines(
+          state,
+          [
+            respondent ? `Respondent: ${respondent}` : '',
+            submittedAt ? `Date: ${submittedAt}` : '',
+            responseStatus ? `Status: ${responseStatus.replaceAll('_', ' ')}` : '',
+          ]
+            .filter(Boolean)
+            .join(' | '),
+          { font: italic, size: 7.5, leading: 10.5 },
+        );
+      }
       const text = responseText(response);
       if (text) state = drawLines(state, text, { size: 8.5, leading: 11.5, indent: 8 });
-      for (const rawComponentResponse of [...asArray(response.componentResponses), ...asArray(response.items)]) {
+      for (const rawComponentResponse of [
+        ...asArray(response.componentResponses),
+        ...asArray(response.items),
+      ]) {
         const componentResponse = asRecord(rawComponentResponse);
-        const label = [valueText(componentResponse.areaName), valueText(componentResponse.componentName, valueText(componentResponse.componentId))].filter(Boolean).join(' / ');
-        const comment = valueText(componentResponse.commentary, valueText(componentResponse.comment));
+        const label = [
+          valueText(componentResponse.areaName),
+          valueText(componentResponse.componentName, valueText(componentResponse.componentId)),
+        ]
+          .filter(Boolean)
+          .join(' / ');
+        const comment = valueText(
+          componentResponse.commentary,
+          valueText(componentResponse.comment),
+        );
         const responseValue = valueText(componentResponse.response);
-        const agrees = typeof componentResponse.agrees === 'boolean'
-          ? `Tenant agrees: ${componentResponse.agrees ? 'Yes' : 'No'}`
-          : responseValue ? `Tenant response: ${responseValue.replaceAll('_', ' ')}` : '';
-        if (label) state = drawLines(state, label, { font: bold, size: 8, leading: 11, indent: 8 });
-        if (agrees) state = drawLines(state, agrees, { font: italic, size: 7.5, leading: 10.5, indent: 16 });
-        if (comment) state = drawLines(state, comment, { size: 8, leading: 11, indent: 16 });
+        const agrees =
+          typeof componentResponse.agrees === 'boolean'
+            ? `Tenant agrees: ${componentResponse.agrees ? 'Yes' : 'No'}`
+            : responseValue
+              ? `Tenant response: ${responseValue.replaceAll('_', ' ')}`
+              : '';
+        if (label) {
+          state = drawLines(state, label, { font: bold, size: 8, leading: 11, indent: 8 });
+        }
+        if (agrees) {
+          state = drawLines(state, agrees, {
+            font: italic,
+            size: 7.5,
+            leading: 10.5,
+            indent: 16,
+          });
+        }
+        if (comment) {
+          state = drawLines(state, comment, { size: 8, leading: 11, indent: 16 });
+        }
       }
       const ids = tenantEvidenceIds(response);
-      if (ids.length) state = drawLines(state, `Tenant evidence: ${ids.join(', ')}`, { font: italic, size: 7, leading: 10, indent: 8, color: rgb(0.35, 0.35, 0.35) });
+      if (ids.length) {
+        state = drawLines(state, `Tenant evidence: ${ids.join(', ')}`, {
+          font: italic,
+          size: 7,
+          leading: 10,
+          indent: 8,
+          color: rgb(0.35, 0.35, 0.35),
+        });
+      }
       state.y -= 8;
       state = drawRule(state);
     }
@@ -324,16 +512,27 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
 
   if (input.assets.length) {
     state = newPage();
-    state = drawLines(state, `Evidence Appendix (${input.assets.length} photo${input.assets.length === 1 ? '' : 's'})`, { font: bold, size: 16, leading: 23 });
+    state = drawLines(
+      state,
+      `Evidence Appendix (${input.assets.length} photo${input.assets.length === 1 ? '' : 's'})`,
+      { font: bold, size: 16, leading: 23 },
+    );
     state = drawRule(state);
     for (const asset of [...input.assets].sort((left, right) => left.photoId.localeCompare(right.photoId))) {
       state = ensureSpace(state, 250);
       state = drawLines(state, `Photo ${asset.photoId}`, { font: bold, size: 10, leading: 14 });
-      state = drawLines(state, `${asset.objectPath} | generation ${asset.generation} | sha256 ${asset.sha256}`, { font: italic, size: 6.5, leading: 9, color: rgb(0.35, 0.35, 0.35) });
+      state = drawLines(
+        state,
+        `${asset.objectPath} | generation ${asset.generation} | sha256 ${asset.sha256}`,
+        { font: italic, size: 6.5, leading: 9, color: rgb(0.35, 0.35, 0.35) },
+      );
       const bytes = imageBytes.get(asset.photoId);
       let image: PDFImage | undefined;
-      if (bytes && asset.contentType === 'image/jpeg') image = await document.embedJpg(bytes).catch(() => undefined);
-      else if (bytes && asset.contentType === 'image/png') image = await document.embedPng(bytes).catch(() => undefined);
+      if (bytes && asset.contentType === 'image/jpeg') {
+        image = await document.embedJpg(bytes).catch(() => undefined);
+      } else if (bytes && asset.contentType === 'image/png') {
+        image = await document.embedPng(bytes).catch(() => undefined);
+      }
       const boxHeight = 185;
       const boxWidth = CONTENT_WIDTH;
       state = ensureSpace(state, boxHeight + 18);
@@ -341,11 +540,42 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
         const scale = Math.min(boxWidth / image.width, boxHeight / image.height);
         const width = image.width * scale;
         const height = image.height * scale;
-        state.page.drawRectangle({ x: MARGIN, y: state.y - boxHeight, width: boxWidth, height: boxHeight, borderWidth: 0.5, borderColor: rgb(0.75, 0.75, 0.75) });
-        state.page.drawImage(image, { x: MARGIN + (boxWidth - width) / 2, y: state.y - boxHeight + (boxHeight - height) / 2, width, height });
+        state.page.drawRectangle({
+          x: MARGIN,
+          y: state.y - boxHeight,
+          width: boxWidth,
+          height: boxHeight,
+          borderWidth: 0.5,
+          borderColor: rgb(0.75, 0.75, 0.75),
+        });
+        state.page.drawImage(image, {
+          x: MARGIN + (boxWidth - width) / 2,
+          y: state.y - boxHeight + (boxHeight - height) / 2,
+          width,
+          height,
+        });
       } else {
-        state.page.drawRectangle({ x: MARGIN, y: state.y - boxHeight, width: boxWidth, height: boxHeight, borderWidth: 0.5, borderColor: rgb(0.65, 0.65, 0.65), color: rgb(0.96, 0.96, 0.96) });
-        state.page.drawText(pdfSafeText(`Image preview unavailable (${asset.contentType || 'unknown format'}). Evidence metadata retained.`), { x: MARGIN + 12, y: state.y - boxHeight / 2, size: 8, font: italic, color: rgb(0.35, 0.35, 0.35) });
+        state.page.drawRectangle({
+          x: MARGIN,
+          y: state.y - boxHeight,
+          width: boxWidth,
+          height: boxHeight,
+          borderWidth: 0.5,
+          borderColor: rgb(0.65, 0.65, 0.65),
+          color: rgb(0.96, 0.96, 0.96),
+        });
+        state.page.drawText(
+          pdfSafeText(
+            `Image preview unavailable (${asset.contentType || 'unknown format'}). Evidence metadata retained.`,
+          ),
+          {
+            x: MARGIN + 12,
+            y: state.y - boxHeight / 2,
+            size: 8,
+            font: italic,
+            color: rgb(0.35, 0.35, 0.35),
+          },
+        );
       }
       state.y -= boxHeight + 18;
     }
@@ -353,6 +583,10 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
 
   state = ensureSpace(state, 75);
   state = drawLines(state, 'Report scope', { font: bold, size: 9, leading: 13 });
-  state = drawLines(state, 'This document records the persisted inspection findings and evidence for the approved report version. Working status is only represented as recorded in the approved assessment; the PDF renderer does not infer condition, operation, causation, tenant responsibility, or liability.', { size: 7.5, leading: 10.5 });
+  state = drawLines(
+    state,
+    'This document records the persisted inspection findings and evidence for the approved report version. Working status is only represented as recorded in the approved assessment; the PDF renderer does not infer condition, operation, causation, tenant responsibility, or liability.',
+    { size: 7.5, leading: 10.5 },
+  );
   return document.save({ useObjectStreams: false });
 }
