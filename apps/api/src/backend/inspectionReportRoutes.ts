@@ -11,6 +11,7 @@ import {
   type ReportPhotoReference,
 } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { routeSpecialisedCloseoutRequest } from './specialisedCloseoutRoutesMounted.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
 
@@ -44,20 +45,14 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 function reportAreas(value: unknown): ReportAggregate['areas'] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new ApiError(400, 'REPORT_AREAS_REQUIRED', 'A seeded canonical area/component structure is required.');
-  }
+  if (!Array.isArray(value) || value.length === 0) throw new ApiError(400, 'REPORT_AREAS_REQUIRED', 'A seeded canonical area/component structure is required.');
   return value.map((area, areaIndex) => {
-    if (!area || typeof area !== 'object' || Array.isArray(area)) {
-      throw new ApiError(400, 'INVALID_REPORT_AREA', `Area ${areaIndex + 1} is invalid.`);
-    }
+    if (!area || typeof area !== 'object' || Array.isArray(area)) throw new ApiError(400, 'INVALID_REPORT_AREA', `Area ${areaIndex + 1} is invalid.`);
     const rawArea = area as Record<string, unknown>;
     const id = typeof rawArea.id === 'string' && rawArea.id.trim() ? rawArea.id.trim() : '';
     const name = typeof rawArea.name === 'string' && rawArea.name.trim() ? rawArea.name.trim() : '';
     const components = Array.isArray(rawArea.components) ? rawArea.components : [];
-    if (!id || !name || components.length === 0) {
-      throw new ApiError(400, 'INVALID_REPORT_AREA', `Area ${areaIndex + 1} must have a stable id, name and components.`);
-    }
+    if (!id || !name || components.length === 0) throw new ApiError(400, 'INVALID_REPORT_AREA', `Area ${areaIndex + 1} must have a stable id, name and components.`);
     return {
       id,
       name,
@@ -65,19 +60,11 @@ function reportAreas(value: unknown): ReportAggregate['areas'] {
       ...(typeof rawArea.overallCommentary === 'string' ? { overallCommentary: rawArea.overallCommentary } : {}),
       photoReferences: Array.isArray(rawArea.photoReferences) ? rawArea.photoReferences as ReportPhotoReference[] : [],
       components: components.map((component, componentIndex) => {
-        if (!component || typeof component !== 'object' || Array.isArray(component)) {
-          throw new ApiError(400, 'INVALID_REPORT_COMPONENT', `Component ${componentIndex + 1} in ${name} is invalid.`);
-        }
+        if (!component || typeof component !== 'object' || Array.isArray(component)) throw new ApiError(400, 'INVALID_REPORT_COMPONENT', `Component ${componentIndex + 1} in ${name} is invalid.`);
         const raw = component as Record<string, unknown>;
         const componentId = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : '';
-        const componentName = typeof raw.component === 'string'
-          ? raw.component
-          : typeof raw.name === 'string'
-            ? raw.name
-            : '';
-        if (!componentId || !componentName.trim()) {
-          throw new ApiError(400, 'INVALID_REPORT_COMPONENT', `Every component in ${name} requires a stable id and name.`);
-        }
+        const componentName = typeof raw.component === 'string' ? raw.component : typeof raw.name === 'string' ? raw.name : '';
+        if (!componentId || !componentName.trim()) throw new ApiError(400, 'INVALID_REPORT_COMPONENT', `Every component in ${name} requires a stable id and name.`);
         return {
           ...raw,
           id: componentId,
@@ -107,26 +94,20 @@ function templateMatches(record: Record<string, unknown>, canonicalType: string)
   return canonicalInspectionType(String(type)) === canonicalType && record.status === 'published';
 }
 
-async function resolvePublishedTemplate(
-  dependencies: ApiDependencies,
-  agencyId: string,
-  canonicalType: string,
-  actorId: string,
-): Promise<{ id: string; version: number }> {
+async function resolvePublishedTemplate(dependencies: ApiDependencies, agencyId: string, canonicalType: string, actorId: string): Promise<{ id: string; version: number }> {
   const templates = await dependencies.repository.list('templates', agencyId, 100);
   const matches = templates.items
     .filter((record) => templateMatches(record, canonicalType))
     .sort((left, right) => Number(right.templateVersion ?? right.version ?? 0) - Number(left.templateVersion ?? left.version ?? 0));
   const chosen = matches[0];
-  if (chosen) {
-    return { id: chosen.id, version: Number(chosen.templateVersion ?? chosen.version ?? 1) };
-  }
+  if (chosen) return { id: String(chosen.templateId ?? chosen.id), version: Number(chosen.templateVersion ?? chosen.version ?? 1) };
 
   const policy = inspectionPolicy(canonicalType);
   const templateId = `system-${canonicalType}-v1`;
   const existing = await dependencies.repository.get('templates', agencyId, templateId);
   if (!existing) {
     await dependencies.repository.create('templates', agencyId, templateId, {
+      templateId,
       inspectionType: canonicalType,
       reportType: policy.displayName,
       name: `${policy.displayName} - System Default`,
@@ -148,37 +129,26 @@ function baselineEligible(report: Record<string, unknown>, propertyId: string, t
   return typeof report.currentVersionId === 'string' && report.currentVersionId.trim().length > 0;
 }
 
-async function resolveEntryBaseline(
-  dependencies: ApiDependencies,
-  agencyId: string,
-  propertyId: string,
-  tenancyId?: string,
-): Promise<Record<string, unknown> | undefined> {
+async function resolveEntryBaseline(dependencies: ApiDependencies, agencyId: string, propertyId: string, tenancyId?: string): Promise<Record<string, unknown> | undefined> {
   const page = await dependencies.repository.list('reports', agencyId, 100);
   return page.items
     .filter((report) => baselineEligible(report, propertyId, tenancyId))
     .sort((left, right) => String(right.finalisedAt ?? right.updatedAt ?? '').localeCompare(String(left.finalisedAt ?? left.updatedAt ?? '')))[0];
 }
 
-async function loadBaselineVersion(
-  agencyId: string,
-  reportId: string,
-  versionId: string,
-): Promise<Map<string, Map<string, BaselineComponentSnapshot & { id: string }>>> {
+async function loadBaselineVersion(agencyId: string, reportId: string, versionId: string): Promise<Map<string, Map<string, BaselineComponentSnapshot & { id: string }>>> {
   const database = getFirestore(adminApp());
   const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
   const versionSnapshot = await versionRef.get();
-  if (!versionSnapshot.exists || versionSnapshot.get('immutable') !== true) {
-    throw new ApiError(409, 'BASELINE_VERSION_INVALID', 'The selected Entry baseline version is not immutable.');
-  }
+  if (!versionSnapshot.exists || versionSnapshot.get('immutable') !== true) throw new ApiError(409, 'BASELINE_VERSION_INVALID', 'The selected Entry baseline version is not immutable.');
   const areaSnapshot = await versionRef.collection('areas').get();
   const result = new Map<string, Map<string, BaselineComponentSnapshot & { id: string }>>();
   for (const areaDocument of areaSnapshot.docs) {
     const componentSnapshot = await areaDocument.ref.collection('components').get();
-    const components = new Map<string, BaselineComponentSnapshot & { id: string }>();
+    const componentMap = new Map<string, BaselineComponentSnapshot & { id: string }>();
     for (const componentDocument of componentSnapshot.docs) {
       const component = componentDocument.data() as Record<string, unknown>;
-      components.set(componentDocument.id, {
+      componentMap.set(componentDocument.id, {
         id: componentDocument.id,
         conditionCategory: component.conditionCategory as BaselineComponentSnapshot['conditionCategory'],
         cleanlinessCategory: component.cleanlinessCategory as BaselineComponentSnapshot['cleanlinessCategory'],
@@ -189,27 +159,18 @@ async function loadBaselineVersion(
         photoReferences: Array.isArray(component.photoReferences) ? component.photoReferences as ReportPhotoReference[] : [],
       });
     }
-    result.set(areaDocument.id, components);
+    result.set(areaDocument.id, componentMap);
   }
   return result;
 }
 
-function bindBaseline(
-  areas: ReportAggregate['areas'],
-  baseline: Map<string, Map<string, BaselineComponentSnapshot & { id: string }>>,
-): ReportAggregate['areas'] {
+function bindBaseline(areas: ReportAggregate['areas'], baseline: Map<string, Map<string, BaselineComponentSnapshot & { id: string }>>): ReportAggregate['areas'] {
   return areas.map((area) => ({
     ...area,
     components: area.components.map((component) => {
       const baselineComponent = baseline.get(area.id)?.get(component.id);
       if (!baselineComponent) {
-        return {
-          ...component,
-          comparisonStatus: 'unable_to_compare',
-          comparisonMethod: 'stable_id',
-          comparisonConfidence: 0,
-          comparisonUncertainty: 'No component with this stable identity exists in the selected Entry baseline.',
-        };
+        return { ...component, comparisonStatus: 'unable_to_compare', comparisonMethod: 'stable_id', comparisonConfidence: 0, comparisonUncertainty: 'No component with this stable identity exists in the selected Entry baseline.' };
       }
       return {
         ...component,
@@ -223,6 +184,20 @@ function bindBaseline(
   }));
 }
 
+function bindPendingLegacyBaseline(areas: ReportAggregate['areas']): ReportAggregate['areas'] {
+  return areas.map((area) => ({
+    ...area,
+    components: area.components.map((component) => ({
+      ...component,
+      comparisonStatus: 'unable_to_compare',
+      comparisonMethod: 'legacy_mapping',
+      comparisonConfidence: 0,
+      comparisonReviewStatus: 'suggested',
+      comparisonUncertainty: 'Legacy Entry baseline mapping is required before this component can be compared.',
+    })),
+  }));
+}
+
 function propertyAddress(property: Record<string, unknown>): string {
   return [property.address, property.suburb, property.state, property.postcode]
     .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
@@ -231,21 +206,10 @@ function propertyAddress(property: Record<string, unknown>): string {
     .join(', ') || 'Property';
 }
 
-async function recoverDeterministicReport(
-  dependencies: ApiDependencies,
-  input: {
-    agencyId: string;
-    jobId: string;
-    jobVersion: number;
-    reportId: string;
-    actorId: string;
-  },
-): Promise<ReportAggregate | undefined> {
+async function recoverDeterministicReport(dependencies: ApiDependencies, input: { agencyId: string; jobId: string; jobVersion: number; reportId: string; actorId: string }): Promise<ReportAggregate | undefined> {
   const existing = await dependencies.reports.load(input.agencyId, input.reportId);
   if (!existing) return undefined;
-  if (existing.report.inspectionJobId !== input.jobId) {
-    throw new ApiError(409, 'DETERMINISTIC_REPORT_CONFLICT', 'The deterministic report identifier is already used by a different inspection job.');
-  }
+  if (existing.report.inspectionJobId !== input.jobId) throw new ApiError(409, 'DETERMINISTIC_REPORT_CONFLICT', 'The deterministic report identifier is already used by a different inspection job.');
   const policy = inspectionPolicy(existing.report.reportType);
   await dependencies.repository.update('inspectionJobs', input.agencyId, input.jobId, {
     reportId: existing.report.id,
@@ -258,14 +222,11 @@ async function recoverDeterministicReport(
   return existing;
 }
 
-export async function routeInspectionReportRequest(
-  req: IncomingMessage,
-  dependencies: ApiDependencies,
-  correlationId: string,
-): Promise<ApiResponse | undefined> {
+export async function routeInspectionReportRequest(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse | undefined> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const parts = url.pathname.split('/').filter(Boolean);
-  if (parts[0] !== 'api' || parts[1] !== 'v1' || parts[2] !== 'inspection-jobs' || !parts[3] || parts[4] !== 'create-report') return undefined;
+  const isCreateReport = parts[0] === 'api' && parts[1] === 'v1' && parts[2] === 'inspection-jobs' && Boolean(parts[3]) && parts[4] === 'create-report';
+  if (!isCreateReport) return routeSpecialisedCloseoutRequest(req, dependencies, correlationId);
   if (req.method !== 'POST') throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Create-report endpoint requires POST.');
 
   const agencyId = agencyHeader(req);
@@ -289,30 +250,14 @@ export async function routeInspectionReportRequest(
 
   const body = await readJson(req);
   const expectedJobVersion = typeof body.expectedJobVersion === 'number' ? body.expectedJobVersion : undefined;
-  if (!expectedJobVersion || expectedJobVersion !== job.version) {
-    throw new ApiError(409, 'VERSION_CONFLICT', 'Inspection job changed before report creation. Reload and retry.');
-  }
+  if (!expectedJobVersion || expectedJobVersion !== job.version) throw new ApiError(409, 'VERSION_CONFLICT', 'Inspection job changed before report creation. Reload and retry.');
 
   const reportId = `report-${jobId}`;
-  const recovered = await recoverDeterministicReport(dependencies, {
-    agencyId,
-    jobId,
-    jobVersion: expectedJobVersion,
-    reportId,
-    actorId: principal.uid,
-  });
+  const recovered = await recoverDeterministicReport(dependencies, { agencyId, jobId, jobVersion: expectedJobVersion, reportId, actorId: principal.uid });
   if (recovered) {
     await dependencies.audit.append({
-      id: randomUUID(),
-      timestamp: new Date().toISOString(),
-      actorId: principal.uid,
-      actorRole: principal.role,
-      agencyId,
-      capability: 'job.manage',
-      outcome: 'allowed',
-      reason: 'inspection_report_link_recovered',
-      target: { agencyId, inspectionJobId: jobId, reportId },
-      correlationId,
+      id: randomUUID(), timestamp: new Date().toISOString(), actorId: principal.uid, actorRole: principal.role, agencyId,
+      capability: 'job.manage', outcome: 'allowed', reason: 'inspection_report_link_recovered', target: { agencyId, inspectionJobId: jobId, reportId }, correlationId,
     });
     return { status: 200, body: { data: recovered, meta: { correlationId, existing: true, recovered: true } } };
   }
@@ -331,17 +276,22 @@ export async function routeInspectionReportRequest(
   let areas = reportAreas(body.areas);
 
   let baseline: Record<string, unknown> | undefined;
+  let legacyPlaceholder = false;
   if (policy.requiresBaseline && canonicalType === 'exit') {
     baseline = await resolveEntryBaseline(dependencies, agencyId, propertyId, tenancyId);
     if (!baseline) {
-      throw new ApiError(422, 'ENTRY_BASELINE_REQUIRED', 'Exit Inspection requires an eligible immutable Entry Property Condition Report linked to the same property and tenancy.');
+      if (body.allowLegacyBaseline !== true) {
+        throw new ApiError(422, 'ENTRY_BASELINE_REQUIRED', 'Exit Inspection requires an eligible immutable Entry Property Condition Report linked to the same property and tenancy. If only a legacy/unstructured Entry report exists, explicitly start the reviewed legacy mapping workflow.');
+      }
+      legacyPlaceholder = true;
+      areas = bindPendingLegacyBaseline(areas);
+    } else {
+      areas = bindBaseline(areas, await loadBaselineVersion(agencyId, String(baseline.id), String(baseline.currentVersionId)));
     }
-    areas = bindBaseline(areas, await loadBaselineVersion(agencyId, String(baseline.id), String(baseline.currentVersionId)));
   }
 
-  const tenantNames = Array.isArray(tenancy?.tenantNames)
-    ? tenancy.tenantNames.filter((name): name is string => typeof name === 'string')
-    : [];
+  const tenantNames = Array.isArray(tenancy?.tenantNames) ? tenancy.tenantNames.filter((name): name is string => typeof name === 'string') : [];
+  const legacyMappingId = legacyPlaceholder ? `legacy-${reportId}` : undefined;
   const aggregate: ReportAggregate = {
     report: {
       id: reportId,
@@ -364,6 +314,10 @@ export async function routeInspectionReportRequest(
         ...(typeof baseline.templateId === 'string' ? { baselineTemplateId: baseline.templateId } : {}),
         ...(typeof baseline.templateVersion === 'number' ? { baselineTemplateVersion: baseline.templateVersion } : {}),
         baselineQuality: 'structured' as const,
+      } : legacyMappingId ? {
+        baselineReportId: `legacy:${legacyMappingId}`,
+        baselineReportVersionId: legacyMappingId,
+        baselineQuality: 'legacy_unstructured' as const,
       } : {}),
     },
     areas,
@@ -375,20 +329,13 @@ export async function routeInspectionReportRequest(
     templateId: template.id,
     templateVersion: template.version,
     tenantResponseRequired: policy.tenantReviewDefault,
-    ...(baseline ? { baselineReportId: baseline.id, baselineReportVersionId: baseline.currentVersionId } : {}),
+    ...(baseline ? { baselineReportId: baseline.id, baselineReportVersionId: baseline.currentVersionId } : legacyMappingId ? { baselineReportId: `legacy:${legacyMappingId}`, baselineReportVersionId: legacyMappingId } : {}),
   }, expectedJobVersion, principal.uid);
 
   await dependencies.audit.append({
-    id: randomUUID(),
-    timestamp: new Date().toISOString(),
-    actorId: principal.uid,
-    actorRole: principal.role,
-    agencyId,
-    capability: 'job.manage',
-    outcome: 'allowed',
-    reason: `inspection_report_created:${canonicalType}`,
-    target: { agencyId, propertyId, ...(tenancyId ? { tenancyId } : {}), inspectionJobId: jobId, reportId },
-    correlationId,
+    id: randomUUID(), timestamp: new Date().toISOString(), actorId: principal.uid, actorRole: principal.role, agencyId,
+    capability: 'job.manage', outcome: 'allowed', reason: `inspection_report_created:${canonicalType}${legacyPlaceholder ? ':legacy_baseline_pending' : ''}`,
+    target: { agencyId, propertyId, ...(tenancyId ? { tenancyId } : {}), inspectionJobId: jobId, reportId }, correlationId,
   });
 
   return {
@@ -400,7 +347,7 @@ export async function routeInspectionReportRequest(
         inspectionType: canonicalType,
         templateId: template.id,
         templateVersion: template.version,
-        ...(baseline ? { baselineReportId: baseline.id, baselineReportVersionId: baseline.currentVersionId } : {}),
+        ...(baseline ? { baselineReportId: baseline.id, baselineReportVersionId: baseline.currentVersionId } : legacyMappingId ? { legacyBaselineMappingId: legacyMappingId } : {}),
       },
     },
   };
