@@ -7,9 +7,7 @@ import {
   type MaintenanceCategory,
   type MaintenanceItem,
   type MaintenancePriority,
-  type TenantInstruction,
   type TenantInstructionType,
-  type WorkRequest,
 } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
