@@ -1,4 +1,5 @@
 import { apiRequest } from '../apiClient';
+import type { ReportWorkflowRecord } from './reportWorkflowService';
 
 export interface ArchiveArtifactResult {
   reportId: string;
@@ -13,7 +14,7 @@ export interface ArchiveArtifactResult {
 
 export interface ArchiveReportResult {
   artifact: ArchiveArtifactResult;
-  archivedReport: Record<string, unknown>;
+  archivedReport: ReportWorkflowRecord;
 }
 
 /**
@@ -35,7 +36,7 @@ export async function archiveFinalisedReport(
     },
   );
 
-  const archivedReport = await apiRequest<Record<string, unknown>>(
+  const archivedReport = await apiRequest<ReportWorkflowRecord>(
     agencyId,
     `/api/v1/reports/${encodeURIComponent(reportId)}/transitions`,
     {
