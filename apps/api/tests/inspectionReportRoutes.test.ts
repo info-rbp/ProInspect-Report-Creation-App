@@ -118,7 +118,14 @@ function dependencies(repository: MemoryRepository, reports = new MemoryReportSt
     reports,
     idempotency: new MemoryIdempotencyStore(),
     tasks: { dispatch: async () => undefined },
-    uploads: { create: async (agencyId, uploadId, input) => ({ id: uploadId, agencyId, ...input }) },
+    uploads: {
+      create: async (agencyId, uploadId, input) => ({
+        id: uploadId,
+        agencyId,
+        ...input,
+        status: 'issued' as const,
+      }),
+    },
   };
 }
 
@@ -173,6 +180,24 @@ async function seedJob(repository: MemoryRepository, id: string, reportType: str
     assignedInspectorId: 'inspector-1',
     ...extra,
   }, 'admin-1');
+}
+
+function orphanAggregate(jobId: string): ReportAggregate {
+  return {
+    report: {
+      id: `report-${jobId}`,
+      agencyId: 'agency-a',
+      propertyId: 'property-1',
+      inspectionJobId: jobId,
+      reportType: 'Property Condition Report',
+      propertyAddress: '1 Inspection Street',
+      lifecycleStatus: 'draft',
+      templateId: 'system-entry-v1',
+      templateVersion: 1,
+      version: 1,
+    },
+    areas: areas as ReportAggregate['areas'],
+  };
 }
 
 describe('inspection report creation command', () => {
@@ -277,6 +302,30 @@ describe('inspection report creation command', () => {
     expect(await second.json()).toMatchObject({
       data: { report: { id: 'report-entry-retry' } },
       meta: { existing: true },
+    });
+    expect(reports.reports.size).toBe(1);
+  });
+
+  it('recovers the deterministic report link after a partial report-first write', async () => {
+    const repository = new MemoryRepository();
+    await seedJob(repository, 'entry-recover', 'Property Condition Report');
+    const reports = new MemoryReportStore();
+    reports.reports.set('agency-a:report-entry-recover', orphanAggregate('entry-recover'));
+
+    const response = await request(dependencies(repository, reports), 'entry-recover', {
+      expectedJobVersion: 1,
+      areas,
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { report: { id: 'report-entry-recover' } },
+      meta: { existing: true, recovered: true },
+    });
+    expect(await repository.get('inspectionJobs', 'agency-a', 'entry-recover')).toMatchObject({
+      reportId: 'report-entry-recover',
+      templateId: 'system-entry-v1',
+      version: 2,
     });
     expect(reports.reports.size).toBe(1);
   });
