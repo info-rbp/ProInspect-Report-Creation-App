@@ -51,6 +51,15 @@ function commandOperation(resource: 'maintenance-items' | 'work-requests' | 'ten
   };
 }
 
+function templateParameters(includeVersion = false, includeAction = false) {
+  return [
+    { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+    { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+    ...(includeVersion ? [{ name: 'version', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } }] : []),
+    ...(includeAction ? [{ name: 'action', in: 'path', required: true, schema: { type: 'string', enum: ['publish', 'duplicate', 'retire'] } }] : []),
+  ];
+}
+
 export function buildOpenApiDocument() {
   const paths: Record<string, unknown> = {};
   for (const resource of API_ROUTE_NAMES) {
@@ -82,6 +91,55 @@ export function buildOpenApiDocument() {
       },
     };
   }
+
+  paths['/api/v1/templates/drafts'] = {
+    post: {
+      operationId: 'createTemplateDraft',
+      tags: ['templates'],
+      description: 'Creates a new editable template business version in draft state. Published and retired states cannot be supplied.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [
+        { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+        { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } },
+      ],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['template'], properties: { template: { type: 'object', additionalProperties: true } } } } } },
+      responses: { '201': { description: 'Draft version created' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'template.manage',
+    },
+  };
+  paths['/api/v1/templates/{id}/versions/{version}'] = {
+    get: {
+      operationId: 'getTemplateVersion',
+      tags: ['templates'],
+      description: 'Reads one exact template business version.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: templateParameters(true),
+      responses: { '200': { description: 'Exact template version' }, '404': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'report.read',
+    },
+    put: {
+      operationId: 'updateTemplateDraft',
+      tags: ['templates'],
+      description: 'Replaces an editable draft using expectedRecordVersion optimistic locking. Published and retired versions are immutable.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [...templateParameters(true), { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['expectedRecordVersion', 'template'], properties: { expectedRecordVersion: { type: 'integer', minimum: 1 }, template: { type: 'object', additionalProperties: true } } } } } },
+      responses: { '200': { description: 'Draft updated' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'template.manage',
+    },
+  };
+  paths['/api/v1/templates/{id}/versions/{version}/actions/{action}'] = {
+    post: {
+      operationId: 'transitionTemplateVersion',
+      tags: ['templates'],
+      description: 'Publishes, duplicates or retires an exact template version. Publishing makes the version immutable and updates the logical published pointer used for new reports.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [...templateParameters(true, true), { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['expectedRecordVersion'], properties: { expectedRecordVersion: { type: 'integer', minimum: 1 } } } } } },
+      responses: { '200': { description: 'Template lifecycle action completed' }, '201': { description: 'New draft version created by duplicate' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'template.manage',
+    },
+  };
 
   paths['/api/v1/inspection-jobs/{id}/transitions'] = {
     post: {
