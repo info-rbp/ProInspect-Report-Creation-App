@@ -185,19 +185,20 @@ export function calculateWorkflowGateContext(
 
   const versionBoundArchive = Boolean(
     report?.currentVersionId &&
+    report.archiveReportVersionId === report.currentVersionId &&
     report.archiveManifestObjectPath?.trim() &&
     report.archiveManifestSha256 &&
     shaPattern.test(report.archiveManifestSha256) &&
-    report.archivedAt,
+    report.archiveCreatedAt,
   );
   const archiveCreated = Boolean(
-    versionBoundArchive || reportStatus === 'archived' || jobStatus === 'archived' || jobRecord?.archivedAt,
+    versionBoundArchive || reportStatus === 'archived' || jobStatus === 'archived',
   );
   if (!archiveCreated) {
     blockers.push({
       gate: 'archiveCreated',
-      code: 'ARCHIVE_NOT_CREATED',
-      message: 'An immutable archive manifest must be created before archiving.',
+      code: 'ARCHIVE_NOT_CREATED_OR_STALE',
+      message: 'An immutable archive manifest matching the current report version must be created before archiving.',
     });
   }
 
