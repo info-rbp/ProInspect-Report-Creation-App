@@ -246,7 +246,10 @@ function comparisonLanguage(
   } else if (working === 'improved') {
     parts.push('The component was recorded as not operational at Entry and operation was confirmed at Exit.');
   } else if (working === 'unable_to_compare' && baseline.workingStatus !== 'not_applicable') {
-    parts.push('Operational status cannot be directly compared because equivalent testing evidence is unavailable.');
+    const exitUntested = current.workingStatus === 'untested' || current.testStatus === 'untested';
+    parts.push(exitUntested
+      ? 'Operational status cannot be directly compared because operational testing was not conducted at Exit.'
+      : 'Operational status cannot be directly compared because equivalent testing evidence is unavailable.');
   }
 
   return sanitizeProhibitedCausation(parts.join(' '));
