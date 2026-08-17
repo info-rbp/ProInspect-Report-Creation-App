@@ -105,8 +105,10 @@ export interface ReportData {
   renderManifestObjectPath?: string;
   renderManifestSha256?: string;
   pdfGeneratedAt?: string;
+  archiveReportVersionId?: string;
   archiveManifestObjectPath?: string;
   archiveManifestSha256?: string;
+  archiveCreatedAt?: string;
   propertyAddress: string;
   agentName: string;
   agentCompany: string;
