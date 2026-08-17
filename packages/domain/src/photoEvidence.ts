@@ -7,8 +7,22 @@ export const PHOTO_STORAGE_AREAS = {
 } as const;
 
 export type PhotoStorageArea = typeof PHOTO_STORAGE_AREAS[keyof typeof PHOTO_STORAGE_AREAS];
-export type PhotoAssetKind = 'original' | 'thumbnail' | 'analysis' | 'final_report_asset' | 'final_report_archive';
-export type PhotoProcessingStatus = 'upload_pending' | 'uploading' | 'uploaded' | 'validating' | 'processing' | 'available' | 'duplicate' | 'rejected' | 'failed';
+export type PhotoAssetKind =
+  | 'original'
+  | 'thumbnail'
+  | 'analysis'
+  | 'final_report_asset'
+  | 'final_report_archive';
+export type PhotoProcessingStatus =
+  | 'upload_pending'
+  | 'uploading'
+  | 'uploaded'
+  | 'validating'
+  | 'processing'
+  | 'available'
+  | 'duplicate'
+  | 'rejected'
+  | 'failed';
 
 export interface PhotoEvidenceRecord {
   id: string;
@@ -53,6 +67,9 @@ export interface UploadSessionRecord {
   status: 'issued' | 'uploading' | 'completed' | 'expired' | 'cancelled' | 'duplicate';
   issuedTo: string;
   expiresAt: string;
+  externalGrantId?: string;
+  externalResourceType?: 'work_request' | 'tenant_instruction';
+  externalResourceId?: string;
   createdAt: string;
   updatedAt: string;
 }
