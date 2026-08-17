@@ -41,6 +41,17 @@ function newIdempotencyKey(): string {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function legacyExitFallback(path: string, body: unknown, error: ApiErrorEnvelope['error']): Record<string, unknown> | undefined {
+  if (error?.code !== 'ENTRY_BASELINE_REQUIRED') return undefined;
+  if (!/^\/api\/v1\/inspection-jobs\/[^/]+\/create-report$/u.test(path)) return undefined;
+  if (!isRecord(body) || body.allowLegacyBaseline === true) return undefined;
+  return { ...body, allowLegacyBaseline: true };
+}
+
 export async function apiRequest<T>(
   agencyId: string | undefined,
   path: string,
@@ -70,16 +81,25 @@ export async function apiRequest<T>(
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (method !== 'GET') headers['idempotency-key'] = init.idempotencyKey ?? newIdempotencyKey();
 
-  const response = await fetch(`${baseUrl.replace(/\/$/u, '')}${path}`, {
-    method,
-    headers,
-    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-  });
-  const payload = await response.json() as ApiEnvelope<T> & ApiErrorEnvelope;
-  if (!response.ok) {
-    const error = new Error(payload.error?.message ?? 'The API request failed.');
-    Object.assign(error, payload.error);
+  const execute = async (body: unknown): Promise<{ response: Response; payload: ApiEnvelope<T> & ApiErrorEnvelope }> => {
+    const response = await fetch(`${baseUrl.replace(/\/$/u, '')}${path}`, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+    return { response, payload: await response.json() as ApiEnvelope<T> & ApiErrorEnvelope };
+  };
+
+  let result = await execute(init.body);
+  if (!result.response.ok) {
+    const fallbackBody = legacyExitFallback(path, init.body, result.payload.error);
+    if (fallbackBody) result = await execute(fallbackBody);
+  }
+
+  if (!result.response.ok) {
+    const error = new Error(result.payload.error?.message ?? 'The API request failed.');
+    Object.assign(error, result.payload.error);
     throw error;
   }
-  return payload.data;
+  return result.payload.data;
 }
