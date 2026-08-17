@@ -35,14 +35,20 @@ describe('archive tenant-response provenance', () => {
     const pdfSha = sha256(pdfBytes);
     const pdfPath = `final-report-assets/reports/${reportId}/${versionId}/final.pdf`;
     const pdfFile = reportBucket.file(pdfPath);
-    await pdfFile.save(pdfBytes, { resumable: false, metadata: { contentType: 'application/pdf', metadata: { sha256: pdfSha } } });
+    await pdfFile.save(pdfBytes, {
+      resumable: false,
+      metadata: { contentType: 'application/pdf', metadata: { sha256: pdfSha } },
+    });
     const [pdfMetadata] = await pdfFile.getMetadata();
     const pdfGeneration = String(pdfMetadata.generation ?? '');
 
     const renderBytes = Buffer.from('{"render":"manifest"}\n');
     const renderSha = sha256(renderBytes);
     const renderPath = `final-report-assets/reports/${reportId}/${versionId}/final.manifest.json`;
-    await reportBucket.file(renderPath).save(renderBytes, { resumable: false, metadata: { contentType: 'application/json', metadata: { sha256: renderSha } } });
+    await reportBucket.file(renderPath).save(renderBytes, {
+      resumable: false,
+      metadata: { contentType: 'application/json', metadata: { sha256: renderSha } },
+    });
 
     await database.doc(`agencies/${agencyId}/reports/${reportId}`).set({
       id: reportId,
@@ -65,19 +71,40 @@ describe('archive tenant-response provenance', () => {
       renderManifestSha256: renderSha,
       version: 7,
     });
-    const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
-    await versionRef.set({ id: versionId, reportId, agencyId, immutable: true, contentHash: 'content-hash', createdAt: '2026-08-17T09:00:00.000Z' });
+    const versionRef = database.doc(
+      `agencies/${agencyId}/reports/${reportId}/versions/${versionId}`,
+    );
+    await versionRef.set({
+      id: versionId,
+      reportId,
+      agencyId,
+      immutable: true,
+      contentHash: 'content-hash',
+      createdAt: '2026-08-17T09:00:00.000Z',
+    });
     const areaRef = versionRef.collection('areas').doc('entry');
     await areaRef.set({ id: 'entry', name: 'Entry', sequence: 1, photoReferences: [] });
     await areaRef.collection('components').doc('front-door').set({
-      id: 'front-door', component: 'Front Door', conditionCategory: 'intact', cleanlinessCategory: 'clean', workingStatus: 'not_applicable', testStatus: 'not_applicable', commentary: 'Recorded Entry observation.', defects: [], photoReferences: [],
+      id: 'front-door',
+      component: 'Front Door',
+      conditionCategory: 'intact',
+      cleanlinessCategory: 'clean',
+      workingStatus: 'not_applicable',
+      testStatus: 'not_applicable',
+      commentary: 'Recorded Entry observation.',
+      defects: [],
+      photoReferences: [],
     });
 
-    const evidencePath = `agencies/${agencyId}/properties/property-1/jobs/job-1/evidence/${photoId}/original/tenant.jpg`;
+    const evidencePath =
+      `agencies/${agencyId}/properties/property-1/jobs/job-1/evidence/${photoId}/original/tenant.jpg`;
     const evidenceBytes = Buffer.from('tenant-evidence-bytes');
     const evidenceSha = sha256(evidenceBytes);
     const evidenceFile = storage.bucket('demo-pcr-uploads').file(evidencePath);
-    await evidenceFile.save(evidenceBytes, { resumable: false, metadata: { contentType: 'image/jpeg' } });
+    await evidenceFile.save(evidenceBytes, {
+      resumable: false,
+      metadata: { contentType: 'image/jpeg' },
+    });
     const [evidenceMetadata] = await evidenceFile.getMetadata();
     const evidenceGeneration = String(evidenceMetadata.generation ?? '');
     await database.doc(`agencies/${agencyId}/photoEvidence/${photoId}`).set({
@@ -99,7 +126,14 @@ describe('archive tenant-response provenance', () => {
       tenancyId: 'tenancy-1',
       tenantUid: 'tenant-1',
       submittedAt: '2026-08-17T11:00:00.000Z',
-      items: [{ componentId: 'front-door', response: 'comment', comment: 'Tenant records an additional observation.', photoIds: [photoId] }],
+      items: [
+        {
+          componentId: 'front-door',
+          response: 'comment',
+          comment: 'Tenant records an additional observation.',
+          photoIds: [photoId],
+        },
+      ],
     });
 
     const result = await createArchiveArtifact({
@@ -119,14 +153,21 @@ describe('archive tenant-response provenance', () => {
       tenantResponses: Array<Record<string, unknown>>;
       evidence: Array<Record<string, unknown>>;
     };
-    expect(manifest.tenantResponses).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'response-1', items: [expect.objectContaining({ componentId: 'front-door', photoIds: [photoId] })] }),
-    ]));
-    expect(manifest.evidence).toContainEqual(expect.objectContaining({
-      photoId,
-      objectPath: evidencePath,
-      generation: evidenceGeneration,
-      sha256: evidenceSha,
-    }));
+    expect(manifest.tenantResponses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'response-1',
+          items: [expect.objectContaining({ componentId: 'front-door', photoIds: [photoId] })],
+        }),
+      ]),
+    );
+    expect(manifest.evidence).toContainEqual(
+      expect.objectContaining({
+        photoId,
+        objectPath: evidencePath,
+        generation: evidenceGeneration,
+        sha256: evidenceSha,
+      }),
+    );
   });
 });
