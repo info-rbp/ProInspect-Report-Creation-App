@@ -41,27 +41,17 @@ export async function listMaintenanceCandidates(): Promise<MaintenanceCandidate[
 }
 
 export async function extractMaintenanceCandidates(reportId: string): Promise<MaintenanceCandidate[]> {
-  return apiRequest<MaintenanceCandidate[]>(agencyId(), '/api/v1/maintenance-candidates/extract', {
-    method: 'POST',
-    body: { reportId },
-  });
+  return apiRequest<MaintenanceCandidate[]>(agencyId(), '/api/v1/maintenance-candidates/extract', { method: 'POST', body: { reportId } });
 }
 
 export async function confirmMaintenanceCandidate(
   candidateId: string,
   overrides?: { title?: string; description?: string; category?: string; priority?: string; workInstruction?: string },
 ): Promise<MaintenanceItem> {
-  return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-candidates/${candidateId}/confirm`, {
-    method: 'POST',
-    body: overrides || {},
-  });
+  return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-candidates/${candidateId}/confirm`, { method: 'POST', body: overrides || {} });
 }
 
-export async function dismissMaintenanceCandidate(
-  candidateId: string,
-  reason: string,
-  expectedVersion = 1,
-): Promise<MaintenanceCandidate> {
+export async function dismissMaintenanceCandidate(candidateId: string, reason: string, expectedVersion = 1): Promise<MaintenanceCandidate> {
   return apiRequest<MaintenanceCandidate>(agencyId(), `/api/v1/maintenance-candidates/${candidateId}`, {
     method: 'PATCH',
     body: { reviewStatus: 'dismissed', dismissedReason: reason, expectedVersion },
@@ -102,10 +92,7 @@ export async function listWorkRequests(): Promise<WorkRequest[]> {
 }
 
 export async function createWorkRequest(input: Partial<WorkRequest>): Promise<WorkRequest> {
-  return apiRequest<WorkRequest>(agencyId(), '/api/v1/work-requests/create', {
-    method: 'POST',
-    body: input,
-  });
+  return apiRequest<WorkRequest>(agencyId(), '/api/v1/work-requests/create', { method: 'POST', body: input });
 }
 
 export async function transitionWorkRequest(
@@ -122,10 +109,7 @@ export async function listTenantInstructions(): Promise<TenantInstruction[]> {
 }
 
 export async function createTenantInstruction(input: Partial<TenantInstruction>): Promise<TenantInstruction> {
-  return apiRequest<TenantInstruction>(agencyId(), '/api/v1/tenant-instructions/create', {
-    method: 'POST',
-    body: input,
-  });
+  return apiRequest<TenantInstruction>(agencyId(), '/api/v1/tenant-instructions/create', { method: 'POST', body: input });
 }
 
 export async function transitionTenantInstruction(
@@ -142,10 +126,7 @@ export async function listClientApprovals(): Promise<ClientApproval[]> {
 }
 
 export async function createClientApproval(input: Partial<ClientApproval>): Promise<ClientApproval> {
-  return apiRequest<ClientApproval>(agencyId(), '/api/v1/client-approvals', {
-    method: 'POST',
-    body: { ...input, status: input.status || 'pending' },
-  });
+  return apiRequest<ClientApproval>(agencyId(), '/api/v1/client-approvals', { method: 'POST', body: { ...input, status: input.status || 'pending' } });
 }
 
 export async function generateAccessGrant(
@@ -154,10 +135,7 @@ export async function generateAccessGrant(
   recipientEmail: string,
   expiresInHours = 72,
 ): Promise<{ grantId: string; grantToken: string; expiresAt: string; accessUrl: string }> {
-  return apiRequest(agencyId(), '/api/v1/external-access-grants/generate', {
-    method: 'POST',
-    body: { resourceType, resourceId, recipientEmail, expiresInHours },
-  });
+  return apiRequest(agencyId(), '/api/v1/external-access-grants/generate', { method: 'POST', body: { resourceType, resourceId, recipientEmail, expiresInHours } });
 }
 
 export async function getExternalWorkRequest(
@@ -173,9 +151,7 @@ export async function submitExternalWorkResponse(
   completionEvidenceIds?: string[],
 ): Promise<WorkRequest> {
   return externalRequest(`/api/v1/external/work-requests/${encodeURIComponent(grantToken)}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ action, responseNotes, completionEvidenceIds }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, responseNotes, completionEvidenceIds }),
   });
 }
 
@@ -189,9 +165,7 @@ export async function submitExternalTenantResponse(
   tenantEvidenceIds?: string[],
 ): Promise<TenantInstruction> {
   return externalRequest(`/api/v1/external/tenant-instructions/${encodeURIComponent(grantToken)}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ tenantResponseNote, tenantEvidenceIds }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tenantResponseNote, tenantEvidenceIds }),
   });
 }
 
@@ -205,8 +179,45 @@ export async function submitExternalClientApproval(
   clientNotes?: string,
 ): Promise<ClientApproval> {
   return externalRequest(`/api/v1/external/client-approvals/${encodeURIComponent(grantToken)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ decision, clientNotes }),
+  });
+}
+
+async function fileSha256(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+export interface ExternalEvidenceUploadResult {
+  photoId: string;
+  uploadSessionId: string;
+}
+
+export async function uploadExternalEvidence(grantToken: string, file: File): Promise<ExternalEvidenceUploadResult> {
+  const sha256 = await fileSha256(file);
+  const session = await externalRequest<{
+    id: string;
+    photoId: string;
+    status: string;
+    resumableUploadUrl?: string;
+    duplicatePhotoId?: string;
+  }>(`/api/v1/external/evidence/${encodeURIComponent(grantToken)}/upload-session`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ decision, clientNotes }),
+    body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, sha256 }),
   });
+  if (session.status === 'duplicate' && session.duplicatePhotoId) {
+    return { photoId: session.duplicatePhotoId, uploadSessionId: session.id };
+  }
+  if (!session.resumableUploadUrl) throw new Error('Evidence upload service is not configured.');
+  const upload = await fetch(session.resumableUploadUrl, {
+    method: 'PUT',
+    headers: {
+      'content-type': file.type,
+      'content-range': `bytes 0-${file.size - 1}/${file.size}`,
+    },
+    body: file,
+  });
+  if (!upload.ok) throw new Error(`Evidence upload failed with ${upload.status}.`);
+  return { photoId: session.photoId || session.id, uploadSessionId: session.id };
 }
