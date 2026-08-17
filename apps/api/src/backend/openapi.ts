@@ -12,7 +12,9 @@ function operation(resource: string, method: 'get' | 'post' | 'patch' | 'put', c
       ...(!collection ? [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }] : []),
       ...(method !== 'get' ? [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } }] : []),
     ],
-    ...(method !== 'get' ? { requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } : {}),
+    ...(method !== 'get'
+      ? { requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } }
+      : {}),
     responses: {
       [method === 'post' ? '201' : '200']: { description: 'Successful response' },
       '400': { $ref: '#/components/responses/Error' },
