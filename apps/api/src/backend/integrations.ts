@@ -1,7 +1,11 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { originalObjectPath, type AuthenticatedPrincipal, type UploadSessionRecord } from '@pcr/domain';
+import {
+  originalObjectPath,
+  type AuthenticatedPrincipal,
+  type UploadSessionRecord,
+} from '@pcr/domain';
 import type { TaskDispatcher, UploadSessionIssuer } from './types.js';
 import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 
@@ -23,7 +27,10 @@ async function metadataAccessToken(): Promise<string> {
   return body.access_token;
 }
 
-async function publishPdfTask(projectId: string, payload: Record<string, unknown>): Promise<string> {
+async function publishPdfTask(
+  projectId: string,
+  payload: Record<string, unknown>,
+): Promise<string> {
   const token = await metadataAccessToken();
   const response = await fetch(
     `https://pubsub.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/topics/pdf-generation-requests:publish`,
@@ -41,7 +48,9 @@ async function publishPdfTask(projectId: string, payload: Record<string, unknown
   );
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw new Error(`Pub/Sub PDF dispatch failed with ${response.status}${detail ? `: ${detail}` : ''}.`);
+    throw new Error(
+      `Pub/Sub PDF dispatch failed with ${response.status}${detail ? `: ${detail}` : ''}.`,
+    );
   }
   const body = (await response.json()) as { messageIds?: string[] };
   const messageId = body.messageIds?.[0];
@@ -128,6 +137,10 @@ export class FirebaseUploadSessionIssuer implements UploadSessionIssuer {
         status: 'duplicate',
         duplicatePhotoId: existing.id,
         objectPath: existing.objectPath,
+        generation: existing.generation,
+        contentType: existing.contentType,
+        fileSize: existing.fileSize,
+        originalFilename: existing.originalFilename,
         sha256,
         createdAt: now,
         updatedAt: now,
@@ -160,6 +173,16 @@ export class FirebaseUploadSessionIssuer implements UploadSessionIssuer {
       status: 'issued',
       issuedTo: principal.uid,
       expiresAt,
+      ...(typeof input.externalGrantId === 'string'
+        ? { externalGrantId: input.externalGrantId }
+        : {}),
+      ...(input.externalResourceType === 'work_request' ||
+      input.externalResourceType === 'tenant_instruction'
+        ? { externalResourceType: input.externalResourceType }
+        : {}),
+      ...(typeof input.externalResourceId === 'string'
+        ? { externalResourceId: input.externalResourceId }
+        : {}),
       createdAt: now,
       updatedAt: now,
     };
