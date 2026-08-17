@@ -82,7 +82,24 @@ export const resourceWriteSchema: ValidationSchema<ResourceWriteInput> = {
   parse(value) {
     const parsed = record(value);
     if (!parsed.ok) return parsed;
-    const forbidden = ['createdAt', 'updatedAt', 'actorId', 'actorRole'];
+    const forbidden = [
+      'createdAt',
+      'updatedAt',
+      'actorId',
+      'actorRole',
+      'finalPdfUrl',
+      'finalPdfReportVersionId',
+      'finalPdfObjectPath',
+      'finalPdfSha256',
+      'finalPdfGeneration',
+      'renderManifestObjectPath',
+      'renderManifestSha256',
+      'pdfGeneratedAt',
+      'archiveReportVersionId',
+      'archiveManifestObjectPath',
+      'archiveManifestSha256',
+      'archiveCreatedAt',
+    ];
     const supplied = forbidden.filter((field) => field in parsed.value);
     if (supplied.length) return validationError('Server-managed fields cannot be supplied.', { fields: supplied });
     return { ok: true, value: parsed.value as ResourceWriteInput };
