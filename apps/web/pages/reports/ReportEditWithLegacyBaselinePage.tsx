@@ -14,7 +14,10 @@ const ReportEditWithLegacyBaselinePage: React.FC = () => {
   useEffect(() => {
     if (!reportId) return;
     let active = true;
-    apiRequest<ReportAggregate>(undefined, `/api/v1/reports/${encodeURIComponent(reportId)}/aggregate`)
+    apiRequest<ReportAggregate>(
+      undefined,
+      `/api/v1/reports/${encodeURIComponent(reportId)}/aggregate`,
+    )
       .then((aggregate) => {
         if (active) setReport(aggregateToReportData(aggregate));
       })
