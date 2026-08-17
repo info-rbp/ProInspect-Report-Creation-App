@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AuthorisationTarget, ReportAggregate, ReportLifecycleStatus } from '@pcr/domain';
 import { reportAggregateSchema, workflowTransitionSchema } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { createArchiveArtifact } from './archiveArtifactService.js';
 import type { ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult } from './types.js';
 
@@ -65,6 +66,14 @@ function hash(body: Record<string, unknown>): string {
   return createHash('sha256').update(JSON.stringify(body)).digest('hex');
 }
 
+function parseExpectedVersion(body: Record<string, unknown>): number {
+  const value = body.expectedVersion;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new ReportRouteError(400, 'EXPECTED_VERSION_INVALID', 'expectedVersion must be a positive integer.');
+  }
+  return value;
+}
+
 async function idempotent(
   dependencies: ApiDependencies,
   req: IncomingMessage,
@@ -108,6 +117,37 @@ export async function routeReportAggregateRequest(
     return idempotent(dependencies, req, agencyId, `reports:${reportId}:aggregate`, body, async () => {
       const stored = await dependencies.reports.saveDraft(aggregate, expectedVersion as number | undefined, principal.uid);
       return { status: expectedVersion === undefined ? 201 : 200, body: { data: stored, meta: { correlationId } } };
+    });
+  }
+
+  if (req.method === 'POST' && command === 'archive-artifact') {
+    const body = await readJson(req);
+    const expectedVersion = parseExpectedVersion(body);
+    const aggregate = await dependencies.reports.load(agencyId, reportId);
+    if (!aggregate) throw new ReportRouteError(404, 'NOT_FOUND', 'Report not found.');
+    if (aggregate.report.lifecycleStatus !== 'finalised') {
+      throw new ReportRouteError(409, 'REPORT_NOT_FINALISED', 'The report must be finalised before an archive artifact can be created.');
+    }
+    const principal = await authenticateAndAuthorise(
+      req,
+      dependencies,
+      'report.edit',
+      target(agencyId, reportId, aggregate),
+      correlationId,
+    );
+    return idempotent(dependencies, req, agencyId, `reports:${reportId}:archive-artifact`, body, async () => {
+      const artifact = await createArchiveArtifact({
+        agencyId,
+        reportId,
+        expectedVersion,
+        actorId: principal.uid,
+        actorRole: principal.role,
+        correlationId,
+      });
+      return {
+        status: artifact.alreadyExists ? 200 : 201,
+        body: { data: artifact, meta: { correlationId } },
+      };
     });
   }
 
