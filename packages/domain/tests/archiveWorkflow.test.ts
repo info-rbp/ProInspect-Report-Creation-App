@@ -124,6 +124,7 @@ describe('immutable report archive workflow', () => {
   it('still blocks finalisation when a PDF is bound to an older report version', () => {
     const evaluation = calculateWorkflowGateContext(finalisedReport({
       lifecycleStatus: 'finalisation_ready',
+      finalisedAt: undefined,
       finalPdfReportVersionId: 'version-old',
     }));
     expect(evaluation.context.finalPdfCreated).toBe(false);
