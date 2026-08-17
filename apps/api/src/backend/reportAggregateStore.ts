@@ -24,11 +24,12 @@ import {
 import type { ReportAggregateStore, ReportTransitionCommand } from './types.js';
 
 const MAX_TRANSACTION_WRITES = 450;
+// Only transitions that represent a new immutable content snapshot mint a new
+// report-version ID. Finalisation and archiving are lifecycle milestones around
+// the already-approved immutable content version and must preserve currentVersionId.
 const VERSIONED_STATUSES = new Set<ReportLifecycleStatus>([
   'approved_for_issue',
   'tenant_submitted',
-  'finalised',
-  'archived',
 ]);
 
 function adminApp() {
