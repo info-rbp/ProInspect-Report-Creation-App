@@ -16,6 +16,7 @@
     "@google/genai": "^1.32.0",
     "@pcr/config": "*",
     "@pcr/domain": "*",
+    "@pcr/templates": "*",
     "@pcr/validation": "*",
     "firebase-admin": "^14.2.0"
   }
