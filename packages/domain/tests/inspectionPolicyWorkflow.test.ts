@@ -21,7 +21,12 @@ function component(overrides: Record<string, unknown> = {}) {
   } as ReportAggregate['areas'][number]['components'][number];
 }
 
-function report(reportType: string, componentOverrides: Record<string, unknown> = {}, reportOverrides: Record<string, unknown> = {}): ReportAggregate {
+function report(
+  reportType: string,
+  componentOverrides: Record<string, unknown> = {},
+  reportOverrides: Record<string, unknown> = {},
+  areaOverrides: Record<string, unknown> = {},
+): ReportAggregate {
   return {
     report: {
       id: 'report-1',
@@ -40,6 +45,7 @@ function report(reportType: string, componentOverrides: Record<string, unknown> 
         sequence: 1,
         photoReferences: [{ photoId: 'overview-1', objectPath: 'evidence/overview-1.jpg' }],
         components: [component(componentOverrides)],
+        ...areaOverrides,
       },
     ],
   };
@@ -50,6 +56,14 @@ describe('inspection type policies', () => {
     expect(inspectionPolicy('Property Condition Report')).toMatchObject({ detailedBaseline: true, exceptionFocused: false });
     expect(inspectionPolicy('Routine Inspection')).toMatchObject({ detailedBaseline: false, exceptionFocused: true, ordinaryComponentCommentaryRequired: false });
     expect(inspectionPolicy('Exit Inspection')).toMatchObject({ requiresBaseline: true, comparisonRequired: true });
+  });
+
+  it('requires area overview evidence for Entry and Routine', () => {
+    const entry = calculateWorkflowGateContext(report('Property Condition Report', {}, {}, { photoReferences: [] }));
+    const routine = calculateWorkflowGateContext(report('Routine Inspection', {}, {}, { photoReferences: [] }));
+    expect(entry.context.requiredEvidenceComplete).toBe(false);
+    expect(routine.context.requiredEvidenceComplete).toBe(false);
+    expect(entry.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'AREA_OVERVIEW_EVIDENCE_REQUIRED' })]));
   });
 
   it('blocks Entry when a component is still unable to confirm', () => {
@@ -97,6 +111,17 @@ describe('inspection type policies', () => {
     ]));
   });
 
+  it('requires every Exit component to be compared', () => {
+    const evaluation = calculateWorkflowGateContext(report('Exit Inspection', {}, {
+      baselineReportId: 'entry-report',
+      baselineReportVersionId: 'entry-version-1',
+    }));
+    expect(evaluation.context.requiredComponentsComplete).toBe(false);
+    expect(evaluation.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'EXIT_COMPARISON_REQUIRED' }),
+    ]));
+  });
+
   it('requires human review for a material Exit comparison', () => {
     const evaluation = calculateWorkflowGateContext(report('Exit Inspection', {
       baselineComponentData: {
@@ -117,5 +142,16 @@ describe('inspection type policies', () => {
     expect(evaluation.blockers).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'EXIT_COMPARISON_REVIEW_REQUIRED' }),
     ]));
+  });
+
+  it('allows a human-confirmed material Exit comparison through the content gate', () => {
+    const evaluation = calculateWorkflowGateContext(report('Exit Inspection', {
+      comparisonStatus: 'material_change',
+      comparisonReviewStatus: 'confirmed',
+    }, {
+      baselineReportId: 'entry-report',
+      baselineReportVersionId: 'entry-version-1',
+    }));
+    expect(evaluation.context.requiredComponentsComplete).toBe(true);
   });
 });
