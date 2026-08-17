@@ -8,6 +8,7 @@ import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.j
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
+import { routeTemplateRequest } from './backend/templateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
@@ -154,6 +155,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceResponse = await routeMaintenanceRequest(req, dependencies, correlationId);
       if (maintenanceResponse) {
         send(res, maintenanceResponse, correlationId);
+        return;
+      }
+
+      const templateResponse = await routeTemplateRequest(req, dependencies, correlationId);
+      if (templateResponse) {
+        send(res, templateResponse, correlationId);
         return;
       }
 
