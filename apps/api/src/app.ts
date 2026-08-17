@@ -5,6 +5,7 @@ import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeAnalysisRequest } from './backend/analysisRoutes.js';
 import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.js';
+import { routeExternalEvidenceRequest } from './backend/externalEvidenceRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
@@ -137,6 +138,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId);
       if (analysisResponse) {
         send(res, analysisResponse, correlationId);
+        return;
+      }
+
+      const externalEvidenceResponse = await routeExternalEvidenceRequest(req, dependencies, correlationId);
+      if (externalEvidenceResponse) {
+        send(res, externalEvidenceResponse, correlationId);
         return;
       }
 
