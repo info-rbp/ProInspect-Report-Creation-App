@@ -19,7 +19,10 @@ function component(index: number, overrides: Record<string, unknown> = {}) {
   };
 }
 
-function input(reportType: string, tenantResponses: Array<Record<string, unknown>> = []): RenderInput {
+function input(
+  reportType: string,
+  tenantResponses: Array<Record<string, unknown>> = [],
+): RenderInput {
   return {
     reportId: 'report-1',
     reportVersionId: 'version-1',
@@ -27,17 +30,30 @@ function input(reportType: string, tenantResponses: Array<Record<string, unknown
     templateVersion: 1,
     approvedAt: '2026-08-17T10:00:00.000Z',
     approvedBy: 'reviewer-1',
-    report: { reportType, propertyAddress: '1 Test Street', inspectionDate: '2026-08-17', agentCompany: 'ProInspect', agentName: 'Reviewer' },
-    areas: [{
-      id: 'living',
-      name: 'Living Room',
-      overallCommentary: 'Area inspected. Exceptions are recorded below where applicable.',
-      photoReferences: [],
-      components: [
-        ...Array.from({ length: 28 }, (_, index) => component(index + 1)),
-        component(29, { conditionCategory: 'repair_required', defects: ['Visible damage'], maintenanceRequired: true, commentary: 'Visible damage noted to this component.' }),
-      ],
-    }],
+    report: {
+      reportType,
+      propertyAddress: '1 Test Street',
+      inspectionDate: '2026-08-17',
+      agentCompany: 'ProInspect',
+      agentName: 'Reviewer',
+    },
+    areas: [
+      {
+        id: 'living',
+        name: 'Living Room',
+        overallCommentary: 'Area inspected. Exceptions are recorded below where applicable.',
+        photoReferences: [],
+        components: [
+          ...Array.from({ length: 28 }, (_, index) => component(index + 1)),
+          component(29, {
+            conditionCategory: 'repair_required',
+            defects: ['Visible damage'],
+            maintenanceRequired: true,
+            commentary: 'Visible damage noted to this component.',
+          }),
+        ],
+      },
+    ],
     assets: [],
     ...(tenantResponses.length ? { tenantResponses } : {}),
   };
@@ -61,20 +77,61 @@ describe('specialised PDF presentation', () => {
 
   it('renders tenant responses as a separate append-only section', async () => {
     const withoutResponse = await pages(input('Property Condition Report'));
-    const withResponse = await pages(input('Property Condition Report', [{
-      id: 'tenant-response-1',
-      respondentName: 'Tenant One',
-      submittedAt: '2026-08-18T10:00:00.000Z',
-      status: 'submitted',
-      tenantResponseNote: 'Tenant records an additional observation for review.',
-      items: [{ componentId: 'component-1', response: 'comment', comment: 'Additional tenant observation.', photoIds: ['tenant-photo-1'] }],
-    }]));
+    const withResponse = await pages(
+      input('Property Condition Report', [
+        {
+          id: 'tenant-response-1',
+          respondentName: 'Tenant One',
+          submittedAt: '2026-08-18T10:00:00.000Z',
+          status: 'submitted',
+          tenantResponseNote: 'Tenant records an additional observation for review.',
+          items: [
+            {
+              componentId: 'component-1',
+              response: 'comment',
+              comment: 'Additional tenant observation.',
+              photoIds: ['tenant-photo-1'],
+            },
+          ],
+        },
+      ]),
+    );
     expect(withResponse).toBeGreaterThan(withoutResponse);
   });
 
   it('changes the canonical render identity when tenant response content changes', () => {
-    const first = buildRenderPackage(input('Property Condition Report', [{ id: 'response-1', items: [{ componentId: 'component-1', response: 'comment', comment: 'First observation.', photoIds: [] }] }]), '2026-08-17T10:00:00.000Z');
-    const second = buildRenderPackage(input('Property Condition Report', [{ id: 'response-1', items: [{ componentId: 'component-1', response: 'comment', comment: 'Changed observation.', photoIds: [] }] }]), '2026-08-17T10:00:00.000Z');
+    const first = buildRenderPackage(
+      input('Property Condition Report', [
+        {
+          id: 'response-1',
+          items: [
+            {
+              componentId: 'component-1',
+              response: 'comment',
+              comment: 'First observation.',
+              photoIds: [],
+            },
+          ],
+        },
+      ]),
+      '2026-08-17T10:00:00.000Z',
+    );
+    const second = buildRenderPackage(
+      input('Property Condition Report', [
+        {
+          id: 'response-1',
+          items: [
+            {
+              componentId: 'component-1',
+              response: 'comment',
+              comment: 'Changed observation.',
+              photoIds: [],
+            },
+          ],
+        },
+      ]),
+      '2026-08-17T10:00:00.000Z',
+    );
     expect(first.canonicalInputHash).not.toBe(second.canonicalInputHash);
     expect(first.renderId).not.toBe(second.renderId);
   });
