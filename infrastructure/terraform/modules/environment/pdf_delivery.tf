@@ -1,13 +1,22 @@
-# Production PDF delivery wiring.
+# Production PDF and archive delivery wiring.
 #
 # The API publishes final-PDF jobs to google_pubsub_topic.pdf. Pub/Sub pushes the
 # authenticated payload to the private pdf-worker Cloud Run service. This keeps
 # retries outside the browser/API process while preserving IAM-only access.
+#
+# The API also creates immutable archive manifests after finalisation, so it has
+# create-only access to the report bucket in addition to its existing viewer role.
 
 resource "google_storage_bucket_iam_member" "pdf_worker_upload_viewer" {
   bucket = google_storage_bucket.uploads.name
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_service_account.runtime["pdf_worker"].email}"
+}
+
+resource "google_storage_bucket_iam_member" "api_report_archive_creator" {
+  bucket = google_storage_bucket.reports.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.runtime["api"].email}"
 }
 
 resource "google_cloud_run_v2_service_iam_member" "pdf_worker_pubsub_invoker" {
