@@ -255,6 +255,8 @@ export interface InspectionJob {
   googleDriveFolderId?: string;
   shopifyOrderId?: string;
   notes?: string;
+  /** Optimistic-lock version returned by the server-authoritative API. */
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
