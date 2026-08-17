@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle, Clock, Hammer, Plus, RefreshCw, Search, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Plus, RefreshCw, Search, ShieldAlert } from 'lucide-react';
 import type { MaintenanceCandidate, MaintenanceCategory, MaintenanceItem, MaintenancePriority } from '../../types/platform';
 import {
   confirmMaintenanceCandidate,
