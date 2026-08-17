@@ -1,4 +1,8 @@
-import type { ReportAggregate } from '@pcr/domain';
+import type {
+  LegacyBaselineComponentMapping,
+  LegacyBaselineSource,
+  ReportAggregate,
+} from '@pcr/domain';
 import type { ReportData, Room } from '../../types';
 import type { InspectionJob, PropertyRecord } from '../../types/platform';
 import { apiRequest } from '../apiClient';
@@ -60,7 +64,7 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
 export async function createInspectionReportForJob(
   job: InspectionJob,
   property: PropertyRecord,
-  options: { clientName?: string; inspectionDate?: string } = {},
+  options: { clientName?: string; inspectionDate?: string; allowLegacyBaseline?: boolean } = {},
 ): Promise<ReportAggregate> {
   if (!job.version) throw new Error('Inspection job version is required. Reload the job before creating its report.');
   const rooms = seedRoomsFromProperty(property);
@@ -71,8 +75,21 @@ export async function createInspectionReportForJob(
       reportType: job.reportType,
       clientName: options.clientName || '',
       inspectionDate: options.inspectionDate || new Date().toISOString().slice(0, 10),
+      ...(options.allowLegacyBaseline ? { allowLegacyBaseline: true } : {}),
       areas: roomAreas(rooms),
     },
+  });
+}
+
+export async function saveLegacyBaselineMapping(
+  report: Pick<ReportData, 'id' | 'agencyId' | 'version'>,
+  source: LegacyBaselineSource,
+  mappings: LegacyBaselineComponentMapping[],
+): Promise<ReportAggregate> {
+  if (!report.version) throw new Error('Current report version is required before saving a legacy baseline mapping.');
+  return apiRequest<ReportAggregate>(report.agencyId, `/api/v1/reports/${encodeURIComponent(report.id)}/legacy-baseline`, {
+    method: 'POST',
+    body: { expectedVersion: report.version, source, mappings },
   });
 }
 
