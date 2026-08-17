@@ -45,7 +45,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function legacyExitFallback(path: string, body: unknown, error: ApiErrorEnvelope['error']): Record<string, unknown> | undefined {
+function legacyExitFallback(
+  path: string,
+  body: unknown,
+  error: ApiErrorEnvelope['error'],
+): Record<string, unknown> | undefined {
   if (error?.code !== 'ENTRY_BASELINE_REQUIRED') return undefined;
   if (!/^\/api\/v1\/inspection-jobs\/[^/]+\/create-report$/u.test(path)) return undefined;
   if (!isRecord(body) || body.allowLegacyBaseline === true) return undefined;
@@ -55,7 +59,11 @@ function legacyExitFallback(path: string, body: unknown, error: ApiErrorEnvelope
 export async function apiRequest<T>(
   agencyId: string | undefined,
   path: string,
-  init: { method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown; idempotencyKey?: string } = {},
+  init: {
+    method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+    body?: unknown;
+    idempotencyKey?: string;
+  } = {},
 ): Promise<T> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
   if (!baseUrl) throw new Error('VITE_API_BASE_URL is required for cloud operations.');
@@ -67,7 +75,8 @@ export async function apiRequest<T>(
   }
   if (!user) throw new Error('Sign in before accessing cloud records.');
   const tokenResult = await user.getIdTokenResult();
-  const claimAgency = typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId : undefined;
+  const claimAgency =
+    typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId : undefined;
   const resolvedAgencyId = agencyId || user.tenantId || claimAgency;
   if (!resolvedAgencyId) throw new Error('The signed-in identity is not linked to an agency.');
   const appCheckValue = await appCheckToken();
@@ -81,13 +90,18 @@ export async function apiRequest<T>(
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (method !== 'GET') headers['idempotency-key'] = init.idempotencyKey ?? newIdempotencyKey();
 
-  const execute = async (body: unknown): Promise<{ response: Response; payload: ApiEnvelope<T> & ApiErrorEnvelope }> => {
+  const execute = async (
+    body: unknown,
+  ): Promise<{ response: Response; payload: ApiEnvelope<T> & ApiErrorEnvelope }> => {
     const response = await fetch(`${baseUrl.replace(/\/$/u, '')}${path}`, {
       method,
       headers,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    return { response, payload: await response.json() as ApiEnvelope<T> & ApiErrorEnvelope };
+    return {
+      response,
+      payload: (await response.json()) as ApiEnvelope<T> & ApiErrorEnvelope,
+    };
   };
 
   let result = await execute(init.body);
