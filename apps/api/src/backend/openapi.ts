@@ -51,6 +51,15 @@ function commandOperation(resource: 'maintenance-items' | 'work-requests' | 'ten
   };
 }
 
+function templateParameters(includeVersion = false, includeAction = false) {
+  return [
+    { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+    { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+    ...(includeVersion ? [{ name: 'version', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } }] : []),
+    ...(includeAction ? [{ name: 'action', in: 'path', required: true, schema: { type: 'string', enum: ['publish', 'duplicate', 'retire'] } }] : []),
+  ];
+}
+
 export function buildOpenApiDocument() {
   const paths: Record<string, unknown> = {};
   for (const resource of API_ROUTE_NAMES) {
@@ -83,6 +92,55 @@ export function buildOpenApiDocument() {
     };
   }
 
+  paths['/api/v1/templates/drafts'] = {
+    post: {
+      operationId: 'createTemplateDraft',
+      tags: ['templates'],
+      description: 'Creates a new editable template business version in draft state. Published and retired states cannot be supplied.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [
+        { name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } },
+        { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } },
+      ],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['template'], properties: { template: { type: 'object', additionalProperties: true } } } } } },
+      responses: { '201': { description: 'Draft version created' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'template.manage',
+    },
+  };
+  paths['/api/v1/templates/{id}/versions/{version}'] = {
+    get: {
+      operationId: 'getTemplateVersion',
+      tags: ['templates'],
+      description: 'Reads one exact template business version.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: templateParameters(true),
+      responses: { '200': { description: 'Exact template version' }, '404': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'report.read',
+    },
+    put: {
+      operationId: 'updateTemplateDraft',
+      tags: ['templates'],
+      description: 'Replaces an editable draft using expectedRecordVersion optimistic locking. Published and retired versions are immutable.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [...templateParameters(true), { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['expectedRecordVersion', 'template'], properties: { expectedRecordVersion: { type: 'integer', minimum: 1 }, template: { type: 'object', additionalProperties: true } } } } } },
+      responses: { '200': { description: 'Draft updated' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'template.manage',
+    },
+  };
+  paths['/api/v1/templates/{id}/versions/{version}/actions/{action}'] = {
+    post: {
+      operationId: 'transitionTemplateVersion',
+      tags: ['templates'],
+      description: 'Publishes, duplicates or retires an exact template version. Publishing makes the version immutable and updates the logical published pointer used for new reports.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [...templateParameters(true, true), { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['expectedRecordVersion'], properties: { expectedRecordVersion: { type: 'integer', minimum: 1 } } } } } },
+      responses: { '200': { description: 'Template lifecycle action completed' }, '201': { description: 'New draft version created by duplicate' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'template.manage',
+    },
+  };
+
   paths['/api/v1/inspection-jobs/{id}/transitions'] = {
     post: {
       ...operation('inspection-jobs', 'post', false),
@@ -94,7 +152,7 @@ export function buildOpenApiDocument() {
     post: {
       ...operation('inspection-jobs', 'post', false),
       operationId: 'createInspectionReportForJob',
-      description: 'Creates or safely reuses the server-authoritative report linked to an inspection job. The server resolves the canonical Entry, Routine, Exit, Comparison or Maintenance policy, binds a published template version, and for Exit binds the eligible immutable Entry baseline for the same property and tenancy.',
+      description: 'Creates or safely reuses the server-authoritative report linked to an inspection job. The server resolves the canonical Entry, Routine, Exit, Comparison or Maintenance policy, binds a published template version, and for Exit binds the eligible immutable Entry baseline for the same property and tenancy. When no structured Entry exists, clients may explicitly request the reviewed legacy-baseline workflow.',
       requestBody: {
         required: true,
         content: {
@@ -108,6 +166,7 @@ export function buildOpenApiDocument() {
                 reportType: { type: 'string' },
                 clientName: { type: 'string' },
                 inspectionDate: { type: 'string', format: 'date' },
+                allowLegacyBaseline: { type: 'boolean', description: 'Explicitly permits a legacy_unstructured placeholder only when no eligible structured Entry version exists.' },
                 areas: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: true } },
               },
             },
@@ -121,6 +180,51 @@ export function buildOpenApiDocument() {
         '409': { $ref: '#/components/responses/Error' },
         '422': { $ref: '#/components/responses/Error' },
       },
+    },
+  };
+  paths['/api/v1/reports/{id}/legacy-baseline'] = {
+    post: {
+      ...operation('reports', 'post', false),
+      operationId: 'saveReviewedLegacyEntryBaselineMapping',
+      description: 'Saves a human-reviewed mapping from an older unstructured Entry source to stable Exit area/component IDs. Confidence is capped for legacy sources and operational status cannot be confirmed without explicit tested evidence.',
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['expectedVersion', 'source', 'mappings'], properties: { expectedVersion: { type: 'integer', minimum: 1 }, source: { type: 'object', additionalProperties: true }, mappings: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: true } } } } } } },
+      responses: { '200': { description: 'Legacy mapping updated' }, '201': { description: 'Legacy mapping created' }, '400': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'report.edit',
+    },
+  };
+  paths['/api/v1/maintenance-reports/create'] = {
+    post: {
+      operationId: 'createMaintenanceFollowUpReport',
+      tags: ['maintenance-items', 'reports'],
+      description: 'Creates or reuses a targeted Maintenance / Follow-Up report and linked inspection job for one or more Maintenance Items from the same property/tenancy context. Source facts become baseline only; current assessment starts unconfirmed/untested.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [{ name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['maintenanceItemIds'], properties: { maintenanceItemIds: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'string' } }, inspectionDate: { type: 'string', format: 'date' } } } } } },
+      responses: { '200': { description: 'Existing deterministic follow-up report reused' }, '201': { description: 'Targeted follow-up report created' }, '409': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'maintenance.manage',
+    },
+  };
+  paths['/api/v1/properties/{id}/history'] = {
+    get: {
+      operationId: 'getImmutablePropertyComponentHistory',
+      tags: ['properties', 'reports', 'maintenance-items'],
+      description: 'Projects read-only property/component history from immutable report versions and linked Maintenance records. Historical report content is never mutated.',
+      security: [{ bearerAuth: [], appCheck: [], agency: [] }],
+      parameters: [{ name: 'x-agency-id', in: 'header', required: true, schema: { type: 'string' } }, { name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Immutable property/component history' }, '404': { $ref: '#/components/responses/Error' } },
+      'x-required-capability': 'property.read',
+    },
+  };
+  paths['/api/v1/external/evidence/{grantToken}/upload-session'] = {
+    post: {
+      operationId: 'createScopedExternalEvidenceUploadSession',
+      tags: ['external-access-grants', 'uploads'],
+      description: 'Creates a canonical immutable photo-evidence upload session scoped by a valid, unexpired Work Request or Tenant Instruction access grant. The grant does not confer ordinary authenticated upload access.',
+      security: [],
+      parameters: [{ name: 'grantToken', in: 'path', required: true, schema: { type: 'string', minLength: 16 } }],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['fileName', 'contentType', 'size', 'sha256'], properties: { fileName: { type: 'string' }, contentType: { type: 'string', enum: ['image/jpeg', 'image/png', 'image/heic', 'image/heif'] }, size: { type: 'integer', minimum: 1, maximum: 26214400 }, sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } } } },
+      responses: { '201': { description: 'Scoped resumable evidence upload session' }, '400': { $ref: '#/components/responses/Error' }, '401': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' } },
+      'x-authorisation': 'external-grant-token',
     },
   };
   paths['/api/v1/reports/{id}/aggregate'] = {
