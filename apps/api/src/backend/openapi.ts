@@ -12,7 +12,7 @@ function operation(resource: string, method: 'get' | 'post' | 'patch' | 'put', c
       ...(!collection ? [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }] : []),
       ...(method !== 'get' ? [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 200 } }] : []),
     ],
-    ...(method !== 'get' ? { requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } } : {}),
+    ...(method !== 'get' ? { requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } : {}),
     responses: {
       [method === 'post' ? '201' : '200']: { description: 'Successful response' },
       '400': { $ref: '#/components/responses/Error' },
@@ -46,6 +46,39 @@ export function buildOpenApiDocument() {
       ...operation('inspection-jobs', 'post', false),
       operationId: 'transitionInspectionJob',
       responses: { '200': { description: 'Workflow transition completed' }, '409': { $ref: '#/components/responses/Error' } },
+    },
+  };
+  paths['/api/v1/inspection-jobs/{id}/create-report'] = {
+    post: {
+      ...operation('inspection-jobs', 'post', false),
+      operationId: 'createInspectionReportForJob',
+      description: 'Creates or safely reuses the server-authoritative report linked to an inspection job. The server resolves the canonical Entry, Routine, Exit, Comparison or Maintenance policy, binds a published template version, and for Exit binds the eligible immutable Entry baseline for the same property and tenancy.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['expectedJobVersion', 'areas'],
+              properties: {
+                expectedJobVersion: { type: 'integer', minimum: 1 },
+                reportType: { type: 'string' },
+                clientName: { type: 'string' },
+                inspectionDate: { type: 'string', format: 'date' },
+                areas: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: true } },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        '200': { description: 'Existing linked report safely reused' },
+        '201': { description: 'Inspection report created and linked to the job' },
+        '400': { $ref: '#/components/responses/Error' },
+        '409': { $ref: '#/components/responses/Error' },
+        '422': { $ref: '#/components/responses/Error' },
+      },
     },
   };
   paths['/api/v1/reports/{id}/aggregate'] = {
