@@ -198,8 +198,10 @@ export interface ReportMetadataRecord {
   renderManifestObjectPath?: string;
   renderManifestSha256?: string;
   pdfGeneratedAt?: string;
+  archiveReportVersionId?: string;
   archiveManifestObjectPath?: string;
   archiveManifestSha256?: string;
+  archiveCreatedAt?: string;
   archivedAt?: string;
   areaCount: number;
   componentCount: number;

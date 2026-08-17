@@ -68,6 +68,7 @@ function parsePreviousReportInput(raw: unknown): PreviousReportInput | undefined
 }
 
 type ExitComparisonComponentInput = Parameters<typeof generateExitComparisonServer>[2];
+type ExitComparisonPhotoReference = NonNullable<ExitComparisonComponentInput['photoReferences']>[number];
 
 function parseExitComparisonComponent(value: unknown): ExitComparisonComponentInput {
   const item = value && typeof value === 'object' && !Array.isArray(value)
@@ -81,7 +82,7 @@ function parseExitComparisonComponent(value: unknown): ExitComparisonComponentIn
     commentary: typeof item.commentary === 'string' ? item.commentary : '',
     defects: Array.isArray(item.defects) ? item.defects.filter((defect): defect is string => typeof defect === 'string') : [],
     photoReferences: Array.isArray(item.photoReferences)
-      ? item.photoReferences.filter((reference): reference is ExitComparisonComponentInput['photoReferences'][number] => (
+      ? item.photoReferences.filter((reference): reference is ExitComparisonPhotoReference => (
           Boolean(reference) &&
           typeof reference === 'object' &&
           typeof (reference as { photoId?: unknown }).photoId === 'string' &&
