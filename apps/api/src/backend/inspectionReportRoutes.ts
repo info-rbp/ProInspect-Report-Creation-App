@@ -119,10 +119,7 @@ async function resolvePublishedTemplate(
     .sort((left, right) => Number(right.templateVersion ?? right.version ?? 0) - Number(left.templateVersion ?? left.version ?? 0));
   const chosen = matches[0];
   if (chosen) {
-    return {
-      id: chosen.id,
-      version: Number(chosen.templateVersion ?? chosen.version ?? 1),
-    };
+    return { id: chosen.id, version: Number(chosen.templateVersion ?? chosen.version ?? 1) };
   }
 
   const policy = inspectionPolicy(canonicalType);
@@ -142,11 +139,7 @@ async function resolvePublishedTemplate(
   return { id: templateId, version: 1 };
 }
 
-function baselineEligible(
-  report: Record<string, unknown>,
-  propertyId: string,
-  tenancyId?: string,
-): boolean {
+function baselineEligible(report: Record<string, unknown>, propertyId: string, tenancyId?: string): boolean {
   if (report.propertyId !== propertyId) return false;
   if (tenancyId && report.tenancyId !== tenancyId) return false;
   if (canonicalInspectionType(String(report.reportType ?? '')) !== 'entry') return false;
@@ -230,6 +223,41 @@ function bindBaseline(
   }));
 }
 
+function propertyAddress(property: Record<string, unknown>): string {
+  return [property.address, property.suburb, property.state, property.postcode]
+    .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
+    .map(String)
+    .filter((value) => value.trim())
+    .join(', ') || 'Property';
+}
+
+async function recoverDeterministicReport(
+  dependencies: ApiDependencies,
+  input: {
+    agencyId: string;
+    jobId: string;
+    jobVersion: number;
+    reportId: string;
+    actorId: string;
+  },
+): Promise<ReportAggregate | undefined> {
+  const existing = await dependencies.reports.load(input.agencyId, input.reportId);
+  if (!existing) return undefined;
+  if (existing.report.inspectionJobId !== input.jobId) {
+    throw new ApiError(409, 'DETERMINISTIC_REPORT_CONFLICT', 'The deterministic report identifier is already used by a different inspection job.');
+  }
+  const policy = inspectionPolicy(existing.report.reportType);
+  await dependencies.repository.update('inspectionJobs', input.agencyId, input.jobId, {
+    reportId: existing.report.id,
+    templateId: existing.report.templateId,
+    templateVersion: existing.report.templateVersion,
+    tenantResponseRequired: policy.tenantReviewDefault,
+    ...(existing.report.baselineReportId ? { baselineReportId: existing.report.baselineReportId } : {}),
+    ...(existing.report.baselineReportVersionId ? { baselineReportVersionId: existing.report.baselineReportVersionId } : {}),
+  }, input.jobVersion, input.actorId);
+  return existing;
+}
+
 export async function routeInspectionReportRequest(
   req: IncomingMessage,
   dependencies: ApiDependencies,
@@ -237,33 +265,26 @@ export async function routeInspectionReportRequest(
 ): Promise<ApiResponse | undefined> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const parts = url.pathname.split('/').filter(Boolean);
-  if (parts[0] !== 'api' || parts[1] !== 'v1' || parts[2] !== 'inspection-jobs' || !parts[3] || parts[4] !== 'create-report') {
-    return undefined;
-  }
+  if (parts[0] !== 'api' || parts[1] !== 'v1' || parts[2] !== 'inspection-jobs' || !parts[3] || parts[4] !== 'create-report') return undefined;
   if (req.method !== 'POST') throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Create-report endpoint requires POST.');
 
   const agencyId = agencyHeader(req);
   const jobId = parts[3];
   const job = await dependencies.repository.get('inspectionJobs', agencyId, jobId);
   if (!job) throw new ApiError(404, 'JOB_NOT_FOUND', 'Inspection job not found.');
-  const principal = await authenticateAndAuthorise(
-    req,
-    dependencies,
-    'job.manage',
-    {
-      agencyId,
-      inspectionJobId: jobId,
-      ...(typeof job.propertyId === 'string' ? { propertyId: job.propertyId } : {}),
-      ...(typeof job.tenancyId === 'string' ? { tenancyId: job.tenancyId } : {}),
-      ...(typeof job.assignedInspectorId === 'string' ? { assignedInspectorId: job.assignedInspectorId } : {}),
-      ...(typeof job.assignedReviewerId === 'string' ? { assignedReviewerId: job.assignedReviewerId } : {}),
-    },
-    correlationId,
-  );
+  const principal = await authenticateAndAuthorise(req, dependencies, 'job.manage', {
+    agencyId,
+    inspectionJobId: jobId,
+    ...(typeof job.propertyId === 'string' ? { propertyId: job.propertyId } : {}),
+    ...(typeof job.tenancyId === 'string' ? { tenancyId: job.tenancyId } : {}),
+    ...(typeof job.assignedInspectorId === 'string' ? { assignedInspectorId: job.assignedInspectorId } : {}),
+    ...(typeof job.assignedReviewerId === 'string' ? { assignedReviewerId: job.assignedReviewerId } : {}),
+  }, correlationId);
 
   if (typeof job.reportId === 'string' && job.reportId.trim()) {
     const existing = await dependencies.reports.load(agencyId, job.reportId);
-    if (existing) return { status: 200, body: { data: existing, meta: { correlationId, existing: true } } };
+    if (!existing) throw new ApiError(409, 'LINKED_REPORT_MISSING', 'Inspection job references a report that cannot be loaded. Repair the link before creating another report.');
+    return { status: 200, body: { data: existing, meta: { correlationId, existing: true } } };
   }
 
   const body = await readJson(req);
@@ -271,6 +292,31 @@ export async function routeInspectionReportRequest(
   if (!expectedJobVersion || expectedJobVersion !== job.version) {
     throw new ApiError(409, 'VERSION_CONFLICT', 'Inspection job changed before report creation. Reload and retry.');
   }
+
+  const reportId = `report-${jobId}`;
+  const recovered = await recoverDeterministicReport(dependencies, {
+    agencyId,
+    jobId,
+    jobVersion: expectedJobVersion,
+    reportId,
+    actorId: principal.uid,
+  });
+  if (recovered) {
+    await dependencies.audit.append({
+      id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      actorId: principal.uid,
+      actorRole: principal.role,
+      agencyId,
+      capability: 'job.manage',
+      outcome: 'allowed',
+      reason: 'inspection_report_link_recovered',
+      target: { agencyId, inspectionJobId: jobId, reportId },
+      correlationId,
+    });
+    return { status: 200, body: { data: recovered, meta: { correlationId, existing: true, recovered: true } } };
+  }
+
   const propertyId = typeof job.propertyId === 'string' ? job.propertyId : '';
   if (!propertyId) throw new ApiError(422, 'PROPERTY_REQUIRED', 'Inspection job has no linked property.');
   const property = await dependencies.repository.get('properties', agencyId, propertyId);
@@ -288,17 +334,11 @@ export async function routeInspectionReportRequest(
   if (policy.requiresBaseline && canonicalType === 'exit') {
     baseline = await resolveEntryBaseline(dependencies, agencyId, propertyId, tenancyId);
     if (!baseline) {
-      throw new ApiError(
-        422,
-        'ENTRY_BASELINE_REQUIRED',
-        'Exit Inspection requires an eligible immutable Entry Property Condition Report linked to the same property and tenancy.',
-      );
+      throw new ApiError(422, 'ENTRY_BASELINE_REQUIRED', 'Exit Inspection requires an eligible immutable Entry Property Condition Report linked to the same property and tenancy.');
     }
-    const baselineVersionId = String(baseline.currentVersionId);
-    areas = bindBaseline(areas, await loadBaselineVersion(agencyId, String(baseline.id), baselineVersionId));
+    areas = bindBaseline(areas, await loadBaselineVersion(agencyId, String(baseline.id), String(baseline.currentVersionId)));
   }
 
-  const reportId = `report-${jobId}`;
   const tenantNames = Array.isArray(tenancy?.tenantNames)
     ? tenancy.tenantNames.filter((name): name is string => typeof name === 'string')
     : [];
@@ -310,7 +350,7 @@ export async function routeInspectionReportRequest(
       ...(tenancyId ? { tenancyId } : {}),
       inspectionJobId: jobId,
       reportType: policy.displayName,
-      propertyAddress: typeof property.address === 'string' ? property.address : 'Property',
+      propertyAddress: propertyAddress(property),
       clientName: typeof body.clientName === 'string' ? body.clientName : '',
       tenantName: tenantNames.join(', '),
       inspectionDate: typeof body.inspectionDate === 'string' ? body.inspectionDate : new Date().toISOString().slice(0, 10),
