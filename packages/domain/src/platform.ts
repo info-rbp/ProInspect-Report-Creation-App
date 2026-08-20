@@ -13,10 +13,6 @@ export type EntityStatus = 'active' | 'inactive' | 'archived';
 
 /**
  * The five report types supported by the shared inspection product model.
- *
- * Entry, Routine and Exit are the first-release field-inspection modules.
- * Comparison and Maintenance are recognised by the domain now and are
- * completed as operational modules during Phase 2.
  */
 export const INSPECTION_REPORT_TYPES = [
   'Property Condition Report',
@@ -76,11 +72,6 @@ export type ReportLifecycleStatus =
   | 'archived'
   | 'cancelled';
 
-/**
- * Stage-specific operational conditions. These do not replace the durable
- * lifecycle state. For example, an archive failure leaves a report finalised
- * until archival succeeds.
- */
 export type WorkflowExceptionCode =
   | 'evidence_upload_failed'
   | 'analysis_failed'
@@ -125,6 +116,344 @@ export interface Client {
   updatedAt: string;
 }
 
+/** Property identity is deliberately multi-dimensional. An apartment can be residential + apartment + strata. */
+export type PropertyUse =
+  | 'residential'
+  | 'commercial'
+  | 'industrial'
+  | 'retail'
+  | 'mixed_use'
+  | 'strata_common_property'
+  | 'other';
+
+export type PhysicalPropertyType =
+  | 'house'
+  | 'apartment'
+  | 'unit'
+  | 'townhouse'
+  | 'villa'
+  | 'duplex'
+  | 'studio'
+  | 'ancillary_dwelling'
+  | 'retirement_supported'
+  | 'office'
+  | 'retail_shop'
+  | 'warehouse'
+  | 'industrial_unit'
+  | 'showroom'
+  | 'medical_consulting'
+  | 'hospitality'
+  | 'restaurant_cafe'
+  | 'childcare'
+  | 'mixed_commercial'
+  | 'common_property'
+  | 'other';
+
+export type OwnershipStructure =
+  | 'freehold'
+  | 'strata'
+  | 'survey_strata'
+  | 'community_title'
+  | 'company_title'
+  | 'common_property'
+  | 'unknown'
+  | 'other';
+
+/** Legacy room types remain supported because report seeding consumes them. */
+export type RoomType =
+  | 'bedroom'
+  | 'bathroom'
+  | 'living'
+  | 'kitchen'
+  | 'dining'
+  | 'outdoor'
+  | 'laundry'
+  | 'garage'
+  | 'study'
+  | 'hallway'
+  | 'storage'
+  | 'office'
+  | 'retail'
+  | 'warehouse'
+  | 'amenities'
+  | 'plant'
+  | 'safety'
+  | 'other';
+
+export interface RoomConfigItem {
+  id: string;
+  name: string;
+  roomType: RoomType;
+  floorLevel?: string;
+  buildingName?: string;
+  parentAreaId?: string;
+  responsibility?: 'lot' | 'common_property' | 'exclusive_use' | 'shared' | 'unknown';
+  notes?: string;
+  itemsPreset?: string[];
+}
+
+export type PropertyLayoutNodeKind = 'site' | 'building' | 'level' | 'area';
+
+export interface PropertyLayoutNode {
+  id: string;
+  name: string;
+  kind: PropertyLayoutNodeKind;
+  parentId?: string;
+  roomType?: RoomType;
+  floorLevel?: string;
+  responsibility?: 'lot' | 'common_property' | 'exclusive_use' | 'shared' | 'unknown';
+  notes?: string;
+  itemsPreset?: string[];
+  order: number;
+}
+
+export interface PropertyLayoutVersion {
+  id: string;
+  version: number;
+  label: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  changeReason?: string;
+  templateId?: string;
+  nodes: PropertyLayoutNode[];
+  roomsConfig: RoomConfigItem[];
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface StrataDetails {
+  schemeName?: string;
+  strataPlanNumber?: string;
+  lotNumber?: string;
+  unitNumber?: string;
+  buildingName?: string;
+  strataCompany?: string;
+  strataManagerName?: string;
+  strataManagerEmail?: string;
+  strataManagerPhone?: string;
+  commonPropertyResponsibility?: string;
+  exclusiveUseAreas?: string[];
+  allocatedParkingBay?: string;
+  storageLot?: string;
+  byLawNotes?: string;
+  accessArrangements?: string;
+}
+
+export interface LandlordDetails {
+  name?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  address?: string;
+  contactPreference?: 'email' | 'phone' | 'sms';
+  notes?: string;
+}
+
+export interface TenantDetails {
+  primaryTenantName?: string;
+  primaryTenantEmail?: string;
+  primaryTenantPhone?: string;
+  additionalTenants?: string[];
+  leaseStartDate?: string;
+  leaseEndDate?: string;
+  rentAmount?: number;
+  rentFrequency?: 'weekly' | 'fortnightly' | 'monthly';
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  occupancyStatus?: 'tenanted' | 'vacant' | 'notice_given';
+  notes?: string;
+}
+
+export interface AccessDetails {
+  keyNumbers?: string;
+  lockboxCode?: string;
+  alarmCode?: string;
+  accessNotes?: string;
+}
+
+export interface PropertyFeatures {
+  airConditioning?: boolean;
+  heating?: boolean;
+  pool?: boolean;
+  furnished?: boolean;
+  petsAllowed?: boolean;
+  dishwasher?: boolean;
+  solar?: boolean;
+  courtyard?: boolean;
+  balcony?: boolean;
+  securitySystem?: boolean;
+  lift?: boolean;
+  loadingDock?: boolean;
+  firePanel?: boolean;
+  commercialKitchen?: boolean;
+}
+
+export type PropertyAssetCategory =
+  | 'appliance'
+  | 'hvac'
+  | 'hot_water'
+  | 'solar'
+  | 'security'
+  | 'pool'
+  | 'fire_safety'
+  | 'electrical'
+  | 'plumbing'
+  | 'fixture'
+  | 'commercial_equipment'
+  | 'other';
+
+export interface PropertyAsset {
+  id: string;
+  name: string;
+  category: PropertyAssetCategory;
+  areaId?: string;
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+  installedAt?: string;
+  ownerSupplied?: boolean;
+  warrantyExpiresAt?: string;
+  manualDocumentId?: string;
+  currentCondition?: string;
+  lastWorkingConfirmationAt?: string;
+  lastMaintenanceAt?: string;
+  evidencePhotoIds?: string[];
+  notes?: string;
+  status: 'active' | 'removed' | 'replaced';
+}
+
+export type AccessDeviceType =
+  | 'key'
+  | 'garage_remote'
+  | 'security_fob'
+  | 'access_card'
+  | 'lockbox'
+  | 'alarm_code'
+  | 'gate_remote'
+  | 'other';
+
+export interface PropertyAccessDevice {
+  id: string;
+  type: AccessDeviceType;
+  name: string;
+  quantity: number;
+  identifier?: string;
+  status: 'held' | 'supplied' | 'returned' | 'lost' | 'replaced' | 'inactive';
+  tenancyId?: string;
+  photoId?: string;
+  suppliedAt?: string;
+  returnedAt?: string;
+  notes?: string;
+}
+
+export interface PropertyOwnershipRecord {
+  id: string;
+  clientId?: string;
+  ownerName: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  companyName?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent: boolean;
+  notes?: string;
+}
+
+export interface PropertyTenancyRecord {
+  id: string;
+  tenancyId?: string;
+  tenantNames: string[];
+  tenantEmails?: string[];
+  leaseStartDate?: string;
+  leaseEndDate?: string;
+  status: 'current' | 'historical' | 'upcoming';
+  notes?: string;
+}
+
+export type PropertyDocumentType =
+  | 'entry_report'
+  | 'routine_report'
+  | 'exit_report'
+  | 'maintenance_report'
+  | 'comparison_report'
+  | 'floor_plan'
+  | 'building_plan'
+  | 'property_photo'
+  | 'owner_instruction'
+  | 'furnishing_inventory'
+  | 'appliance_schedule'
+  | 'key_schedule'
+  | 'contractor_report'
+  | 'quote'
+  | 'invoice'
+  | 'completion_report'
+  | 'warranty'
+  | 'compliance_certificate'
+  | 'appliance_manual'
+  | 'strata_plan'
+  | 'exclusive_use_plan'
+  | 'strata_bylaw'
+  | 'other';
+
+export interface HistoricalMappingCandidate {
+  id: string;
+  sourceLabel: string;
+  proposedAreaId?: string;
+  proposedComponentId?: string;
+  confidence?: number;
+  status: 'suggested' | 'confirmed' | 'edited' | 'rejected';
+  reviewerNote?: string;
+}
+
+export interface PropertyDocument {
+  id: string;
+  type: PropertyDocumentType;
+  title: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  sha256?: string;
+  objectPath?: string;
+  generation?: string;
+  source: 'proinspect' | 'legacy_upload' | 'external_system' | 'google_drive' | 'other';
+  sourceSystem?: string;
+  inspectionType?: InspectionReportType;
+  inspectionDate?: string;
+  tenancyId?: string;
+  description?: string;
+  uploadedBy?: string;
+  uploadedAt: string;
+  status: 'uploading' | 'active' | 'archived' | 'failed' | 'local_only';
+  importStatus?: 'not_applicable' | 'uploaded' | 'analysis_pending' | 'review_required' | 'mapped' | 'rejected';
+  mappingCandidates?: HistoricalMappingCandidate[];
+  useAsBaseline?: boolean;
+}
+
+export interface PropertyAlert {
+  id: string;
+  type: 'access' | 'safety' | 'tenant' | 'strata' | 'maintenance' | 'general';
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface PropertyProfilePhoto {
+  id: string;
+  label: 'frontage' | 'street_view' | 'rear' | 'building_entry' | 'car_bay' | 'access_point' | 'other';
+  documentId?: string;
+  photoId?: string;
+  caption?: string;
+}
+
+export interface PropertyOnboardingState {
+  status: 'not_started' | 'in_progress' | 'ready_for_inspection';
+  completedSteps: string[];
+  missingItems?: string[];
+  historicalImportStatus?: 'not_started' | 'in_progress' | 'complete' | 'not_required';
+  updatedAt: string;
+}
+
 export interface PropertyRecord {
   id: string;
   agencyId: string;
@@ -132,10 +461,49 @@ export interface PropertyRecord {
   suburb?: string;
   state?: string;
   postcode?: string;
-  propertyType?: 'house' | 'unit' | 'apartment' | 'townhouse' | 'villa' | 'other';
+
+  /** Legacy propertyType remains for compatibility with existing reports and filters. */
+  propertyType?:
+    | 'house'
+    | 'unit'
+    | 'apartment'
+    | 'townhouse'
+    | 'villa'
+    | 'commercial'
+    | 'duplex'
+    | 'other';
+  propertyUse?: PropertyUse;
+  physicalPropertyType?: PhysicalPropertyType;
+  ownershipStructure?: OwnershipStructure;
+  strataDetails?: StrataDetails;
+
   bedrooms?: number;
   bathrooms?: number;
   parking?: number;
+  livingAreas?: number;
+
+  roomsConfig?: RoomConfigItem[];
+  layoutTemplateId?: string;
+  layoutNodes?: PropertyLayoutNode[];
+  currentLayoutVersionId?: string;
+  layoutVersions?: PropertyLayoutVersion[];
+
+  landlordDetails?: LandlordDetails;
+  tenantDetails?: TenantDetails;
+  ownershipHistory?: PropertyOwnershipRecord[];
+  tenancyHistory?: PropertyTenancyRecord[];
+
+  accessDetails?: AccessDetails;
+  accessDevices?: PropertyAccessDevice[];
+  features?: PropertyFeatures;
+  assets?: PropertyAsset[];
+  documents?: PropertyDocument[];
+  profilePhotos?: PropertyProfilePhoto[];
+  alerts?: PropertyAlert[];
+  floorPlanDocumentIds?: string[];
+  onboarding?: PropertyOnboardingState;
+
+  notes?: string;
   clientIds: string[];
   googleDriveFolderId?: string;
   status: EntityStatus;
@@ -200,6 +568,9 @@ export interface AuditEvent {
     | 'agency'
     | 'user'
     | 'property'
+    | 'property_layout'
+    | 'property_document'
+    | 'property_asset'
     | 'client'
     | 'tenancy'
     | 'inspection_job'
