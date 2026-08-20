@@ -1,3 +1,5 @@
+import './inspectionJobAugmentation.js';
+
 export * from './platform.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
