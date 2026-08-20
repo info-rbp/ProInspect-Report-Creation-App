@@ -5,8 +5,10 @@ import {
   type EncryptedSecret,
 } from './integrationSecurityService.js';
 
+export type IntegrationCredentialProvider = 'shopify' | 'google_calendar' | 'xero';
+
 interface CredentialRecord extends StoredRecord {
-  provider: 'shopify' | 'google_calendar';
+  provider: IntegrationCredentialProvider;
   encryptedSecret: EncryptedSecret;
 }
 
@@ -19,7 +21,7 @@ export async function saveIntegrationCredentials<T>(
   input: {
     agencyId: string;
     connectionId: string;
-    provider: 'shopify' | 'google_calendar';
+    provider: IntegrationCredentialProvider;
     credentials: T;
     actorId: string;
   },
