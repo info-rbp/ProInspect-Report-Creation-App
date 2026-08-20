@@ -6,6 +6,18 @@ import { localGet, localPut } from './localPlatformStore';
 import { getProperty, updateProperty } from './propertyService';
 
 const CHUNK_SIZE = 8 * 1024 * 1024;
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  zip: 'application/zip',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+};
 
 export interface PropertyDocumentUploadMetadata {
   type: PropertyDocumentType;
@@ -39,20 +51,28 @@ function apiEnabled(): boolean {
   return isFirebaseConfigured() && Boolean(import.meta.env.VITE_API_BASE_URL?.trim());
 }
 
+function contentType(file: File): string {
+  if (file.type && file.type !== 'application/octet-stream') return file.type.toLowerCase();
+  const extension = file.name.toLowerCase().split('.').pop() || '';
+  const inferred = MIME_BY_EXTENSION[extension];
+  if (!inferred) throw new Error(`Unsupported property document file type: .${extension || 'unknown'}`);
+  return inferred;
+}
+
 async function sha256(file: File): Promise<string> {
   const bytes = await file.arrayBuffer();
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
-async function uploadChunks(file: File, uploadUrl: string): Promise<void> {
+async function uploadChunks(file: File, uploadUrl: string, mimeType: string): Promise<void> {
   let start = 0;
   while (start < file.size) {
     const end = Math.min(start + CHUNK_SIZE, file.size);
     const response = await fetch(uploadUrl, {
       method: 'PUT',
       headers: {
-        'content-type': file.type || 'application/octet-stream',
+        'content-type': mimeType,
         'content-range': `bytes ${start}-${end - 1}/${file.size}`,
       },
       body: file.slice(start, end),
@@ -72,6 +92,7 @@ async function localUpload(
   file: File,
   metadata: PropertyDocumentUploadMetadata,
   digest: string,
+  mimeType: string,
 ): Promise<PropertyDocument> {
   const id = `document-${generateId()}`;
   const now = new Date().toISOString();
@@ -80,7 +101,7 @@ async function localUpload(
     type: metadata.type,
     title: metadata.title?.trim() || file.name,
     fileName: file.name,
-    contentType: file.type || 'application/octet-stream',
+    contentType: mimeType,
     fileSize: file.size,
     sha256: digest,
     source: metadata.source || 'legacy_upload',
@@ -113,8 +134,9 @@ export async function uploadPropertyDocument(
   file: File,
   metadata: PropertyDocumentUploadMetadata,
 ): Promise<PropertyDocument> {
+  const mimeType = contentType(file);
   const digest = await sha256(file);
-  if (!apiEnabled()) return localUpload(property, file, metadata, digest);
+  if (!apiEnabled()) return localUpload(property, file, metadata, digest, mimeType);
 
   const session = await apiRequest<UploadSession>(
     property.agencyId,
@@ -123,13 +145,13 @@ export async function uploadPropertyDocument(
       method: 'POST',
       body: {
         fileName: file.name,
-        contentType: file.type || 'application/octet-stream',
+        contentType: mimeType,
         fileSize: file.size,
         sha256: digest,
       },
     },
   );
-  await uploadChunks(file, session.resumableUploadUrl);
+  await uploadChunks(file, session.resumableUploadUrl, mimeType);
   return apiRequest<PropertyDocument>(
     property.agencyId,
     `/api/v1/properties/${encodeURIComponent(property.id)}/documents/${encodeURIComponent(session.uploadId)}/complete`,
