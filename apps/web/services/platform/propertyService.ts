@@ -10,9 +10,9 @@ import { apiRequest } from '../apiClient';
 import { getFirestoreDb, isFirebaseConfigured } from '../storageService';
 import { localGet, localList, localPut } from './localPlatformStore';
 
-export type CreatePropertyInput = Omit<PropertyRecord, 'id' | 'createdAt' | 'updatedAt'> & {
-  id?: string;
-};
+export type CreatePropertyInput =
+  Omit<PropertyRecord, 'id' | 'status' | 'createdAt' | 'updatedAt' | 'clientIds'> &
+  Partial<Pick<PropertyRecord, 'clientIds' | 'status'>> & { id?: string };
 
 type VersionedProperty = PropertyRecord & { version?: number };
 
