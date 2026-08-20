@@ -8,6 +8,7 @@ import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.j
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
+import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
@@ -107,6 +108,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         const target = body.target as AuthorisationTarget;
         const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId);
         send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId);
+        return;
+      }
+
+      const propertyDocumentResponse = await routePropertyDocumentRequest(req, dependencies, correlationId);
+      if (propertyDocumentResponse) {
+        send(res, propertyDocumentResponse, correlationId);
         return;
       }
 
