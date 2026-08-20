@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  statuses: write
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -110,3 +111,38 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+  report:
+    if: always()
+    needs: [validate, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish combined validation status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$VALIDATE_RESULT" = "success" ] && [ "$BROWSER_RESULT" = "success" ]; then
+            STATE=success
+            DESCRIPTION="Full validation and browser E2E passed"
+          else
+            STATE=failure
+            DESCRIPTION="Validation=$VALIDATE_RESULT, browser=$BROWSER_RESULT"
+          fi
+          jq -n \
+            --arg state "$STATE" \
+            --arg target_url "$RUN_URL" \
+            --arg description "$DESCRIPTION" \
+            --arg context "ci/full-validation" \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            > status.json
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data @status.json \
+            "https://api.github.com/repos/$REPOSITORY/statuses/$SHA"
