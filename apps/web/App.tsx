@@ -22,11 +22,13 @@ import SettingsPage from './pages/admin/SettingsPage';
 import TemplatesPage from './pages/admin/TemplatesPage';
 import UsersPage from './pages/admin/UsersPage';
 import MaintenancePage from './pages/admin/MaintenancePage';
-import MaintenanceDetailPage from './pages/admin/MaintenanceDetailPage';
+import MaintenanceConfigurationPage from './pages/admin/MaintenanceConfigurationPage';
+import MaintenanceItemConsolePage from './pages/admin/MaintenanceItemConsolePage';
 import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
 import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
+import ExternalMaintenanceQuotePage from './pages/external/ExternalMaintenanceQuotePage';
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
 
@@ -39,6 +41,7 @@ const App: React.FC = () => (
         <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
+        <Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} />
         <Route path="/app" element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />
@@ -65,7 +68,8 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="maintenance" />}>
               <Route path="admin/maintenance" element={<MaintenancePage />} />
-              <Route path="admin/maintenance/:maintenanceId" element={<MaintenanceDetailPage />} />
+              <Route path="admin/maintenance/configuration" element={<MaintenanceConfigurationPage />} />
+              <Route path="admin/maintenance/:maintenanceId" element={<MaintenanceItemConsolePage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="tenant-followup" />}>
               <Route path="admin/tenant-followup" element={<TenantFollowUpPage />} />
