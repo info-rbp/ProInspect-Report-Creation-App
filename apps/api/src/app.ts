@@ -5,6 +5,9 @@ import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeAnalysisRequest } from './backend/analysisRoutes.js';
 import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.js';
+import { routeInspectionOperationsRequest } from './backend/inspectionOperationsRoutes.js';
+import { routeShopifyIntegrationRequest } from './backend/shopifyIntegrationRoutes.js';
+import { routeGoogleCalendarIntegrationRequest } from './backend/googleCalendarIntegrationRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
@@ -109,6 +112,24 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         const target = body.target as AuthorisationTarget;
         const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId);
         send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId);
+        return;
+      }
+
+      const shopifyResponse = await routeShopifyIntegrationRequest(req, dependencies, correlationId);
+      if (shopifyResponse) {
+        send(res, shopifyResponse, correlationId);
+        return;
+      }
+
+      const googleCalendarResponse = await routeGoogleCalendarIntegrationRequest(req, dependencies, correlationId);
+      if (googleCalendarResponse) {
+        send(res, googleCalendarResponse, correlationId);
+        return;
+      }
+
+      const inspectionOperationsResponse = await routeInspectionOperationsRequest(req, dependencies, correlationId);
+      if (inspectionOperationsResponse) {
+        send(res, inspectionOperationsResponse, correlationId);
         return;
       }
 
