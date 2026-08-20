@@ -9,6 +9,7 @@ import { routeInspectionOperationsRequest } from './backend/inspectionOperations
 import { routeShopifyIntegrationRequest } from './backend/shopifyIntegrationRoutes.js';
 import { routeGoogleCalendarIntegrationRequest } from './backend/googleCalendarIntegrationRoutes.js';
 import { routeXeroIntegrationRequest } from './backend/xeroIntegrationRoutes.js';
+import { routePriceBookUploadRequest } from './backend/priceBookUploadRoutes.js';
 import { routeMaintenanceCommercialRequest } from './backend/maintenanceCommercialRoutes.js';
 import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanceCandidateCommercialRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
@@ -181,6 +182,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId);
       if (analysisResponse) {
         send(res, analysisResponse, correlationId);
+        return;
+      }
+
+      const priceBookUploadResponse = await routePriceBookUploadRequest(req, dependencies, correlationId);
+      if (priceBookUploadResponse) {
+        send(res, priceBookUploadResponse, correlationId);
         return;
       }
 
