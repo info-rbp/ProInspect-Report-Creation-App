@@ -11,6 +11,7 @@ import LoginRoutePage from './pages/LoginRoutePage';
 import AdminHomePage from './pages/admin/AdminHomePage';
 import InspectionJobConsolePage from './pages/admin/InspectionJobConsolePage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
+import InspectionOperationsConfigurationPage from './pages/admin/InspectionOperationsConfigurationPage';
 import PropertiesPage from './pages/admin/PropertiesPage';
 import PropertyBulkImportPage from './pages/admin/PropertyBulkImportPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
@@ -53,6 +54,7 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="jobs" />}>
               <Route path="admin/jobs" element={<InspectionJobsPage />} />
+              <Route path="admin/jobs/configuration" element={<InspectionOperationsConfigurationPage />} />
               <Route path="admin/jobs/:jobId" element={<InspectionJobConsolePage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="reports" />}>
