@@ -5,6 +5,7 @@ const LOCAL_PLATFORM_DB = 'proinspect-platform-db';
 export type PlatformStoreName =
   | 'clients'
   | 'properties'
+  | 'tenancies'
   | 'inspectionJobs'
   | 'reportIndexes'
   | 'users'
@@ -13,6 +14,7 @@ export type PlatformStoreName =
 const STORE_NAMES: PlatformStoreName[] = [
   'clients',
   'properties',
+  'tenancies',
   'inspectionJobs',
   'reportIndexes',
   'users',
@@ -20,7 +22,7 @@ const STORE_NAMES: PlatformStoreName[] = [
 ];
 
 const initPlatformDB = async () => {
-  return openDB(LOCAL_PLATFORM_DB, 1, {
+  return openDB(LOCAL_PLATFORM_DB, 2, {
     upgrade(database) {
       STORE_NAMES.forEach((storeName) => {
         if (!database.objectStoreNames.contains(storeName)) {
