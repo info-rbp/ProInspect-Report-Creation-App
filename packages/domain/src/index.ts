@@ -1,4 +1,5 @@
 import './inspectionJobAugmentation.js';
+import './maintenanceCommercial.js';
 
 export * from './platform.js';
 export * from './propertyIntelligence.js';
@@ -9,6 +10,7 @@ export * from './photoEvidence.js';
 export * from './workflow.js';
 export * from './comparisonEngine.js';
 export * from './maintenance.js';
+export * from './maintenanceCommercial.js';
 export * from './maintenanceWorkflow.js';
 export * from './inspectionPolicy.js';
 export * from './legacyBaseline.js';
