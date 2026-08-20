@@ -10,6 +10,7 @@ import { routeShopifyIntegrationRequest } from './backend/shopifyIntegrationRout
 import { routeGoogleCalendarIntegrationRequest } from './backend/googleCalendarIntegrationRoutes.js';
 import { routeXeroIntegrationRequest } from './backend/xeroIntegrationRoutes.js';
 import { routeMaintenanceCommercialRequest } from './backend/maintenanceCommercialRoutes.js';
+import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanceCandidateCommercialRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
@@ -186,6 +187,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceCommercialResponse = await routeMaintenanceCommercialRequest(req, dependencies, correlationId);
       if (maintenanceCommercialResponse) {
         send(res, maintenanceCommercialResponse, correlationId);
+        return;
+      }
+
+      const maintenanceCandidateResponse = await routeMaintenanceCandidateCommercialRequest(req, dependencies, correlationId);
+      if (maintenanceCandidateResponse) {
+        send(res, maintenanceCandidateResponse, correlationId);
         return;
       }
 
