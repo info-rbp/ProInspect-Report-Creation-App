@@ -12,6 +12,7 @@ import AdminHomePage from './pages/admin/AdminHomePage';
 import InspectionJobDetailPage from './pages/admin/InspectionJobDetailPage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
 import PropertiesPage from './pages/admin/PropertiesPage';
+import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
 import PropertyDetailWithHistoryPage from './pages/admin/PropertyDetailWithHistoryPage';
 import ReportDetailPage from './pages/admin/ReportDetailPage';
 import ReportsPage from './pages/admin/ReportsPage';
@@ -34,7 +35,6 @@ const App: React.FC = () => (
         <Route path="/" element={<AuthRedirect />} />
         <Route path="/auth/login" element={<LoginRoutePage />} />
 
-        {/* External Scoped Portals */}
         <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
@@ -48,6 +48,7 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="properties" />}>
               <Route path="admin/properties" element={<PropertiesPage />} />
+              <Route path="admin/properties/new" element={<PropertyOnboardingPage />} />
               <Route path="admin/properties/:propertyId" element={<PropertyDetailWithHistoryPage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="jobs" />}>
