@@ -9,7 +9,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import LoginRoutePage from './pages/LoginRoutePage';
 import AdminHomePage from './pages/admin/AdminHomePage';
-import InspectionJobDetailPage from './pages/admin/InspectionJobDetailPage';
+import InspectionJobConsolePage from './pages/admin/InspectionJobConsolePage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
 import PropertiesPage from './pages/admin/PropertiesPage';
 import PropertyBulkImportPage from './pages/admin/PropertyBulkImportPage';
@@ -53,7 +53,7 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="jobs" />}>
               <Route path="admin/jobs" element={<InspectionJobsPage />} />
-              <Route path="admin/jobs/:jobId" element={<InspectionJobDetailPage />} />
+              <Route path="admin/jobs/:jobId" element={<InspectionJobConsolePage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="reports" />}>
               <Route path="admin/reports" element={<ReportsPage />} />
