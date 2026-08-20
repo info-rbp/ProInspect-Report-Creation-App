@@ -20,6 +20,16 @@ export const SECURITY_CAPABILITIES = [
   'template.manage',
   'audit.read',
   'maintenance.manage',
+  'maintenance.read',
+  'maintenance.triage',
+  'maintenance.quote.prepare',
+  'maintenance.quote.approve',
+  'maintenance.quote.send',
+  'maintenance.work_order.issue',
+  'maintenance.verify',
+  'maintenance.finance.sync',
+  'price_book.manage',
+  'xero.manage',
   'upload.create',
   'analysis.create',
   'pdf.create',
@@ -64,6 +74,8 @@ export interface AuthorisationTarget {
   inspectionJobId?: string;
   reportId?: string;
   maintenanceItemId?: string;
+  maintenanceQuoteId?: string;
+  priceBookId?: string;
   workRequestId?: string;
   tenantInstructionId?: string;
   externalContactId?: string;
