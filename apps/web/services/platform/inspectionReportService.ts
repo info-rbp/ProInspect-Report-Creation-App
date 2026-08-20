@@ -17,14 +17,7 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
     photoReferences: (room.photos || []).flatMap((photo, photoIndex) => {
       const objectPath = photo.objectPath || photo.downloadUrl;
       if (!objectPath) return [];
-      return [
-        {
-          photoId: photo.id,
-          objectPath,
-          ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}),
-          sequence: photoIndex + 1,
-        },
-      ];
+      return [{ photoId: photo.id, objectPath, ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}), sequence: photoIndex + 1 }];
     }),
     components: room.items.map((item) => ({
       id: item.id,
@@ -52,22 +45,12 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
       ...(item.comparisonCommentary ? { comparisonCommentary: item.comparisonCommentary } : {}),
       ...(item.baselineComponentId ? { baselineComponentId: item.baselineComponentId } : {}),
       ...(item.baselineComponentData ? { baselineComponentData: item.baselineComponentData } : {}),
-      ...(item.baselineEvidencePhotoIds
-        ? { baselineEvidencePhotoIds: item.baselineEvidencePhotoIds }
-        : {}),
-      ...(item.currentEvidencePhotoIds
-        ? { currentEvidencePhotoIds: item.currentEvidencePhotoIds }
-        : {}),
+      ...(item.baselineEvidencePhotoIds ? { baselineEvidencePhotoIds: item.baselineEvidencePhotoIds } : {}),
+      ...(item.currentEvidencePhotoIds ? { currentEvidencePhotoIds: item.currentEvidencePhotoIds } : {}),
       ...(item.evidencePairs ? { evidencePairs: item.evidencePairs } : {}),
-      ...(typeof item.comparisonConfidence === 'number'
-        ? { comparisonConfidence: item.comparisonConfidence }
-        : {}),
-      ...(item.comparisonUncertainty
-        ? { comparisonUncertainty: item.comparisonUncertainty }
-        : {}),
-      ...(item.comparisonReviewStatus
-        ? { comparisonReviewStatus: item.comparisonReviewStatus }
-        : {}),
+      ...(typeof item.comparisonConfidence === 'number' ? { comparisonConfidence: item.comparisonConfidence } : {}),
+      ...(item.comparisonUncertainty ? { comparisonUncertainty: item.comparisonUncertainty } : {}),
+      ...(item.comparisonReviewStatus ? { comparisonReviewStatus: item.comparisonReviewStatus } : {}),
       ...(item.comparisonMethod ? { comparisonMethod: item.comparisonMethod } : {}),
     })),
   }));
@@ -76,31 +59,21 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
 export async function createInspectionReportForJob(
   job: InspectionJob,
   property: PropertyRecord,
-  options: {
-    clientName?: string;
-    inspectionDate?: string;
-    allowLegacyBaseline?: boolean;
-  } = {},
+  options: { clientName?: string; inspectionDate?: string; allowLegacyBaseline?: boolean } = {},
 ): Promise<ReportAggregate> {
-  if (!job.version) {
-    throw new Error('Inspection job version is required. Reload the job before creating its report.');
-  }
+  if (!job.version) throw new Error('Inspection job version is required. Reload the job before creating its report.');
   const rooms = seedRoomsFromProperty(property);
-  return apiRequest<ReportAggregate>(
-    job.agencyId,
-    `/api/v1/inspection-jobs/${encodeURIComponent(job.id)}/create-report`,
-    {
-      method: 'POST',
-      body: {
-        expectedJobVersion: job.version,
-        reportType: job.reportType,
-        clientName: options.clientName || '',
-        inspectionDate: options.inspectionDate || new Date().toISOString().slice(0, 10),
-        ...(options.allowLegacyBaseline ? { allowLegacyBaseline: true } : {}),
-        areas: roomAreas(rooms),
-      },
+  return apiRequest<ReportAggregate>(job.agencyId, `/api/v1/inspection-jobs/${encodeURIComponent(job.id)}/create-report`, {
+    method: 'POST',
+    body: {
+      expectedJobVersion: job.version,
+      reportType: job.reportType,
+      clientName: options.clientName || '',
+      inspectionDate: options.inspectionDate || new Date().toISOString().slice(0, 10),
+      ...(options.allowLegacyBaseline ? { allowLegacyBaseline: true } : {}),
+      areas: roomAreas(rooms),
     },
-  );
+  });
 }
 
 export async function saveLegacyBaselineMapping(
@@ -108,17 +81,10 @@ export async function saveLegacyBaselineMapping(
   source: LegacyBaselineSource,
   mappings: LegacyBaselineComponentMapping[],
 ): Promise<ReportAggregate> {
-  if (!report.version) {
-    throw new Error('Current report version is required before saving a legacy baseline mapping.');
-  }
-  return apiRequest<ReportAggregate>(
-    report.agencyId,
-    `/api/v1/reports/${encodeURIComponent(report.id)}/legacy-baseline`,
-    {
-      method: 'POST',
-      body: { expectedVersion: report.version, source, mappings },
-    },
-  );
+  if (!report.version) throw new Error('Current report version is required before saving a legacy baseline mapping.');
+  return apiRequest<ReportAggregate>(report.agencyId, `/api/v1/reports/${encodeURIComponent(report.id)}/legacy-baseline`, {
+    method: 'POST', body: { expectedVersion: report.version, source, mappings },
+  });
 }
 
 export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
@@ -128,6 +94,7 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
     propertyId: aggregate.report.propertyId,
     tenancyId: aggregate.report.tenancyId,
     inspectionJobId: aggregate.report.inspectionJobId,
+    propertyLayoutVersionId: aggregate.report.propertyLayoutVersionId,
     lifecycleStatus: aggregate.report.lifecycleStatus,
     currentVersionId: aggregate.report.currentVersionId,
     templateId: aggregate.report.templateId,

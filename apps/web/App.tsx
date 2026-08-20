@@ -12,6 +12,8 @@ import AdminHomePage from './pages/admin/AdminHomePage';
 import InspectionJobDetailPage from './pages/admin/InspectionJobDetailPage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
 import PropertiesPage from './pages/admin/PropertiesPage';
+import PropertyBulkImportPage from './pages/admin/PropertyBulkImportPage';
+import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
 import PropertyDetailWithHistoryPage from './pages/admin/PropertyDetailWithHistoryPage';
 import ReportDetailPage from './pages/admin/ReportDetailPage';
 import ReportsPage from './pages/admin/ReportsPage';
@@ -33,12 +35,9 @@ const App: React.FC = () => (
       <Routes>
         <Route path="/" element={<AuthRedirect />} />
         <Route path="/auth/login" element={<LoginRoutePage />} />
-
-        {/* External Scoped Portals */}
         <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
-
         <Route path="/app" element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />
@@ -48,6 +47,8 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="properties" />}>
               <Route path="admin/properties" element={<PropertiesPage />} />
+              <Route path="admin/properties/new" element={<PropertyOnboardingPage />} />
+              <Route path="admin/properties/import" element={<PropertyBulkImportPage />} />
               <Route path="admin/properties/:propertyId" element={<PropertyDetailWithHistoryPage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="jobs" />}>
@@ -67,22 +68,14 @@ const App: React.FC = () => (
             <Route element={<RoleProtectedRoute section="tenant-followup" />}>
               <Route path="admin/tenant-followup" element={<TenantFollowUpPage />} />
             </Route>
-            <Route element={<RoleProtectedRoute section="users" />}>
-              <Route path="admin/users" element={<UsersPage />} />
-            </Route>
-            <Route element={<RoleProtectedRoute section="templates" />}>
-              <Route path="admin/templates" element={<TemplatesPage />} />
-            </Route>
-            <Route element={<RoleProtectedRoute section="settings" />}>
-              <Route path="admin/settings" element={<SettingsPage />} />
-            </Route>
+            <Route element={<RoleProtectedRoute section="users" />}><Route path="admin/users" element={<UsersPage />} /></Route>
+            <Route element={<RoleProtectedRoute section="templates" />}><Route path="admin/templates" element={<TemplatesPage />} /></Route>
+            <Route element={<RoleProtectedRoute section="settings" />}><Route path="admin/settings" element={<SettingsPage />} /></Route>
           </Route>
         </Route>
-
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   </AuthProvider>
 );
-
 export default App;

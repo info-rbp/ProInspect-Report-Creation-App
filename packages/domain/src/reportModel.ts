@@ -36,8 +36,27 @@ export const COMPONENT_TEST_STATUSES = [
   'unable_to_confirm',
 ] as const;
 
-export const COMPONENT_REVIEW_STATUSES = ['draft', 'ai_generated', 'analyst_reviewed', 'reviewer_approved', 'changes_requested'] as const;
-export const COMPONENT_COMPARISON_STATUSES = ['not_compared', 'unchanged', 'improved', 'deteriorated', 'new_item', 'missing_item', 'material_change', 'no_material_change', 'review_required', 'confirmed', 'unable_to_compare'] as const;
+export const COMPONENT_REVIEW_STATUSES = [
+  'draft',
+  'ai_generated',
+  'analyst_reviewed',
+  'reviewer_approved',
+  'changes_requested',
+] as const;
+
+export const COMPONENT_COMPARISON_STATUSES = [
+  'not_compared',
+  'unchanged',
+  'improved',
+  'deteriorated',
+  'new_item',
+  'missing_item',
+  'material_change',
+  'no_material_change',
+  'review_required',
+  'confirmed',
+  'unable_to_compare',
+] as const;
 
 export const PRESENCE_COMPARISON_STATES = [
   'present_both',
@@ -85,11 +104,17 @@ export type PresenceComparison = (typeof PRESENCE_COMPARISON_STATES)[number];
 export type ConditionComparison = (typeof CONDITION_COMPARISON_STATES)[number];
 export type CleanlinessComparison = (typeof CLEANLINESS_COMPARISON_STATES)[number];
 export type WorkingComparison = (typeof WORKING_COMPARISON_STATES)[number];
+export type ComponentComparisonMethod =
+  | 'stable_id'
+  | 'explicit_mapping'
+  | 'legacy_mapping'
+  | 'ai_assisted'
+  | 'manual';
 
 export interface ComponentEvidencePair {
   baselinePhotoId: string;
   currentPhotoId: string;
-  matchingMethod: 'stable_id' | 'explicit_mapping' | 'legacy_mapping' | 'ai_assisted' | 'manual';
+  matchingMethod: ComponentComparisonMethod;
   matchingConfidence: number;
 }
 
@@ -147,7 +172,7 @@ export interface ReportComponentRecord {
   comparisonConfidence?: number;
   comparisonUncertainty?: string;
   comparisonReviewStatus?: 'suggested' | 'confirmed' | 'edited' | 'rejected';
-  comparisonMethod?: 'stable_id' | 'explicit_mapping' | 'legacy_mapping' | 'ai_assisted' | 'manual';
+  comparisonMethod?: ComponentComparisonMethod;
   tenantResponseId?: string;
   version: number;
   createdAt: string;
@@ -175,6 +200,8 @@ export interface ReportMetadataRecord {
   propertyId?: string;
   tenancyId?: string;
   inspectionJobId?: string;
+  /** Exact property layout version from which the report area/component structure was seeded. */
+  propertyLayoutVersionId?: string;
   reportType: string;
   propertyAddress: string;
   clientName?: string;
@@ -227,8 +254,24 @@ export interface ReportVersionRecord {
 }
 
 export interface ReportAggregate {
-  report: Omit<ReportMetadataRecord, 'createdAt' | 'updatedAt' | 'version' | 'areaCount' | 'componentCount'> & Partial<Pick<ReportMetadataRecord, 'createdAt' | 'updatedAt' | 'version'>>;
-  areas: Array<Omit<ReportAreaRecord, 'agencyId' | 'reportId' | 'createdAt' | 'updatedAt' | 'version' | 'componentCount'> & { components: Array<Omit<ReportComponentRecord, 'agencyId' | 'reportId' | 'areaId' | 'createdAt' | 'updatedAt' | 'version'>> }>;
+  report: Omit<
+    ReportMetadataRecord,
+    'createdAt' | 'updatedAt' | 'version' | 'areaCount' | 'componentCount'
+  > &
+    Partial<Pick<ReportMetadataRecord, 'createdAt' | 'updatedAt' | 'version'>>;
+  areas: Array<
+    Omit<
+      ReportAreaRecord,
+      'agencyId' | 'reportId' | 'createdAt' | 'updatedAt' | 'version' | 'componentCount'
+    > & {
+      components: Array<
+        Omit<
+          ReportComponentRecord,
+          'agencyId' | 'reportId' | 'areaId' | 'createdAt' | 'updatedAt' | 'version'
+        >
+      >;
+    }
+  >;
 }
 
 export const IMMUTABLE_REPORT_STATUSES = new Set<ReportLifecycleStatus>(['finalised', 'archived']);
