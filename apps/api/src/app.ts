@@ -8,6 +8,8 @@ import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.j
 import { routeInspectionOperationsRequest } from './backend/inspectionOperationsRoutes.js';
 import { routeShopifyIntegrationRequest } from './backend/shopifyIntegrationRoutes.js';
 import { routeGoogleCalendarIntegrationRequest } from './backend/googleCalendarIntegrationRoutes.js';
+import { routeXeroIntegrationRequest } from './backend/xeroIntegrationRoutes.js';
+import { routeMaintenanceCommercialRequest } from './backend/maintenanceCommercialRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
@@ -127,6 +129,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         return;
       }
 
+      const xeroResponse = await routeXeroIntegrationRequest(req, dependencies, correlationId);
+      if (xeroResponse) {
+        send(res, xeroResponse, correlationId);
+        return;
+      }
+
       const inspectionOperationsResponse = await routeInspectionOperationsRequest(req, dependencies, correlationId);
       if (inspectionOperationsResponse) {
         send(res, inspectionOperationsResponse, correlationId);
@@ -172,6 +180,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId);
       if (analysisResponse) {
         send(res, analysisResponse, correlationId);
+        return;
+      }
+
+      const maintenanceCommercialResponse = await routeMaintenanceCommercialRequest(req, dependencies, correlationId);
+      if (maintenanceCommercialResponse) {
+        send(res, maintenanceCommercialResponse, correlationId);
         return;
       }
 
