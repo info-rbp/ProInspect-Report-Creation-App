@@ -19,10 +19,48 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   heif: 'image/heif',
 };
 
+const PROPERTY_DOCUMENT_TYPES = new Set<PropertyDocumentType>([
+  'entry_report',
+  'routine_report',
+  'exit_report',
+  'maintenance_report',
+  'comparison_report',
+  'floor_plan',
+  'building_plan',
+  'property_photo',
+  'owner_instruction',
+  'furnishing_inventory',
+  'appliance_schedule',
+  'key_schedule',
+  'contractor_report',
+  'quote',
+  'invoice',
+  'completion_report',
+  'warranty',
+  'compliance_certificate',
+  'appliance_manual',
+  'strata_plan',
+  'exclusive_use_plan',
+  'strata_bylaw',
+  'other',
+]);
+
+const PROPERTY_DOCUMENT_SOURCES = new Set<PropertyDocument['source']>([
+  'proinspect',
+  'legacy_upload',
+  'external_system',
+  'google_drive',
+  'other',
+]);
+
+/**
+ * This is a browser form boundary, so raw string values from selects are accepted
+ * here and narrowed before either local persistence or an API command is issued.
+ */
 export interface PropertyDocumentUploadMetadata {
-  type: PropertyDocumentType;
+  type: PropertyDocumentType | string;
   title?: string;
-  source?: PropertyDocument['source'];
+  source?: PropertyDocument['source'] | string;
   sourceSystem?: string;
   inspectionType?: PropertyDocument['inspectionType'];
   inspectionDate?: string;
@@ -30,6 +68,11 @@ export interface PropertyDocumentUploadMetadata {
   description?: string;
   useAsBaseline?: boolean;
 }
+
+type NormalisedUploadMetadata = Omit<PropertyDocumentUploadMetadata, 'type' | 'source'> & {
+  type: PropertyDocumentType;
+  source?: PropertyDocument['source'];
+};
 
 interface UploadSession {
   uploadId: string;
@@ -49,6 +92,20 @@ interface LocalPropertyDocumentBlob {
 
 function apiEnabled(): boolean {
   return isFirebaseConfigured() && Boolean(import.meta.env.VITE_API_BASE_URL?.trim());
+}
+
+function normaliseMetadata(metadata: PropertyDocumentUploadMetadata): NormalisedUploadMetadata {
+  if (!PROPERTY_DOCUMENT_TYPES.has(metadata.type as PropertyDocumentType)) {
+    throw new Error(`Unsupported property document category: ${metadata.type || 'empty'}.`);
+  }
+  if (metadata.source && !PROPERTY_DOCUMENT_SOURCES.has(metadata.source as PropertyDocument['source'])) {
+    throw new Error(`Unsupported property document source: ${metadata.source}.`);
+  }
+  return {
+    ...metadata,
+    type: metadata.type as PropertyDocumentType,
+    ...(metadata.source ? { source: metadata.source as PropertyDocument['source'] } : {}),
+  };
 }
 
 function contentType(file: File): string {
@@ -90,7 +147,7 @@ async function uploadChunks(file: File, uploadUrl: string, mimeType: string): Pr
 async function localUpload(
   property: PropertyRecord,
   file: File,
-  metadata: PropertyDocumentUploadMetadata,
+  metadata: NormalisedUploadMetadata,
   digest: string,
   mimeType: string,
 ): Promise<PropertyDocument> {
@@ -134,9 +191,10 @@ export async function uploadPropertyDocument(
   file: File,
   metadata: PropertyDocumentUploadMetadata,
 ): Promise<PropertyDocument> {
+  const normalisedMetadata = normaliseMetadata(metadata);
   const mimeType = contentType(file);
   const digest = await sha256(file);
-  if (!apiEnabled()) return localUpload(property, file, metadata, digest, mimeType);
+  if (!apiEnabled()) return localUpload(property, file, normalisedMetadata, digest, mimeType);
 
   const session = await apiRequest<UploadSession>(
     property.agencyId,
@@ -158,7 +216,7 @@ export async function uploadPropertyDocument(
     {
       method: 'POST',
       body: {
-        ...metadata,
+        ...normalisedMetadata,
         expectedVersion: property.version ?? 1,
       },
     },
