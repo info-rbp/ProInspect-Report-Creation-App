@@ -102,8 +102,14 @@ function normaliseMetadata(metadata: PropertyDocumentUploadMetadata): Normalised
     throw new Error(`Unsupported property document source: ${metadata.source}.`);
   }
   return {
-    ...metadata,
     type: metadata.type as PropertyDocumentType,
+    title: metadata.title,
+    sourceSystem: metadata.sourceSystem,
+    inspectionType: metadata.inspectionType,
+    inspectionDate: metadata.inspectionDate,
+    tenancyId: metadata.tenancyId,
+    description: metadata.description,
+    useAsBaseline: metadata.useAsBaseline,
     ...(metadata.source ? { source: metadata.source as PropertyDocument['source'] } : {}),
   };
 }
