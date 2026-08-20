@@ -10,6 +10,7 @@ import type {
 import { getProperty } from '../../services/platform/propertyService';
 import {
   analyseHistoricalDocument,
+  getHistoricalDocumentAnalysis,
   reviewHistoricalDocument,
   type HistoricalReviewDecision,
 } from '../../services/platform/propertyIntelligenceService';
@@ -51,8 +52,23 @@ const HistoricalImportIntelligencePanel: React.FC<Props> = ({ propertyId }) => {
     });
   }, []);
 
+  const selectDocument = async (document: PropertyDocument) => {
+    setSelectedDocumentId(document.id);
+    setAnalysis(null);
+    setError(null);
+    if (!property || document.status === 'local_only') return;
+    setBusy(true);
+    try {
+      setAnalysis(await getHistoricalDocumentAnalysis(property, document.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Historical analysis could not be loaded.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const analyse = async (document: PropertyDocument) => {
-    if (!property) return;
+    if (!property || document.status === 'local_only') return;
     setBusy(true);
     setError(null);
     try {
@@ -125,14 +141,15 @@ const HistoricalImportIntelligencePanel: React.FC<Props> = ({ propertyId }) => {
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {documents.map((document) => (
-          <button
+          <div
             key={document.id}
-            type="button"
-            onClick={() => {
-              setSelectedDocumentId(document.id);
-              setAnalysis(null);
+            role="button"
+            tabIndex={0}
+            onClick={() => void selectDocument(document)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') void selectDocument(document);
             }}
-            className={`rounded-xl border p-3 text-left ${selectedDocumentId === document.id ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'}`}
+            className={`rounded-xl border p-3 text-left outline-none focus:ring-2 focus:ring-blue-500 ${selectedDocumentId === document.id ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -142,23 +159,20 @@ const HistoricalImportIntelligencePanel: React.FC<Props> = ({ propertyId }) => {
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600">{document.importStatus || 'uploaded'}</span>
             </div>
             <div className="mt-3">
-              <span
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
+                disabled={busy || document.status === 'local_only'}
                 onClick={(event) => {
                   event.stopPropagation();
                   void analyse(document);
                 }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void analyse(document);
-                }}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${document.status === 'local_only' ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-slate-950 text-white'}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
               >
                 {busy && selectedDocumentId === document.id ? <RefreshCw size={13} className="animate-spin" /> : <FileSearch size={13} />}
                 {document.status === 'local_only' ? 'Cloud verification required' : 'Analyse historical report'}
-              </span>
+              </button>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
