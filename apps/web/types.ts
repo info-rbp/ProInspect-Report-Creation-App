@@ -90,6 +90,8 @@ export interface ReportData {
   propertyId?: string;
   tenancyId?: string;
   inspectionJobId?: string;
+  /** Exact property layout snapshot used to seed this inspection. */
+  propertyLayoutVersionId?: string;
   lifecycleStatus?: ReportLifecycleStatus;
   currentVersionId?: string;
   templateId?: string;
