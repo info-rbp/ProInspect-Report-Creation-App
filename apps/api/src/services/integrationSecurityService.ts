@@ -80,7 +80,7 @@ export function verifyShopifyWebhookHmac(
 
 export interface OAuthStatePayload {
   agencyId: string;
-  provider: 'google_calendar';
+  provider: 'google_calendar' | 'xero';
   nonce: string;
   issuedAt: number;
   returnPath?: string;
@@ -98,13 +98,22 @@ export function signOAuthState(payload: OAuthStatePayload): string {
   return `${encoded}.${signature}`;
 }
 
-export function verifyOAuthState(value: string, maxAgeSeconds = 15 * 60): OAuthStatePayload {
+export function verifyOAuthState(
+  value: string,
+  maxAgeSeconds = 15 * 60,
+  expectedProvider?: OAuthStatePayload['provider'],
+): OAuthStatePayload {
   const [encoded, received] = value.split('.');
   if (!encoded || !received) throw new Error('OAuth state is malformed.');
   const expected = createHmac('sha256', stateSecret()).update(encoded).digest('base64url');
   if (!equalText(expected, received)) throw new Error('OAuth state signature is invalid.');
   const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as OAuthStatePayload;
-  if (payload.provider !== 'google_calendar' || !payload.agencyId || !payload.nonce) {
+  if (
+    !['google_calendar', 'xero'].includes(payload.provider) ||
+    !payload.agencyId ||
+    !payload.nonce ||
+    (expectedProvider && payload.provider !== expectedProvider)
+  ) {
     throw new Error('OAuth state payload is invalid.');
   }
   if (!Number.isFinite(payload.issuedAt) || Date.now() - payload.issuedAt > maxAgeSeconds * 1000) {
