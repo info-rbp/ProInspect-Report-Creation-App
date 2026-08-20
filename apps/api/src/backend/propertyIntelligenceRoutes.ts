@@ -3,12 +3,11 @@ import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import type {
+  AuthenticatedPrincipal,
   HistoricalExtractedFinding,
   HistoricalMappingCandidate,
   PropertyDocument,
-  PropertyDocumentAnalysisRecord,
   PropertyFloorPlanHotspot,
-  PropertyFloorPlanMap,
   RoomConfigItem,
 } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
@@ -134,7 +133,7 @@ function floorPlanHotspots(value: unknown, validAreaIds: Set<string>): PropertyF
 
 async function appendAudit(
   dependencies: ApiDependencies,
-  principal: { uid: string; role: string; agencyId: string },
+  principal: AuthenticatedPrincipal,
   correlationId: string,
   propertyId: string,
   entityType: string,
