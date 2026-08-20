@@ -45,8 +45,10 @@ describe('property layout foundation', () => {
     const patch = applyLayoutTemplate(source, template!);
     expect(patch.currentLayoutVersionId).toBeTruthy();
     expect(patch.layoutVersions).toHaveLength(1);
-    expect(patch.roomsConfig.length).toBeGreaterThan(10);
-    expect(patch.layoutVersions[0].roomsConfig).not.toBe(patch.roomsConfig);
+    expect(patch.roomsConfig).toBeDefined();
+    expect(patch.layoutVersions).toBeDefined();
+    expect(patch.roomsConfig!.length).toBeGreaterThan(10);
+    expect(patch.layoutVersions![0].roomsConfig).not.toBe(patch.roomsConfig);
   });
 
   it('builds Site to Building to Level to Area hierarchy', () => {
@@ -64,8 +66,10 @@ describe('property layout foundation', () => {
     const source = property({ id: 'source', roomsConfig: [{ id: 'source-area', name: 'Kitchen', roomType: 'kitchen' }] });
     const target = property({ id: 'target', address: '2 Test Street' });
     const patch = cloneLayoutFromProperty(target, source);
-    expect(patch.roomsConfig[0].id).not.toBe('source-area');
-    expect(patch.layoutVersions[0].changeReason).toContain(source.address);
+    expect(patch.roomsConfig).toBeDefined();
+    expect(patch.layoutVersions).toBeDefined();
+    expect(patch.roomsConfig![0].id).not.toBe('source-area');
+    expect(patch.layoutVersions![0].changeReason).toContain(source.address);
   });
 });
 
