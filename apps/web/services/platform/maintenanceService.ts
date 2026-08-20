@@ -49,7 +49,15 @@ export async function extractMaintenanceCandidates(reportId: string): Promise<Ma
 
 export async function confirmMaintenanceCandidate(
   candidateId: string,
-  overrides?: { title?: string; description?: string; category?: string; priority?: string; workInstruction?: string },
+  overrides?: {
+    title?: string;
+    description?: string;
+    category?: string;
+    priority?: string;
+    workInstruction?: string;
+    recommendedAction?: string;
+    approvalRequired?: boolean;
+  },
 ): Promise<MaintenanceItem> {
   return apiRequest<MaintenanceItem>(agencyId(), `/api/v1/maintenance-candidates/${candidateId}/confirm`, {
     method: 'POST',
