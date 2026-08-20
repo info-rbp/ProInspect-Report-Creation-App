@@ -20,6 +20,8 @@ The internal Property workspace is organised into nine areas:
 8. Maintenance
 9. Property History
 
+Historical Report Intelligence and Interactive Floor Plans extend the property detail workspace without changing the authority of the nine core property sections.
+
 The Property Portfolio provides search, classification filters, ownership filters, occupancy filters, onboarding readiness and bulk onboarding.
 
 ## Classification model
@@ -101,11 +103,51 @@ Cloud property-document upload is server authorised and uses a restricted Cloud 
 
 Historical source files are never rewritten during extraction or mapping.
 
-### Historical report mapping
+### Historical report intelligence
 
-Historical report extraction is not automatically authoritative. Report documents can enter `analysis_pending` and `review_required` states. Any suggested area/component mapping is a candidate until a human confirms it.
+Verified historical Entry, Routine, Exit, comparison and maintenance report documents can be submitted to the Historical Report Intelligence workflow.
 
-This deliberately follows the same evidence principle as legacy Entry baseline mapping for Exit inspections: imported prose or an AI suggestion must not silently become a factual inspection observation.
+Before model analysis, the server re-verifies the accepted object generation and SHA-256 against the immutable property-document record. The historical source bytes are supplied to the server-side Gemini service together with the property's configured stable area IDs and the canonical PCR component catalogue.
+
+The extraction contract requires the model to:
+
+- extract only information supported by the historical source;
+- preserve operation or test wording only when the source explicitly states it;
+- avoid tenant liability, causation, negligence, fair-wear-and-tear, compensation and bond-deduction conclusions;
+- provide page references where identifiable;
+- suggest only supplied property area IDs and canonical component IDs;
+- provide mapping confidence and uncertainty; and
+- produce review candidates rather than authoritative inspection findings.
+
+The server normalises and validates model output. Unknown area/component IDs are removed, confidence is bounded, duplicate findings are collapsed and prohibited liability language is removed. The source file remains immutable.
+
+The operator then reviews each candidate and may:
+
+- confirm the suggested mapping;
+- edit and confirm the mapping;
+- reject the finding; or
+- leave it requiring further review.
+
+The analysis remains `review_required` while any candidates are unresolved. It becomes `mapped` only after human review accepts at least one finding and no suggested candidates remain. A fully rejected extraction becomes `rejected`. Review decisions are versioned and audited.
+
+This follows the same evidence principle as legacy Entry baseline mapping for Exit inspections: imported prose or an AI suggestion must never silently become a factual inspection observation.
+
+## Interactive floor plans
+
+Uploaded floor-plan and building-plan documents remain property documents. Image plans can additionally be converted into an interactive `PropertyFloorPlanMap`.
+
+A floor-plan map:
+
+- references the immutable source property document;
+- records the property layout version against which it was mapped;
+- contains graphical hotspots linked only to stable configured property area IDs;
+- stores hotspot position and size as percentages so the map remains responsive;
+- is independently versioned; and
+- is auditable property navigation metadata rather than condition evidence.
+
+An operator can choose an area, click the plan to place a hotspot, resize or reposition the hotspot, add a display label and save the map. If the property's current layout version later differs from the floor-plan map's layout version, the UI warns the operator to review the mapping rather than silently treating it as current.
+
+PDF floor plans remain fully retained as property documents. Graphical hotspots currently require an image plan because the browser map operates against a rendered image surface; PDF plans are not altered or rasterised into new source evidence.
 
 ## Assets and access
 
@@ -144,6 +186,8 @@ The Property workspace presents both:
 - immutable component history assembled from report versions and maintenance records; and
 - a unified property timeline containing layout versions, documents/imports, reports, jobs and maintenance events.
 
+Historical extraction records and floor-plan maps add structured property context but do not rewrite immutable report history.
+
 ## Data authority rules
 
 1. Current property configuration may change.
@@ -151,10 +195,12 @@ The Property workspace presents both:
 3. A new layout creates a new layout version rather than rewriting the version used by prior reports.
 4. Historical source documents remain immutable originals.
 5. Imported findings require human review before becoming authoritative structured history.
-6. Inspection working status remains evidence/test controlled.
-7. Maintenance and tenant follow-up do not rewrite the source inspection finding.
-8. External integrations added later must map into the canonical Property model rather than introducing provider-specific property identities throughout the application.
+6. AI extraction can suggest mappings but cannot approve them.
+7. Floor-plan hotspots are navigation metadata and cannot prove component condition, cleanliness or operation.
+8. Inspection working status remains evidence/test controlled.
+9. Maintenance and tenant follow-up do not rewrite the source inspection finding.
+10. External integrations added later must map into the canonical Property model rather than introducing provider-specific property identities throughout the application.
 
-## Future-compatible foundations
+## Remaining future extensions
 
-The domain includes explicit foundations for persistent property profile photographs and floor-plan document references. Dedicated visual floor-plan navigation and graphical inspection completion are intentionally separate future UI work and do not require a second property model.
+The Property model also retains foundations for persistent property profile photographs and future richer spatial tooling. Future work may add per-inspection floor-plan progress overlays or additional spatial annotations, but those extensions build on the existing `PropertyFloorPlanMap` and property layout identities rather than requiring a second property model.
