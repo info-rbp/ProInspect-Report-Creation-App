@@ -24,6 +24,12 @@ export interface PropertyImportCandidate {
 
 const USES = new Set<PropertyUse>(['residential', 'commercial', 'industrial', 'retail', 'mixed_use', 'strata_common_property', 'other']);
 const OWNERSHIP = new Set<OwnershipStructure>(['freehold', 'strata', 'survey_strata', 'community_title', 'company_title', 'common_property', 'unknown', 'other']);
+const PHYSICAL_TYPES = new Set<PhysicalPropertyType>([
+  'house', 'apartment', 'unit', 'townhouse', 'villa', 'duplex', 'studio', 'ancillary_dwelling',
+  'retirement_supported', 'office', 'retail_shop', 'warehouse', 'industrial_unit', 'showroom',
+  'medical_consulting', 'hospitality', 'restaurant_cafe', 'childcare', 'mixed_commercial',
+  'common_property', 'other',
+]);
 
 function cells(line: string): string[] {
   const result: string[] = [];
@@ -46,15 +52,23 @@ function numberValue(value?: string): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-function normalisedType(value?: string): PhysicalPropertyType {
-  const candidate = (value || 'house').trim().toLowerCase().replace(/[ /-]+/gu, '_') as PhysicalPropertyType;
-  return candidate;
+function normalise(value: string): string {
+  return value.trim().toLowerCase().replace(/[ /-]+/gu, '_');
+}
+
+function defaultPhysicalType(use: PropertyUse): PhysicalPropertyType {
+  if (use === 'commercial' || use === 'mixed_use') return 'office';
+  if (use === 'industrial') return 'warehouse';
+  if (use === 'retail') return 'retail_shop';
+  if (use === 'strata_common_property') return 'common_property';
+  if (use === 'other') return 'other';
+  return 'house';
 }
 
 export function parsePropertyCsv(csv: string): PropertyImportCandidate[] {
   const lines = csv.split(/\r?\n/u).filter((line) => line.trim());
   if (lines.length < 2) return [];
-  const headers = cells(lines[0]).map((header) => header.trim().toLowerCase().replace(/[ /-]+/gu, '_'));
+  const headers = cells(lines[0]).map((header) => normalise(header));
   const index = (name: string) => headers.indexOf(name);
   const value = (row: string[], name: string) => { const position = index(name); return position >= 0 ? row[position]?.trim() : undefined; };
 
@@ -63,10 +77,32 @@ export function parsePropertyCsv(csv: string): PropertyImportCandidate[] {
     const errors: string[] = [];
     const address = value(row, 'address') || '';
     if (!address) errors.push('Address is required.');
-    const rawUse = (value(row, 'property_use') || 'residential').toLowerCase().replace(/[ /-]+/gu, '_') as PropertyUse;
+
+    const rawUseText = value(row, 'property_use');
+    const rawUse = normalise(rawUseText || 'residential') as PropertyUse;
     const propertyUse = USES.has(rawUse) ? rawUse : 'other';
-    const rawOwnership = (value(row, 'ownership_structure') || 'unknown').toLowerCase().replace(/[ /-]+/gu, '_') as OwnershipStructure;
+    if (rawUseText && !USES.has(rawUse)) errors.push(`Unsupported property use "${rawUseText}".`);
+
+    const rawOwnershipText = value(row, 'ownership_structure');
+    const rawOwnership = normalise(rawOwnershipText || 'unknown') as OwnershipStructure;
     const ownershipStructure = OWNERSHIP.has(rawOwnership) ? rawOwnership : 'unknown';
+    if (rawOwnershipText && !OWNERSHIP.has(rawOwnership)) errors.push(`Unsupported ownership structure "${rawOwnershipText}".`);
+
+    const rawTypeText = value(row, 'physical_property_type') || value(row, 'property_type');
+    const rawType = normalise(rawTypeText || defaultPhysicalType(propertyUse)) as PhysicalPropertyType;
+    const physicalPropertyType = PHYSICAL_TYPES.has(rawType) ? rawType : defaultPhysicalType(propertyUse);
+    if (rawTypeText && !PHYSICAL_TYPES.has(rawType)) errors.push(`Unsupported physical property type "${rawTypeText}".`);
+
+    const bedroomsText = value(row, 'bedrooms');
+    const bathroomsText = value(row, 'bathrooms');
+    const parkingText = value(row, 'parking');
+    const bedrooms = numberValue(bedroomsText);
+    const bathrooms = numberValue(bathroomsText);
+    const parking = numberValue(parkingText);
+    if (bedroomsText && bedrooms === undefined) errors.push('Bedrooms must be a non-negative number.');
+    if (bathroomsText && bathrooms === undefined) errors.push('Bathrooms must be a non-negative number.');
+    if (parkingText && parking === undefined) errors.push('Parking must be a non-negative number.');
+
     return {
       row: offset + 2,
       address,
@@ -74,11 +110,11 @@ export function parsePropertyCsv(csv: string): PropertyImportCandidate[] {
       state: value(row, 'state') || 'WA',
       postcode: value(row, 'postcode'),
       propertyUse,
-      physicalPropertyType: normalisedType(value(row, 'physical_property_type') || value(row, 'property_type')),
+      physicalPropertyType,
       ownershipStructure,
-      bedrooms: numberValue(value(row, 'bedrooms')),
-      bathrooms: numberValue(value(row, 'bathrooms')),
-      parking: numberValue(value(row, 'parking')),
+      bedrooms,
+      bathrooms,
+      parking,
       ownerName: value(row, 'owner_name'),
       tenantName: value(row, 'tenant_name'),
       tenantEmail: value(row, 'tenant_email'),
