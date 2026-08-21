@@ -1,5 +1,6 @@
 import { inspectionPolicy } from './inspectionPolicy.js';
-import type { ReportAggregate, ReportLifecycleStatus } from './index.js';
+import type { ReportAggregate } from './reportModel.js';
+import type { ReportLifecycleStatus } from './platform.js';
 
 export const REPORT_QC_SEVERITIES = ['info', 'warning', 'error', 'blocker'] as const;
 export type ReportQcSeverity = (typeof REPORT_QC_SEVERITIES)[number];
