@@ -1,6 +1,7 @@
 import './inspectionJobAugmentation.js';
 import './maintenanceCommercial.js';
 import './reportOperations.js';
+import './reportMetadataAugmentation.js';
 
 export * from './platform.js';
 export * from './propertyIntelligence.js';
