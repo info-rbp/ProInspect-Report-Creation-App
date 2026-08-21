@@ -7,8 +7,15 @@ export const SECURITY_CAPABILITIES = [
   'user.suspend',
   'property.read',
   'property.manage',
+  'tenant.read',
+  'tenant.manage',
   'tenancy.read',
   'tenancy.manage',
+  'tenant.communication.read',
+  'tenant.communication.send',
+  'tenant.document.read',
+  'tenant.document.manage',
+  'tenant.portal.manage',
   'job.read',
   'job.manage',
   'job.inspect',
@@ -69,6 +76,7 @@ export interface AgencyMembership {
 
 export interface AuthorisationTarget {
   agencyId: string;
+  tenantId?: string;
   propertyId?: string;
   tenancyId?: string;
   inspectionJobId?: string;
