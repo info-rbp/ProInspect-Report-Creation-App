@@ -30,6 +30,7 @@ import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
 import ExternalMaintenanceQuotePage from './pages/external/ExternalMaintenanceQuotePage';
+import TenantPortalPage from './pages/external/TenantPortalPage';
 import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPage';
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
@@ -42,7 +43,7 @@ const App: React.FC = () => (
         <Route path="/auth/login" element={<LoginRoutePage />} />
         <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
-        <Route path="/tenant-portal/:grantToken" element={<ExternalTenantInstructionPage />} />
+        <Route path="/tenant-portal/:grantToken" element={<TenantPortalPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
         <Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} />
         <Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
