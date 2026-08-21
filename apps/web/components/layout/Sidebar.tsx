@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { ClipboardList, FileText, Gauge, Hammer, Home, MessageSquare, Settings, Users, Wrench } from 'lucide-react';
+import { ClipboardList, FileText, Gauge, Hammer, Home, Settings, Users, Wrench } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { InternalSection } from '../../services/platform/roleAccess';
 
@@ -17,7 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Inspection Jobs', to: '/app/admin/jobs', section: 'jobs', icon: ClipboardList },
   { label: 'Reports', to: '/app/admin/reports', section: 'reports', icon: FileText },
   { label: 'Maintenance', to: '/app/admin/maintenance', section: 'maintenance', icon: Hammer },
-  { label: 'Tenant Follow-Up', to: '/app/admin/tenant-followup', section: 'tenant-followup', icon: MessageSquare },
+  { label: 'Tenants', to: '/app/admin/tenants', section: 'tenants', icon: Users },
   { label: 'Users', to: '/app/admin/users', section: 'users', icon: Users },
   { label: 'Templates', to: '/app/admin/templates', section: 'templates', icon: Wrench },
   { label: 'Settings', to: '/app/admin/settings', section: 'settings', icon: Settings },
@@ -54,7 +54,6 @@ const Sidebar: React.FC = () => {
           );
         })}
       </nav>
-      {/* Navigation links */}
     </aside>
   );
 };
