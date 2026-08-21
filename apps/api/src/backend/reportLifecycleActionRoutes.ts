@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type { ReportLifecycleStatus, SecurityCapability } from '@pcr/domain';
+import { evaluateReportQuality, type ReportLifecycleStatus, type SecurityCapability } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -29,6 +29,57 @@ function capabilityFor(status: ReportLifecycleStatus): SecurityCapability {
   if (['issued_to_tenant', 'tenant_response_in_progress', 'tenant_submitted', 'agent_response_required', 'finalisation_ready'].includes(status)) return 'report.issue';
   if (status === 'finalised' || status === 'archived') return 'report.finalise';
   return 'report.edit';
+}
+
+async function enforceApprovalReadiness(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  reportId: string,
+  aggregate: Awaited<ReturnType<ApiDependencies['reports']['load']>>,
+): Promise<void> {
+  if (!aggregate) return;
+  const qc = evaluateReportQuality(aggregate);
+  if (qc.status === 'blocked') {
+    throw new ApiError(422, 'REPORT_QC_BLOCKED', 'Report cannot be approved while Quality Control blockers or errors remain.', {
+      score: qc.score,
+      blockerCount: qc.blockerCount,
+      errorCount: qc.errorCount,
+      issues: qc.issues.filter((issue) => issue.severity === 'blocker' || issue.severity === 'error'),
+    });
+  }
+
+  const unreviewed = aggregate.areas.flatMap((area) =>
+    area.components
+      .filter((component) => !['analyst_reviewed', 'reviewer_approved'].includes(component.reviewStatus ?? 'draft'))
+      .map((component) => ({ areaId: area.id, componentId: component.id, component: component.component, reviewStatus: component.reviewStatus })),
+  );
+  if (unreviewed.length > 0) {
+    throw new ApiError(422, 'ANALYST_COMPONENT_REVIEW_REQUIRED', 'Every component must complete analyst review before reviewer approval.', {
+      components: unreviewed.slice(0, 100),
+    });
+  }
+
+  const comments = await dependencies.repository.list('reportReviewComments', agencyId, 100);
+  const openComments = comments.items.filter((comment) => comment.reportId === reportId && comment.status === 'open');
+  if (openComments.length > 0) {
+    throw new ApiError(422, 'OPEN_REVIEW_COMMENTS', 'Resolve all open review comments before approving the report for issue.', {
+      commentIds: openComments.map((comment) => comment.id),
+    });
+  }
+}
+
+async function enforceFinalisationReadiness(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  reportId: string,
+): Promise<void> {
+  const responses = await dependencies.repository.list('reportRecipientResponses', agencyId, 100);
+  const unresolved = responses.items.filter((response) => response.reportId === reportId && response.status !== 'resolved');
+  if (unresolved.length > 0) {
+    throw new ApiError(422, 'RECIPIENT_RESPONSES_UNRESOLVED', 'Resolve all recipient responses before finalisation.', {
+      responseIds: unresolved.map((response) => response.id),
+    });
+  }
 }
 
 export async function routeReportLifecycleActionRequest(
@@ -73,8 +124,14 @@ export async function routeReportLifecycleActionRequest(
     lifecycleStatus: aggregate.report.lifecycleStatus,
   }, correlationId);
 
-  if (status === 'approved_for_issue' && (job?.assignedInspectorId === principal.uid || job?.assignedAnalystId === principal.uid)) {
-    throw new ApiError(403, 'SEPARATION_OF_DUTIES_VIOLATION', 'An assigned inspector or analyst cannot approve their own report for issue.');
+  if (status === 'approved_for_issue') {
+    if (job?.assignedInspectorId === principal.uid || job?.assignedAnalystId === principal.uid) {
+      throw new ApiError(403, 'SEPARATION_OF_DUTIES_VIOLATION', 'An assigned inspector or analyst cannot approve their own report for issue.');
+    }
+    await enforceApprovalReadiness(dependencies, agencyId, reportId, aggregate);
+  }
+  if (status === 'finalisation_ready') {
+    await enforceFinalisationReadiness(dependencies, agencyId, reportId);
   }
 
   const key = req.headers['idempotency-key']?.toString().trim();
