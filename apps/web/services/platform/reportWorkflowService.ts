@@ -23,7 +23,7 @@ export interface ReportWorkflowRecord {
 }
 
 export async function getReportWorkflowRecord(
-  agencyId: string,
+  agencyId: string | undefined,
   reportId: string,
 ): Promise<ReportWorkflowRecord> {
   return apiRequest<ReportWorkflowRecord>(
@@ -33,7 +33,7 @@ export async function getReportWorkflowRecord(
 }
 
 export async function transitionReportLifecycle(
-  agencyId: string,
+  agencyId: string | undefined,
   reportId: string,
   status: ReportLifecycleStatus,
   expectedVersion: number,
