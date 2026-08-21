@@ -5,6 +5,7 @@ function target(body: Record<string, unknown>, id?: string): AuthorisationTarget
   const agencyId = typeof body.agencyId === 'string' ? body.agencyId : '';
   return {
     agencyId,
+    ...(typeof body.tenantId === 'string' ? { tenantId: body.tenantId } : {}),
     ...(typeof body.propertyId === 'string' ? { propertyId: body.propertyId } : {}),
     ...(typeof body.tenancyId === 'string' ? { tenancyId: body.tenancyId } : {}),
     ...(typeof body.inspectionJobId === 'string' ? { inspectionJobId: body.inspectionJobId } : {}),
@@ -27,7 +28,11 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   invitations: { collection: 'invitations', readCapability: 'agency.read', writeCapability: 'user.invite', target },
   clients: { collection: 'clients', readCapability: 'property.read', writeCapability: 'property.manage', target },
   properties: { collection: 'properties', readCapability: 'property.read', writeCapability: 'property.manage', target },
+  tenants: { collection: 'tenants', readCapability: 'tenant.read', writeCapability: 'tenant.manage', target },
   tenancies: { collection: 'tenancies', readCapability: 'tenancy.read', writeCapability: 'tenancy.manage', target },
+  'tenancy-participants': { collection: 'tenancyParticipants', readCapability: 'tenancy.read', writeCapability: 'tenancy.manage', target },
+  'tenant-communications': { collection: 'tenantCommunications', readCapability: 'tenant.communication.read', writeCapability: 'tenant.communication.send', target },
+  'tenancy-documents': { collection: 'tenancyDocuments', readCapability: 'tenant.document.read', writeCapability: 'tenant.document.manage', target },
   'inspection-jobs': { collection: 'inspectionJobs', readCapability: 'job.read', writeCapability: 'job.manage', target },
   'inspection-requests': { collection: 'inspectionRequests', readCapability: 'job.read', writeCapability: 'job.manage', target },
   'inspection-service-mappings': { collection: 'inspectionServiceMappings', readCapability: 'agency.read', writeCapability: 'agency.manage', target },
