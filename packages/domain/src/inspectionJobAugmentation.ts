@@ -42,7 +42,8 @@ declare module './platform.js' {
     slaStatus?: 'on_track' | 'at_risk' | 'overdue' | 'not_applicable';
     lastReminderAt?: string;
     lastSyncedAt?: string;
-    lastCalendarSyncStatus?: 'pending' | 'synchronised' | 'conflict' | 'failed' | 'not_required';
+    /** Provider adapters may return new diagnostic states; UI badges render unknown values safely. */
+    lastCalendarSyncStatus?: string;
   }
 }
 
