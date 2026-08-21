@@ -1,11 +1,13 @@
 import './inspectionJobAugmentation.js';
 import './maintenanceCommercial.js';
+import './reportOperations.js';
 
 export * from './platform.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
 export * from './security.js';
 export * from './reportModel.js';
+export * from './reportOperations.js';
 export * from './photoEvidence.js';
 export * from './workflow.js';
 export * from './comparisonEngine.js';
