@@ -22,7 +22,7 @@ resource "google_secret_manager_secret" "inspection_operations" {
     capability = "inspection-operations"
   })
 
-  depends_on = [google_project_service.enabled]
+  depends_on = [google_project_service.required]
 }
 
 output "inspection_operations_secret_ids" {
