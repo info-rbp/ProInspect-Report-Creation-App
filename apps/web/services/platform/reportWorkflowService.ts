@@ -41,7 +41,7 @@ export async function transitionReportLifecycle(
 ): Promise<ReportWorkflowRecord> {
   return apiRequest<ReportWorkflowRecord>(
     agencyId,
-    `/api/v1/reports/${encodeURIComponent(reportId)}/transitions`,
+    `/api/v1/report-actions/${encodeURIComponent(reportId)}/lifecycle/transition`,
     {
       method: 'POST',
       body: {
