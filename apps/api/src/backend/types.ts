@@ -7,6 +7,8 @@ export interface StoredRecord {
   version: number;
   createdAt: string;
   updatedAt: string;
+  /** Common inspection-job snapshot shape used by integration and scheduling routes. */
+  propertySnapshot?: { address?: string; [key: string]: unknown };
   [key: string]: unknown;
 }
 
