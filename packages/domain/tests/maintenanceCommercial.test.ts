@@ -15,17 +15,18 @@ import {
 
 const entry: PriceBookEntry = {
   id: 'entry-plumbing-tap',
-  priceCode: 'PLUMB-TAP-001',
+  code: 'PLUMB-TAP-001',
   active: true,
-  description: 'Replace basin tap cartridge',
   trade: 'Plumber',
   category: 'Plumbing',
-  componentPatterns: ['tap', 'basin tap'],
-  issueTypes: ['leak'],
-  defectKeywords: ['leaking', 'dripping'],
-  recommendedActionPatterns: ['replace cartridge'],
+  componentPattern: 'tap basin tap',
+  issueType: 'leak',
+  recommendedAction: 'replace cartridge',
+  keywords: ['leaking', 'dripping'],
   propertyUses: ['residential'],
-  serviceAreas: ['6000', 'Perth'],
+  physicalPropertyTypes: [],
+  regions: ['Perth'],
+  postcodes: ['6000'],
   unit: 'each',
   defaultQuantity: 1,
   minimumQuantity: 1,
@@ -36,15 +37,18 @@ const entry: PriceBookEntry = {
   travelCost: 0,
   disposalCost: 0,
   subcontractorCost: 0,
-  otherDirectCost: 0,
   markupPercent: 20,
-  fixedAdministrationFee: 15,
+  fixedMargin: 0,
+  administrationFee: 15,
   minimumSellPrice: 300,
-  gstRate: 10,
+  gstRate: 0.1,
+  taxable: true,
   clientDescription: 'Replace leaking basin tap cartridge and test for leaks.',
   inclusions: ['Standard cartridge', 'Functional leak test'],
   exclusions: ['Concealed pipework repairs'],
   warrantyDays: 90,
+  siteAssessmentRequired: false,
+  automationConfidenceThreshold: 0.7,
   xeroItemCode: 'PLUMB-TAP-001',
   xeroSalesAccountCode: '200',
   xeroPurchaseAccountCode: '300',
@@ -84,17 +88,21 @@ describe('maintenance commercial pricing', () => {
       {
         propertyUse: 'residential',
         postcode: '6000',
-        suburb: 'Perth',
+        region: 'Perth',
       },
     );
     expect(matches).toHaveLength(1);
-    expect(matches[0]?.entry.priceCode).toBe('PLUMB-TAP-001');
+    expect(matches[0]?.entry.code).toBe('PLUMB-TAP-001');
     expect(matches[0]?.score).toBeGreaterThan(0.7);
     expect(matches[0]?.reasons.join(' ')).toMatch(/category|component|issue/i);
   });
 
   it('calculates direct cost, markup, GST and minimum selling price deterministically', () => {
-    const line = calculateEstimateLine(entry, 1);
+    const line = calculateEstimateLine(
+      entry,
+      { quantity: 1 },
+      { score: 0.95, reasons: ['Canonical price-book match.'] },
+    );
     expect(line.directCost).toBe(240);
     expect(line.markupAmount).toBe(48);
     expect(line.administrationFee).toBe(15);
@@ -104,7 +112,7 @@ describe('maintenance commercial pricing', () => {
 
     const quoteLine = quoteLineFromEstimate(line);
     const totals = quoteTotals([quoteLine]);
-    expect(totals).toEqual({ subtotal: 303, tax: 30.3, total: 333.3 });
+    expect(totals).toEqual({ subtotal: 303, totalTax: 30.3, total: 333.3 });
   });
 });
 
@@ -132,11 +140,13 @@ describe('maintenance quote approval controls', () => {
   };
 
   it('requires owner approval above delegated authority', () => {
-    const result = resolveQuoteApproval({
+    const result = resolveQuoteApproval(policy, {
       total: 750,
-      item,
-      policy,
-      propertyUse: 'residential',
+      replacement: false,
+      capital: false,
+      cosmetic: false,
+      emergency: false,
+      preauthorised: false,
     });
     expect(result.required).toBe(true);
     expect(result.recipientType).toBe('landlord');
@@ -144,11 +154,13 @@ describe('maintenance quote approval controls', () => {
   });
 
   it('requires approval for replacements even below the ordinary threshold', () => {
-    const result = resolveQuoteApproval({
+    const result = resolveQuoteApproval(policy, {
       total: 250,
-      item: { ...item, issueType: 'replacement' },
-      policy,
-      propertyUse: 'residential',
+      replacement: true,
+      capital: false,
+      cosmetic: false,
+      emergency: false,
+      preauthorised: false,
     });
     expect(result.required).toBe(true);
     expect(result.reasons.join(' ')).toMatch(/replacement/i);
@@ -167,20 +179,22 @@ describe('maintenance quote approval controls', () => {
 
 describe('maintenance SLA policy', () => {
   it('assigns shorter response windows to urgent work', () => {
-    const urgent = Date.parse(maintenanceSlaDueAt('urgent', '2026-08-20T00:00:00.000Z'));
-    const routine = Date.parse(maintenanceSlaDueAt('routine', '2026-08-20T00:00:00.000Z'));
+    const from = new Date('2026-08-20T00:00:00.000Z');
+    const urgent = Date.parse(maintenanceSlaDueAt('urgent', from));
+    const routine = Date.parse(maintenanceSlaDueAt('routine', from));
     expect(urgent).toBeLessThan(routine);
   });
 
   it('classifies overdue and at-risk deadlines', () => {
+    const now = Date.parse('2026-08-20T11:00:00.000Z');
     expect(
-      maintenanceSlaStatus('2026-08-20T10:00:00.000Z', '2026-08-20T11:00:00.000Z'),
+      maintenanceSlaStatus('2026-08-20T10:00:00.000Z', 'triage_required', now),
     ).toBe('overdue');
     expect(
-      maintenanceSlaStatus('2026-08-20T12:00:00.000Z', '2026-08-20T11:00:00.000Z'),
+      maintenanceSlaStatus('2026-08-20T12:00:00.000Z', 'triage_required', now),
     ).toBe('at_risk');
     expect(
-      maintenanceSlaStatus('2026-08-25T12:00:00.000Z', '2026-08-20T11:00:00.000Z'),
+      maintenanceSlaStatus('2026-08-25T12:00:00.000Z', 'triage_required', now),
     ).toBe('on_track');
   });
 });
