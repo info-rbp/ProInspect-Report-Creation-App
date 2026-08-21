@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { REPORT_CONTENT_LOCKED_STATUSES } from '@pcr/domain';
 import { ReportData } from '../../types';
 import { PropertyRecord } from '../../types/platform';
 import { useReportWorkspace } from '../../hooks/inspection/useReportWorkspace';
@@ -17,21 +18,12 @@ import { sanitizeReportData, validateReport } from '../../services/validationSer
 import { logAuditEvent } from '../../services/platform/auditService';
 import { upsertReportIndexFromReport } from '../../services/platform/reportIndexService';
 
-const IMMUTABLE_REPORT_STATUSES = new Set([
-  'approved_for_issue',
-  'reviewer_approved',
-  'ready_to_issue',
-  'issued_to_tenant',
-  'tenant_viewed',
-  'tenant_submitted',
-  'finalisation_ready',
-  'finalised',
-  'archived',
-]);
-
 export const ReportBuilder: React.FC = () => {
   const navigate = useNavigate();
   const { reportId } = useParams<{ reportId: string }>();
+  const [searchParams] = useSearchParams();
+  const requestedAreaId = searchParams.get('area');
+  const requestedComponentId = searchParams.get('component');
 
   const [properties, setProperties] = useState<PropertyRecord[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
@@ -72,10 +64,8 @@ export const ReportBuilder: React.FC = () => {
   };
 
   const analysis = useReportAnalysis(report.agencyId);
-
   useUnsavedChangesGuard(isDirty, analysis.analysisState.isAnalyzing || isSaving);
-
-  const isImmutable = IMMUTABLE_REPORT_STATUSES.has(report.lifecycleStatus || 'draft');
+  const isImmutable = REPORT_CONTENT_LOCKED_STATUSES.has(report.lifecycleStatus || 'draft');
 
   useEffect(() => {
     const fetchProperties = async () => {
@@ -85,26 +75,26 @@ export const ReportBuilder: React.FC = () => {
         if (report.propertyId) {
           setSelectedPropertyId(report.propertyId);
         } else if (report.propertyAddress) {
-          const match = records.find((p) => p.address && report.propertyAddress.includes(p.address));
+          const match = records.find((property) => property.address && report.propertyAddress.includes(property.address));
           if (match) setSelectedPropertyId(match.id);
         }
-      } catch (err) {
-        console.warn('Failed to load properties in report builder:', err);
+      } catch (error) {
+        console.warn('Failed to load properties in report builder:', error);
       }
     };
-    fetchProperties();
+    void fetchProperties();
   }, [report.propertyId, report.propertyAddress]);
 
   useEffect(() => {
     const hydrateRouteReport = async () => {
       if (!reportId || reportId === 'new') return;
-
       setIsHydrating(true);
       try {
         const loadedReport = await loadReportFromDB(reportId);
         if (loadedReport) {
           setReport(loadedReport);
           markSaved();
+          if (requestedAreaId && loadedReport.rooms.some((area) => area.id === requestedAreaId)) selectArea(requestedAreaId);
           await logAuditEvent({
             agencyId: loadedReport.agencyId || 'proinspect-agency',
             actorId: 'user',
@@ -121,24 +111,35 @@ export const ReportBuilder: React.FC = () => {
         setIsHydrating(false);
       }
     };
+    void hydrateRouteReport();
+  }, [reportId, requestedAreaId]);
 
-    hydrateRouteReport();
-  }, [reportId]);
+  useEffect(() => {
+    if (isHydrating || !requestedComponentId) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`component-${requestedComponentId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [isHydrating, requestedComponentId, activeAreaId]);
 
   const handleImportProperty = (propertyIdToImport?: string) => {
+    if (report.inspectionJobId) {
+      setImportMessage('This operational report is already bound to its server-authoritative Property and layout version.');
+      return;
+    }
     const targetId = propertyIdToImport || selectedPropertyId;
     if (!targetId) return;
-    const prop = properties.find((p) => p.id === targetId);
-    if (!prop) return;
-
-    const seeded = seedReportFromProperty(prop, report);
+    const property = properties.find((candidate) => candidate.id === targetId);
+    if (!property) return;
+    const seeded = seedReportFromProperty(property, report);
     setReport(seeded);
     setSelectedPropertyId(targetId);
-    setImportMessage(`Successfully pulled property details & seeded ${seeded.rooms.length} room templates for ${prop.address}.`);
-    setTimeout(() => setImportMessage(''), 6000);
+    setImportMessage(`Successfully pulled property details and seeded ${seeded.rooms.length} areas for ${property.address}.`);
+    window.setTimeout(() => setImportMessage(''), 6000);
   };
 
   const handleSeedDefaultRooms = () => {
+    if (report.inspectionJobId) return;
     const defaultProperty: PropertyRecord = {
       id: 'default',
       agencyId: report.agencyId || 'proinspect-agency',
@@ -155,19 +156,19 @@ export const ReportBuilder: React.FC = () => {
     const rooms = seedRoomsFromProperty(defaultProperty);
     handleUpdateReport({ rooms });
     setImportMessage(`Auto-generated ${rooms.length} default room templates.`);
-    setTimeout(() => setImportMessage(''), 6000);
+    window.setTimeout(() => setImportMessage(''), 6000);
   };
 
   const handleSaveReport = async () => {
     if (isImmutable) {
-      alert(`Report is immutable in status "${report.lifecycleStatus}". Direct edits are locked.`);
+      window.alert(`Report is immutable in status "${report.lifecycleStatus}". Corrections must use the superseding-report workflow.`);
       return;
     }
 
     const sanitizedReport = sanitizeReportData(report);
     const { errors } = validateReport(sanitizedReport);
     if (errors.length > 0) {
-      alert(errors.join('\n'));
+      window.alert(errors.join('\n'));
       return;
     }
 
@@ -188,11 +189,11 @@ export const ReportBuilder: React.FC = () => {
       });
 
       if (!reportId || reportId === 'new') {
-        navigate(`/reports/${savedReport.id}/edit`, { replace: true });
+        navigate(`/app/admin/reports/${savedReport.id}/edit`, { replace: true });
       }
     } catch (error) {
       console.error('Save report failed', error);
-      alert('Failed to save report. Please check your storage connection.');
+      window.alert('Failed to save report. Cloud-authoritative deployments do not silently create a separate local report. Your current unsaved draft remains in this browser session so you can retry.');
     } finally {
       setIsSaving(false);
     }
@@ -211,7 +212,7 @@ export const ReportBuilder: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 space-y-6 pb-24">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 pb-24">
       <ReportContextPanel
         report={report}
         properties={properties}
@@ -248,8 +249,8 @@ export const ReportBuilder: React.FC = () => {
 
       <ReportActionBar
         onSaveDraft={handleSaveReport}
-        onPreview={() => navigate(`/reports/${report.id}/preview`)}
-        onBackToList={() => navigate('/reports')}
+        onPreview={() => navigate(`/app/admin/reports/${report.id}/preview`)}
+        onBackToList={() => navigate('/app/admin/reports')}
         isSaving={isSaving}
         isDirty={isDirty}
         readOnly={isImmutable}
