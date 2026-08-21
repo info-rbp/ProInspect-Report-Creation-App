@@ -3,8 +3,17 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AuthorisationTarget, DomainErrorShape, SecurityCapability } from '@pcr/domain';
 import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
+import { routeReportOperationsRequest } from './backend/reportOperationsRoutes.js';
+import { routeReportLifecycleActionRequest } from './backend/reportLifecycleActionRoutes.js';
 import { routeAnalysisRequest } from './backend/analysisRoutes.js';
 import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.js';
+import { routeInspectionOperationsRequest } from './backend/inspectionOperationsRoutes.js';
+import { routeShopifyIntegrationRequest } from './backend/shopifyIntegrationRoutes.js';
+import { routeGoogleCalendarIntegrationRequest } from './backend/googleCalendarIntegrationRoutes.js';
+import { routeXeroIntegrationRequest } from './backend/xeroIntegrationRoutes.js';
+import { routePriceBookUploadRequest } from './backend/priceBookUploadRoutes.js';
+import { routeMaintenanceCommercialRequest } from './backend/maintenanceCommercialRoutes.js';
+import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanceCandidateCommercialRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
@@ -112,6 +121,42 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         return;
       }
 
+      const reportOperationsResponse = await routeReportOperationsRequest(req, dependencies, correlationId);
+      if (reportOperationsResponse) {
+        send(res, reportOperationsResponse, correlationId);
+        return;
+      }
+
+      const reportLifecycleResponse = await routeReportLifecycleActionRequest(req, dependencies, correlationId);
+      if (reportLifecycleResponse) {
+        send(res, reportLifecycleResponse, correlationId);
+        return;
+      }
+
+      const shopifyResponse = await routeShopifyIntegrationRequest(req, dependencies, correlationId);
+      if (shopifyResponse) {
+        send(res, shopifyResponse, correlationId);
+        return;
+      }
+
+      const googleCalendarResponse = await routeGoogleCalendarIntegrationRequest(req, dependencies, correlationId);
+      if (googleCalendarResponse) {
+        send(res, googleCalendarResponse, correlationId);
+        return;
+      }
+
+      const xeroResponse = await routeXeroIntegrationRequest(req, dependencies, correlationId);
+      if (xeroResponse) {
+        send(res, xeroResponse, correlationId);
+        return;
+      }
+
+      const inspectionOperationsResponse = await routeInspectionOperationsRequest(req, dependencies, correlationId);
+      if (inspectionOperationsResponse) {
+        send(res, inspectionOperationsResponse, correlationId);
+        return;
+      }
+
       const propertyIntelligenceResponse = await routePropertyIntelligenceRequest(req, dependencies, correlationId);
       if (propertyIntelligenceResponse) {
         send(res, propertyIntelligenceResponse, correlationId);
@@ -151,6 +196,24 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId);
       if (analysisResponse) {
         send(res, analysisResponse, correlationId);
+        return;
+      }
+
+      const priceBookUploadResponse = await routePriceBookUploadRequest(req, dependencies, correlationId);
+      if (priceBookUploadResponse) {
+        send(res, priceBookUploadResponse, correlationId);
+        return;
+      }
+
+      const maintenanceCommercialResponse = await routeMaintenanceCommercialRequest(req, dependencies, correlationId);
+      if (maintenanceCommercialResponse) {
+        send(res, maintenanceCommercialResponse, correlationId);
+        return;
+      }
+
+      const maintenanceCandidateResponse = await routeMaintenanceCandidateCommercialRequest(req, dependencies, correlationId);
+      if (maintenanceCandidateResponse) {
+        send(res, maintenanceCandidateResponse, correlationId);
         return;
       }
 

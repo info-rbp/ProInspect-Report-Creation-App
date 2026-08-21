@@ -5,18 +5,18 @@ import { apiRequest } from '../apiClient';
 import { isFirebaseConfigured, saveReportToDB } from '../storageService';
 import { getInspectionJob, updateInspectionJob } from './inspectionJobService';
 import { localGet, localList, localPut } from './localPlatformStore';
+import { transitionReportLifecycle } from './reportWorkflowService';
 
-type VersionedReportIndex = ReportIndex & { version?: number };
-
-function reportIndexCommand(reportIndex: ReportIndex): Record<string, unknown> {
-  const payload: Record<string, unknown> = { ...reportIndex };
-  delete payload.id;
-  delete payload.createdAt;
-  delete payload.updatedAt;
-  return payload;
+function cloudMode(): boolean {
+  return Boolean(isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim());
 }
 
 export const upsertReportIndexFromReport = async (report: ReportData): Promise<ReportIndex> => {
+  if (cloudMode()) {
+    const authoritative = await apiRequest<ReportIndex>(report.agencyId, `/api/v1/reports/${encodeURIComponent(report.id)}`);
+    return authoritative;
+  }
+
   const timestamp = new Date().toISOString();
   const existing = await getReportIndex(report.id);
   const reportIndex: ReportIndex = {
@@ -36,30 +36,21 @@ export const upsertReportIndexFromReport = async (report: ReportData): Promise<R
     createdAt: existing?.createdAt || report.createdAt || timestamp,
     updatedAt: timestamp,
   };
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
-    try {
-      if (existing) {
-        return await apiRequest<ReportIndex>(report.agencyId, `/api/v1/reports/${report.id}`, {
-          method: 'PATCH',
-          body: { ...reportIndexCommand(reportIndex), expectedVersion: (existing as VersionedReportIndex).version ?? 1 },
-        });
-      }
-      return await apiRequest<ReportIndex>(report.agencyId, '/api/v1/reports', {
-        method: 'POST',
-        body: { id: report.id, ...reportIndexCommand(reportIndex) },
-      });
-    } catch (err) {
-      console.warn('API upsertReportIndexFromReport failed, saving locally:', err);
-    }
-  }
   await localPut('reportIndexes', reportIndex);
   return reportIndex;
 };
 
+/**
+ * Local/demo-only helper retained for backwards compatibility. Cloud deployments must create
+ * operational reports through the server-authoritative Inspection Job create-report command.
+ */
 export const createReportForInspectionJob = async (
   inspectionJobId: string,
   reportInput: Omit<ReportData, 'id' | 'rooms'> & Partial<Pick<ReportData, 'id' | 'rooms'>>,
 ): Promise<ReportIndex> => {
+  if (cloudMode()) {
+    throw new Error('Cloud reports must be created from the Inspection Job console so Property, tenancy, Template Version, layout version and Entry baseline are bound server-side.');
+  }
   const inspectionJob = await getInspectionJob(inspectionJobId);
   if (!inspectionJob) throw new Error('Inspection job not found.');
   const report: ReportData = {
@@ -79,25 +70,19 @@ export const createReportForInspectionJob = async (
 };
 
 export const getReportIndex = async (reportId: string): Promise<ReportIndex | undefined> => {
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
+  if (cloudMode()) {
     try {
-      return await apiRequest<ReportIndex>(undefined, `/api/v1/reports/${reportId}`);
+      return await apiRequest<ReportIndex>(undefined, `/api/v1/reports/${encodeURIComponent(reportId)}`);
     } catch (error) {
       if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
-      console.warn('API getReportIndex failed, getting locally:', error);
+      throw error;
     }
   }
   return localGet<ReportIndex>('reportIndexes', reportId);
 };
 
 export const listReportIndexes = async (): Promise<ReportIndex[]> => {
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
-    try {
-      return await apiRequest<ReportIndex[]>(undefined, '/api/v1/reports');
-    } catch (err) {
-      console.warn('API listReportIndexes failed, listing locally:', err);
-    }
-  }
+  if (cloudMode()) return apiRequest<ReportIndex[]>(undefined, '/api/v1/reports');
   return localList<ReportIndex>('reportIndexes');
 };
 
@@ -107,15 +92,14 @@ export const updateReportLifecycleStatus = async (
 ): Promise<ReportIndex> => {
   const existing = await getReportIndex(reportId);
   if (!existing) throw new Error('Report index not found.');
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
-    try {
-      return await apiRequest<ReportIndex>(existing.agencyId, `/api/v1/reports/${reportId}/transitions`, {
-        method: 'POST',
-        body: { status: lifecycleStatus, expectedVersion: (existing as VersionedReportIndex).version ?? 1 },
-      });
-    } catch (err) {
-      console.warn('API updateReportLifecycleStatus failed, updating locally:', err);
-    }
+  if (cloudMode()) {
+    const transitioned = await transitionReportLifecycle(
+      existing.agencyId || '',
+      reportId,
+      lifecycleStatus,
+      (existing as ReportIndex & { version?: number }).version ?? 1,
+    );
+    return transitioned as unknown as ReportIndex;
   }
   const updatedReportIndex: ReportIndex = { ...existing, lifecycleStatus, updatedAt: new Date().toISOString() };
   await localPut('reportIndexes', updatedReportIndex);

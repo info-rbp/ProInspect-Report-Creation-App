@@ -1,11 +1,20 @@
+import './inspectionJobAugmentation.js';
+import './inspectionRequestAugmentation.js';
+import './maintenanceCommercial.js';
+import './reportOperations.js';
+import './reportMetadataAugmentation.js';
+
 export * from './platform.js';
 export * from './propertyIntelligence.js';
+export * from './inspectionOperations.js';
 export * from './security.js';
 export * from './reportModel.js';
+export * from './reportOperations.js';
 export * from './photoEvidence.js';
 export * from './workflow.js';
 export * from './comparisonEngine.js';
 export * from './maintenance.js';
+export * from './maintenanceCommercial.js';
 export * from './maintenanceWorkflow.js';
 export * from './inspectionPolicy.js';
 export * from './legacyBaseline.js';

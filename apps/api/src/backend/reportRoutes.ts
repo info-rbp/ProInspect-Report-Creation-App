@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { AuthorisationTarget, ReportAggregate, ReportLifecycleStatus } from '@pcr/domain';
 import { reportAggregateSchema, workflowTransitionSchema } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { extractMaintenanceForReport } from '../services/maintenanceCommercialService.js';
 import { createArchiveArtifact } from './archiveArtifactService.js';
 import type { ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult } from './types.js';
@@ -11,6 +12,11 @@ const REPORT_STATUSES = new Set<ReportLifecycleStatus>([
   'draft', 'internal_review', 'photos_uploaded', 'analysis_queued', 'analysis_running', 'analysis_complete',
   'review_required', 'changes_requested', 'approved_for_issue', 'issued_to_tenant', 'tenant_response_in_progress',
   'tenant_submitted', 'agent_response_required', 'finalisation_ready', 'finalised', 'archived', 'cancelled',
+]);
+const MAINTENANCE_EXTRACTION_STATUSES = new Set<ReportLifecycleStatus>([
+  'approved_for_issue',
+  'finalised',
+  'archived',
 ]);
 
 class ReportRouteError extends Error {
@@ -84,6 +90,100 @@ async function idempotent(
 ): Promise<ApiResponse> {
   const execution = await dependencies.idempotency.execute(agencyId, operation, idempotencyKey(req), hash(body), action);
   return { status: execution.result.status, body: execution.result.body, headers: { 'idempotency-replayed': String(execution.replayed) } };
+}
+
+async function attemptMaintenanceExtraction(
+  dependencies: ApiDependencies,
+  input: {
+    agencyId: string;
+    reportId: string;
+    actorId: string;
+    actorRole: string;
+    correlationId: string;
+  },
+): Promise<Record<string, unknown>> {
+  const jobId = `maintenance-extraction-${input.reportId}`;
+  const existing = await dependencies.repository.get('maintenanceExtractionJobs', input.agencyId, jobId);
+  const now = new Date().toISOString();
+  try {
+    const result = await extractMaintenanceForReport(dependencies, input);
+    const data = {
+      reportId: input.reportId,
+      reportVersionId: result.sourceVersionId,
+      status: 'complete',
+      createdCount: result.created.length,
+      existingCount: result.existing,
+      completedAt: now,
+      lastAttemptedAt: now,
+    };
+    if (existing) {
+      await dependencies.repository.update(
+        'maintenanceExtractionJobs',
+        input.agencyId,
+        jobId,
+        data,
+        Number(existing.version),
+        input.actorId,
+      );
+    } else {
+      await dependencies.repository.create(
+        'maintenanceExtractionJobs',
+        input.agencyId,
+        jobId,
+        data,
+        input.actorId,
+      );
+    }
+    return data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Maintenance extraction failed.';
+    const data = {
+      reportId: input.reportId,
+      status: 'failed',
+      errorCode:
+        error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: unknown }).code || 'MAINTENANCE_EXTRACTION_FAILED')
+          : 'MAINTENANCE_EXTRACTION_FAILED',
+      errorMessage: message,
+      attemptCount: Number(existing?.attemptCount || 0) + 1,
+      lastAttemptedAt: now,
+    };
+    if (existing) {
+      await dependencies.repository.update(
+        'maintenanceExtractionJobs',
+        input.agencyId,
+        jobId,
+        data,
+        Number(existing.version),
+        input.actorId,
+      );
+    } else {
+      await dependencies.repository.create(
+        'maintenanceExtractionJobs',
+        input.agencyId,
+        jobId,
+        data,
+        input.actorId,
+      );
+    }
+    await dependencies.audit.append({
+      id: randomUUID(),
+      timestamp: now,
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+      agencyId: input.agencyId,
+      capability: 'maintenance.triage',
+      outcome: 'allowed',
+      reason: 'maintenance.extraction_failed',
+      target: { agencyId: input.agencyId, reportId: input.reportId },
+      correlationId: input.correlationId,
+      entityType: 'maintenance_extraction_job',
+      entityId: jobId,
+      eventType: 'maintenance.extraction_failed',
+      metadata: { message },
+    });
+    return data;
+  }
 }
 
 export async function routeReportAggregateRequest(
@@ -172,7 +272,27 @@ export async function routeReportAggregateRequest(
         ...(transition.reason ? { reason: transition.reason } : {}),
         ...(transition.assignedUserId ? { assignedUserId: transition.assignedUserId } : {}),
       });
-      return { status: 200, body: { data: stored, meta: { correlationId } } };
+      const extraction = MAINTENANCE_EXTRACTION_STATUSES.has(
+        transition.status as ReportLifecycleStatus,
+      )
+        ? await attemptMaintenanceExtraction(dependencies, {
+            agencyId,
+            reportId,
+            actorId: principal.uid,
+            actorRole: principal.role,
+            correlationId,
+          })
+        : undefined;
+      return {
+        status: 200,
+        body: {
+          data: stored,
+          meta: {
+            correlationId,
+            ...(extraction ? { maintenanceExtraction: extraction } : {}),
+          },
+        },
+      };
     });
   }
 

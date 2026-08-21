@@ -294,7 +294,7 @@ export async function routePropertyIntelligenceRequest(
         if (typeof decision.findingId === 'string') decisions.set(decision.findingId, decision);
       }
       const sourceFindings = Array.isArray(analysis.findings) ? analysis.findings as HistoricalExtractedFinding[] : [];
-      const reviewedFindings = sourceFindings.map((finding) => {
+      const reviewedFindings: HistoricalExtractedFinding[] = sourceFindings.map((finding): HistoricalExtractedFinding => {
         const review = decisions.get(finding.id);
         if (!review) return finding;
         const decision = review.decision;

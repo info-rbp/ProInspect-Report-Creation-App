@@ -12,6 +12,8 @@ import type {
   ComponentEvidencePair,
   BaselineComponentSnapshot,
   ReportPhotoReference,
+  ReportTestRecord,
+  ReportAiSuggestion,
 } from '@pcr/domain';
 import type { ReportLifecycleStatus } from './types/platform';
 
@@ -45,11 +47,16 @@ export interface InspectionItem {
   cleanlinessCategory: ComponentCleanlinessCategory;
   workingStatus: ComponentWorkingStatus;
   testStatus: ComponentTestStatus;
+  testRecord?: ReportTestRecord;
   defects: string[];
   maintenanceRequired: boolean;
   comment: string;
   photoReferences?: ReportPhotoReference[];
   aiConfidence?: number;
+  aiSuggestion?: ReportAiSuggestion;
+  authoritativeSource?: 'inspector' | 'analyst' | 'reviewer';
+  lastReviewedBy?: string;
+  lastReviewedAt?: string;
   reviewStatus?: ComponentReviewStatus;
   comparisonStatus?: ComponentComparisonStatus;
   presenceComparison?: PresenceComparison;

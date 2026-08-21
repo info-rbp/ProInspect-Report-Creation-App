@@ -9,8 +9,9 @@ import { AuthProvider } from './contexts/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import LoginRoutePage from './pages/LoginRoutePage';
 import AdminHomePage from './pages/admin/AdminHomePage';
-import InspectionJobDetailPage from './pages/admin/InspectionJobDetailPage';
+import InspectionJobConsolePage from './pages/admin/InspectionJobConsolePage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
+import InspectionOperationsConfigurationPage from './pages/admin/InspectionOperationsConfigurationPage';
 import PropertiesPage from './pages/admin/PropertiesPage';
 import PropertyBulkImportPage from './pages/admin/PropertyBulkImportPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
@@ -21,11 +22,14 @@ import SettingsPage from './pages/admin/SettingsPage';
 import TemplatesPage from './pages/admin/TemplatesPage';
 import UsersPage from './pages/admin/UsersPage';
 import MaintenancePage from './pages/admin/MaintenancePage';
-import MaintenanceDetailPage from './pages/admin/MaintenanceDetailPage';
+import MaintenanceConfigurationPage from './pages/admin/MaintenanceConfigurationPage';
+import MaintenanceItemConsolePage from './pages/admin/MaintenanceItemConsolePage';
 import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
 import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
+import ExternalMaintenanceQuotePage from './pages/external/ExternalMaintenanceQuotePage';
+import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPage';
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
 
@@ -38,6 +42,8 @@ const App: React.FC = () => (
         <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
+        <Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} />
+        <Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
         <Route path="/app" element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />
@@ -53,7 +59,8 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="jobs" />}>
               <Route path="admin/jobs" element={<InspectionJobsPage />} />
-              <Route path="admin/jobs/:jobId" element={<InspectionJobDetailPage />} />
+              <Route path="admin/jobs/configuration" element={<InspectionOperationsConfigurationPage />} />
+              <Route path="admin/jobs/:jobId" element={<InspectionJobConsolePage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="reports" />}>
               <Route path="admin/reports" element={<ReportsPage />} />
@@ -63,7 +70,8 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="maintenance" />}>
               <Route path="admin/maintenance" element={<MaintenancePage />} />
-              <Route path="admin/maintenance/:maintenanceId" element={<MaintenanceDetailPage />} />
+              <Route path="admin/maintenance/configuration" element={<MaintenanceConfigurationPage />} />
+              <Route path="admin/maintenance/:maintenanceId" element={<MaintenanceItemConsolePage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="tenant-followup" />}>
               <Route path="admin/tenant-followup" element={<TenantFollowUpPage />} />

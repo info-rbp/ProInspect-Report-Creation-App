@@ -9,6 +9,14 @@ export type PlatformStoreName =
   | 'propertyFloorPlans'
   | 'tenancies'
   | 'inspectionJobs'
+  | 'inspectionRequests'
+  | 'inspectionServiceMappings'
+  | 'inspectorCapabilityProfiles'
+  | 'recurringInspectionSchedules'
+  | 'inspectionCommunications'
+  | 'inspectionOperationalEvents'
+  | 'integrationConnections'
+  | 'integrationSyncExceptions'
   | 'reportIndexes'
   | 'users'
   | 'auditEvents';
@@ -20,13 +28,21 @@ const STORE_NAMES: PlatformStoreName[] = [
   'propertyFloorPlans',
   'tenancies',
   'inspectionJobs',
+  'inspectionRequests',
+  'inspectionServiceMappings',
+  'inspectorCapabilityProfiles',
+  'recurringInspectionSchedules',
+  'inspectionCommunications',
+  'inspectionOperationalEvents',
+  'integrationConnections',
+  'integrationSyncExceptions',
   'reportIndexes',
   'users',
   'auditEvents',
 ];
 
 const initPlatformDB = async () => {
-  return openDB(LOCAL_PLATFORM_DB, 4, {
+  return openDB(LOCAL_PLATFORM_DB, 5, {
     upgrade(database) {
       STORE_NAMES.forEach((storeName) => {
         if (!database.objectStoreNames.contains(storeName)) {

@@ -31,7 +31,7 @@ async function resolveGrant(rawToken: string): Promise<VersionedGrant> {
     throw new ApiError(401, 'AMBIGUOUS_GRANT_TOKEN', 'Access link cannot be resolved safely.');
   }
   const grant = snapshot.docs[0].data() as VersionedGrant;
-  if (!['work_request', 'tenant_instruction'].includes(grant.resourceType)) {
+  if (!['work_request', 'tenant_instruction', 'report_distribution'].includes(String(grant.resourceType))) {
     throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'This access link cannot complete evidence.');
   }
   if (grant.revokedAt) {
@@ -78,7 +78,7 @@ export async function routeExternalEvidenceCompletionRequest(
   const session = sessionSnapshot.data() as UploadSessionRecord;
   if (
     session.externalGrantId !== grant.id ||
-    session.externalResourceType !== grant.resourceType ||
+    String(session.externalResourceType) !== String(grant.resourceType) ||
     session.externalResourceId !== grant.resourceId
   ) {
     throw new ApiError(
@@ -153,7 +153,7 @@ export async function routeExternalEvidenceCompletionRequest(
     {
       source: 'external_portal',
       externalGrantId: grant.id,
-      externalResourceType: grant.resourceType,
+      externalResourceType: String(grant.resourceType),
       externalResourceId: grant.resourceId,
       updatedAt: completedAt,
     },
@@ -171,7 +171,7 @@ export async function routeExternalEvidenceCompletionRequest(
     reason: 'external.evidence_upload_completed',
     target: { agencyId: grant.agencyId },
     correlationId,
-    entityType: grant.resourceType,
+    entityType: String(grant.resourceType),
     entityId: grant.resourceId,
     eventType: 'external.evidence_upload_completed',
     metadata: {

@@ -13,7 +13,7 @@ import type {
   ReportTransitionCommand,
   StoredRecord,
 } from '../../apps/api/src/backend/types.js';
-import type { ReportAggregate } from '@pcr/domain';
+import type { ReportAggregate, UploadSessionRecord } from '@pcr/domain';
 import { MemoryIdempotencyStore } from '../../apps/api/src/backend/idempotency.js';
 
 class MemoryRepository implements OperationalRepository {
@@ -192,28 +192,30 @@ describe('external evidence provenance', () => {
       metadata: { contentType: 'image/jpeg' },
     });
 
-    const repository = new MemoryRepository();
-    await repository.create(
-      'uploadSessions',
-      'agency-a',
-      uploadId,
-      {
-        objectPath,
-        sha256,
-        size: bytes.length,
-        contentType: 'image/jpeg',
-        propertyId: 'property-1',
-        inspectionJobId: 'job-1',
-        componentIds: ['component-1'],
-        externalGrantId: 'grant-1',
-        externalResourceType: 'work_request',
-        externalResourceId: 'work-1',
-        status: 'issued',
-      },
-      'external:grant-1',
-    );
+    const issuedAt = new Date().toISOString();
+    const session: UploadSessionRecord = {
+      id: uploadId,
+      agencyId: 'agency-a',
+      propertyId: 'property-1',
+      inspectionJobId: 'job-1',
+      componentIds: ['component-1'],
+      originalFilename: 'photo.jpg',
+      contentType: 'image/jpeg',
+      fileSize: bytes.length,
+      sha256,
+      objectPath,
+      status: 'issued',
+      issuedTo: 'external:grant-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      externalGrantId: 'grant-1',
+      externalResourceType: 'work_request',
+      externalResourceId: 'work-1',
+      createdAt: issuedAt,
+      updatedAt: issuedAt,
+    };
+    await db.doc(`agencies/agency-a/uploadSessions/${uploadId}`).set(session);
 
-    const response = await request(dependencies(repository), token, uploadId);
+    const response = await request(dependencies(new MemoryRepository()), token, uploadId);
     expect(response.status).toBe(201);
     const evidence = await db.doc(`agencies/agency-a/photoEvidence/${uploadId}`).get();
     expect(evidence.exists).toBe(true);
@@ -224,13 +226,14 @@ describe('external evidence provenance', () => {
       inspectionJobId: 'job-1',
       objectPath,
       sha256,
-      status: 'uploaded',
+      processingStatus: 'validating',
       source: 'external_portal',
       externalGrantId: 'grant-1',
     });
     expect(String(evidence.get('generation') ?? '')).not.toBe('');
-    expect(await repository.get('uploadSessions', 'agency-a', uploadId)).toMatchObject({
-      status: 'uploaded',
+    const completedSession = await db.doc(`agencies/agency-a/uploadSessions/${uploadId}`).get();
+    expect(completedSession.data()).toMatchObject({
+      status: 'completed',
       sha256,
     });
     expect(auditEvents.length).toBeGreaterThan(0);

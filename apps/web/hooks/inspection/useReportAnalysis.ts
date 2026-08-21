@@ -40,6 +40,11 @@ function workingFor(value: StructuredComponentAnalysis['testStatus']): WorkingSt
   return 'not_tested';
 }
 
+function newSuggestionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `ai-suggestion-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function useReportAnalysis(agencyId?: string) {
   const [analysisState, setAnalysisState] = useState<ReportAnalysisState>({
     isAnalyzing: false,
@@ -138,19 +143,37 @@ export function useReportAnalysis(agencyId?: string) {
             };
 
             const commentary = generateCommentary(template, fact).commentary;
-
-            return {
-              ...item,
+            const proposed = {
               conditionCategory: match.conditionCategory,
               cleanlinessCategory: match.cleanlinessCategory,
               workingStatus: match.workingStatus,
               testStatus: match.testStatus,
               defects: match.defects || [],
               maintenanceRequired: Boolean(match.maintenanceRequired),
-              comment: commentary,
-              aiConfidence: match.aiConfidence ?? item.aiConfidence,
+              commentary,
               photoReferences,
+              aiConfidence: match.aiConfidence ?? item.aiConfidence,
+            };
+
+            if (item.reviewStatus === 'analyst_reviewed' || item.reviewStatus === 'reviewer_approved') {
+              return {
+                ...item,
+                aiSuggestion: {
+                  id: newSuggestionId(),
+                  generatedAt: new Date().toISOString(),
+                  confidence: match.aiConfidence,
+                  proposed,
+                  status: 'suggested' as const,
+                },
+              };
+            }
+
+            return {
+              ...item,
+              ...proposed,
+              comment: commentary,
               reviewStatus: match.reviewStatus || 'ai_generated',
+              aiSuggestion: undefined,
             };
           });
 

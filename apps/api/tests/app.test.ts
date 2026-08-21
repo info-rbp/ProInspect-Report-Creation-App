@@ -116,7 +116,7 @@ describe('Cloud Run API', () => {
     server?.close();
     const docs = await request(dependencies(), '/api/v1/openapi.json');
     expect(docs.status).toBe(200);
-    expect(await docs.json()).toMatchObject({ openapi: '3.1.0', info: { version: '1.1.0' } });
+    expect(await docs.json()).toMatchObject({ openapi: '3.1.0', info: { version: '1.2.0' } });
   });
 
   it('requires an idempotency key for material writes', async () => {

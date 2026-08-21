@@ -3,12 +3,13 @@ import type { InspectionItem, Photo } from '../../../types';
 import { ConditionAssessment } from './ConditionAssessment';
 import { CleanlinessAssessment } from './CleanlinessAssessment';
 import { WorkingStatusAssessment } from './WorkingStatusAssessment';
+import { ComponentTestingAssessment } from './ComponentTestingAssessment';
 import { ComponentDescriptionFields } from './ComponentDescriptionFields';
 import { ComponentEvidencePanel } from './ComponentEvidencePanel';
 import { ComponentCommentaryPanel } from './ComponentCommentaryPanel';
 import { ExitComponentComparisonPanel } from './ExitComponentComparisonPanel';
 import { isOperationalItem } from '../../../services/platform/propertySeedingService';
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2, Sparkles, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, Sparkles, Link2, ShieldCheck } from 'lucide-react';
 
 interface ComponentAssessmentCardProps {
   item: InspectionItem;
@@ -36,13 +37,14 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isOperational = isOperationalItem(item.name);
+  const testComplete = !isOperational || item.testStatus === 'not_applicable' || item.testStatus === 'untested' || (
+    ['tested_passed', 'tested_failed'].includes(item.testStatus) && Boolean(item.testRecord?.method?.trim())
+  );
   const isComplete =
     item.conditionCategory !== 'unable_to_confirm' &&
     item.cleanlinessCategory !== 'unable_to_confirm' &&
-    (!isOperational || (
-      item.workingStatus !== 'unable_to_confirm' &&
-      item.testStatus !== 'unable_to_confirm'
-    ));
+    (!isOperational || item.workingStatus !== 'unable_to_confirm') &&
+    testComplete;
 
   const isDamaged =
     item.conditionCategory === 'repair_required' ||
@@ -51,6 +53,7 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
 
   const hasMaterialChange = item.comparisonStatus === 'material_change' || item.comparisonStatus === 'deteriorated';
   const linkedPhotosCount = (item.photoReferences || []).length;
+  const protectedReview = item.reviewStatus === 'analyst_reviewed' || item.reviewStatus === 'reviewer_approved';
 
   return (
     <div
@@ -74,6 +77,7 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
             <div className="flex items-center gap-2">
               <h4 className="truncate text-xs font-bold text-slate-900 dark:text-white">{item.name}</h4>
               {isComplete ? <CheckCircle2 size={13} className="shrink-0 text-emerald-500" /> : <span className="shrink-0 text-[10px] font-bold text-slate-400">○ Pending</span>}
+              {protectedReview && <ShieldCheck size={13} className="shrink-0 text-blue-600" />}
             </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
               <span className="font-semibold capitalize text-slate-600 dark:text-slate-300">Cond: {item.conditionCategory?.replaceAll('_', ' ') || 'unconfirmed'}</span>
@@ -85,6 +89,8 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
                   <span className={`font-semibold capitalize ${item.workingStatus === 'operation_confirmed' || item.workingStatus === 'appears_operational' ? 'text-emerald-600' : item.workingStatus === 'not_working' ? 'text-rose-600' : 'text-amber-600'}`}>
                     Status: {item.workingStatus?.replaceAll('_', ' ') || 'untested'}
                   </span>
+                  <span className="text-slate-300">•</span>
+                  <span className="capitalize text-slate-600 dark:text-slate-300">Test: {item.testStatus?.replaceAll('_', ' ') || 'untested'}</span>
                 </>
               ) : null}
               {item.comparisonStatus && item.comparisonStatus !== 'not_compared' ? (
@@ -105,6 +111,12 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
         </div>
       </div>
 
+      {item.aiSuggestion?.status === 'suggested' && (
+        <div className="border-t border-purple-100 bg-purple-50 px-4 py-2 text-[11px] font-medium text-purple-800 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-200">
+          AI produced a new suggestion after human review. The reviewed values remain authoritative until an analyst or reviewer explicitly accepts the suggestion in the Report Console.
+        </div>
+      )}
+
       {isExpanded ? (
         <div className="space-y-3.5 border-t border-slate-100 bg-white p-4 pt-2 dark:border-slate-800 dark:bg-slate-900">
           {(item.baselineComponentData || (item.comparisonStatus && item.comparisonStatus !== 'not_compared')) ? (
@@ -116,6 +128,16 @@ export const ComponentAssessmentCard: React.FC<ComponentAssessmentCardProps> = (
             <CleanlinessAssessment value={item.cleanlinessCategory} onChange={(value) => onChange({ cleanlinessCategory: value })} disabled={disabled} />
             {isOperational ? <WorkingStatusAssessment value={item.workingStatus} onChange={(value) => onChange({ workingStatus: value })} disabled={disabled} /> : null}
           </div>
+
+          {isOperational && (
+            <ComponentTestingAssessment
+              testStatus={item.testStatus}
+              testRecord={item.testRecord}
+              areaPhotos={areaPhotos}
+              onChange={(patch) => onChange(patch)}
+              disabled={disabled}
+            />
+          )}
 
           <ComponentDescriptionFields item={item} onChange={onChange} disabled={disabled} />
           <ComponentEvidencePanel item={item} areaPhotos={areaPhotos} onChange={onChange} disabled={disabled} />
