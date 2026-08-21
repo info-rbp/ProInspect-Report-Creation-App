@@ -33,6 +33,16 @@ export async function getReportConsole(reportId: string, agencyId?: string): Pro
   return apiRequest<ReportConsoleData>(agencyId, `/api/v1/report-operations/${encodeURIComponent(reportId)}`);
 }
 
+export async function listReportAuditHistory(reportId: string, agencyId?: string): Promise<Array<Record<string, unknown>>> {
+  const records = await apiRequest<Array<Record<string, unknown>>>(agencyId, '/api/v1/audit-history?limit=100');
+  return records.filter((record) => {
+    const target = record.target && typeof record.target === 'object' && !Array.isArray(record.target)
+      ? record.target as Record<string, unknown>
+      : undefined;
+    return record.entityId === reportId || record.reportId === reportId || target?.reportId === reportId;
+  });
+}
+
 export async function reviewReportComponent(
   reportId: string,
   areaId: string,
