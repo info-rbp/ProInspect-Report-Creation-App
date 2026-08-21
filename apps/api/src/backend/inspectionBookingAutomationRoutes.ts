@@ -152,6 +152,7 @@ export async function routeInspectionBookingAutomationRequest(
             agencyId,
             id,
             {
+              agencyId,
               inspectionRequestId: request.id,
               type: 'booking_link_sent',
               channel: 'email',
