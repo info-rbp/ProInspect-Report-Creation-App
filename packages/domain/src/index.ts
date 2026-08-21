@@ -8,6 +8,7 @@ export * from './platform.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
 export * from './security.js';
+export * from './tenant.js';
 export * from './reportModel.js';
 export * from './reportOperations.js';
 export * from './photoEvidence.js';
