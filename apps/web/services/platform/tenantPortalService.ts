@@ -24,7 +24,7 @@ export interface TenantPortalContext {
   maintenance: Array<{ id: string; title?: string; description?: string; category?: string; priority?: string; status?: string; dueDate?: string }>;
   actions: Array<{ id: string; type?: string; title?: string; instruction?: string; status?: string; dueDate?: string; tenantResponseNote?: string }>;
   communications: Array<{ id: string; channel?: string; direction?: string; subject?: string; message?: string; status?: string; createdAt?: string }>;
-  documents: Array<{ id: string; type?: string; title?: string; status?: string; issuedAt?: string; signedAt?: string }>;
+  documents: Array<{ id: string; type?: string; title?: string; status?: string; content?: string; contentType?: string; acknowledgementText?: string; issuedAt?: string; signedAt?: string; signatureName?: string }>;
 }
 
 export async function generateTenantPortalGrant(tenantId: string, tenancyId: string, recipientEmail: string, expiresInHours = 168): Promise<{ grantId: string; grantToken: string; expiresAt: string; accessUrl: string }> {
@@ -32,6 +32,10 @@ export async function generateTenantPortalGrant(tenantId: string, tenancyId: str
     method: 'POST',
     body: { tenantId, tenancyId, recipientEmail, expiresInHours },
   });
+}
+
+export async function revokeTenantPortalGrant(grantId: string): Promise<unknown> {
+  return apiRequest(agencyId(), `/api/v1/tenant-portal-grants/${encodeURIComponent(grantId)}/revoke`, { method: 'POST', body: {} });
 }
 
 export async function getTenantPortalContext(grantToken: string): Promise<TenantPortalContext> {
@@ -47,5 +51,11 @@ export async function submitTenantPortalMessage(grantToken: string, message: str
 export async function submitTenantPortalMaintenance(grantToken: string, input: { title: string; description: string; category?: string; priority?: string }): Promise<unknown> {
   return externalRequest(`/api/v1/external/tenant-portal/${encodeURIComponent(grantToken)}/maintenance`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+  });
+}
+
+export async function signTenantPortalDocument(grantToken: string, documentId: string, signatureName: string): Promise<unknown> {
+  return externalRequest(`/api/v1/external/tenant-portal/${encodeURIComponent(grantToken)}/sign-document`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ documentId, signatureName }),
   });
 }
