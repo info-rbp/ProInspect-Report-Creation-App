@@ -1,4 +1,5 @@
 import './inspectionJobAugmentation.js';
+import './inspectionRequestAugmentation.js';
 import './maintenanceCommercial.js';
 import './reportOperations.js';
 import './reportMetadataAugmentation.js';
