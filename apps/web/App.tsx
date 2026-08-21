@@ -24,8 +24,10 @@ import UsersPage from './pages/admin/UsersPage';
 import MaintenancePage from './pages/admin/MaintenancePage';
 import MaintenanceConfigurationPage from './pages/admin/MaintenanceConfigurationPage';
 import MaintenanceItemConsolePage from './pages/admin/MaintenanceItemConsolePage';
+import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
 import TenantsPage from './pages/admin/TenantsPage';
 import TenantWorkspacePage from './pages/admin/TenantWorkspacePage';
+import TenantPortalAccessPage from './pages/admin/TenantPortalAccessPage';
 import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
@@ -78,8 +80,10 @@ const App: React.FC = () => (
             </Route>
             <Route element={<RoleProtectedRoute section="tenants" />}>
               <Route path="admin/tenants" element={<TenantsPage />} />
+              <Route path="admin/tenants/actions" element={<TenantFollowUpPage />} />
+              <Route path="admin/tenants/:tenantId/portal" element={<TenantPortalAccessPage />} />
               <Route path="admin/tenants/:tenantId" element={<TenantWorkspacePage />} />
-              <Route path="admin/tenant-followup" element={<Navigate to="/app/admin/tenants?tab=actions" replace />} />
+              <Route path="admin/tenant-followup" element={<Navigate to="/app/admin/tenants/actions" replace />} />
             </Route>
             <Route element={<RoleProtectedRoute section="users" />}><Route path="admin/users" element={<UsersPage />} /></Route>
             <Route element={<RoleProtectedRoute section="templates" />}><Route path="admin/templates" element={<TemplatesPage />} /></Route>
