@@ -29,6 +29,7 @@ import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
 import ExternalMaintenanceQuotePage from './pages/external/ExternalMaintenanceQuotePage';
+import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPage';
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
 
@@ -42,6 +43,7 @@ const App: React.FC = () => (
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
         <Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} />
+        <Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
         <Route path="/app" element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/app/dashboard" replace />} />
