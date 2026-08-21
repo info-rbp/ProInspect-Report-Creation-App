@@ -4,6 +4,7 @@ import type { AuthorisationTarget, DomainErrorShape, SecurityCapability } from '
 import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeReportOperationsRequest } from './backend/reportOperationsRoutes.js';
+import { routeReportLifecycleActionRequest } from './backend/reportLifecycleActionRoutes.js';
 import { routeAnalysisRequest } from './backend/analysisRoutes.js';
 import { routeInspectionReportRequest } from './backend/inspectionReportRoutes.js';
 import { routeInspectionOperationsRequest } from './backend/inspectionOperationsRoutes.js';
@@ -123,6 +124,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const reportOperationsResponse = await routeReportOperationsRequest(req, dependencies, correlationId);
       if (reportOperationsResponse) {
         send(res, reportOperationsResponse, correlationId);
+        return;
+      }
+
+      const reportLifecycleResponse = await routeReportLifecycleActionRequest(req, dependencies, correlationId);
+      if (reportLifecycleResponse) {
+        send(res, reportLifecycleResponse, correlationId);
         return;
       }
 
