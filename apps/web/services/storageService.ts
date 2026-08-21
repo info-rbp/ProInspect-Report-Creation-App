@@ -72,11 +72,16 @@ interface AggregateComponent {
   cleanlinessCategory: ComponentCleanlinessCategory;
   workingStatus: ComponentWorkingStatus;
   testStatus: ComponentTestStatus;
+  testRecord?: InspectionItem['testRecord'];
   defects: string[];
   maintenanceRequired: boolean;
   commentary: string;
   photoReferences: ReportPhotoReference[];
   aiConfidence?: number;
+  aiSuggestion?: InspectionItem['aiSuggestion'];
+  authoritativeSource?: InspectionItem['authoritativeSource'];
+  lastReviewedBy?: string;
+  lastReviewedAt?: string;
   reviewStatus: ComponentReviewStatus;
   comparisonStatus: ComponentComparisonStatus;
   presenceComparison?: InspectionItem['presenceComparison'];
@@ -143,11 +148,16 @@ export function normalizeItem(rawItem: any): InspectionItem {
       cleanlinessCategory: rawItem.cleanlinessCategory,
       workingStatus: rawItem.workingStatus || (operational ? 'untested' : 'not_applicable'),
       testStatus: rawItem.testStatus || (operational ? 'untested' : 'not_applicable'),
+      testRecord: rawItem.testRecord,
       defects: Array.isArray(rawItem.defects) ? rawItem.defects : [],
       maintenanceRequired: Boolean(rawItem.maintenanceRequired),
       comment: rawItem.comment ?? rawItem.commentary ?? '',
       photoReferences: Array.isArray(rawItem.photoReferences) ? rawItem.photoReferences : [],
       aiConfidence: rawItem.aiConfidence,
+      aiSuggestion: rawItem.aiSuggestion,
+      authoritativeSource: rawItem.authoritativeSource,
+      lastReviewedBy: rawItem.lastReviewedBy,
+      lastReviewedAt: rawItem.lastReviewedAt,
       reviewStatus: rawItem.reviewStatus || 'draft',
       comparisonStatus: rawItem.comparisonStatus || 'not_compared',
       presenceComparison: rawItem.presenceComparison,
@@ -222,6 +232,7 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
     propertyId: report.propertyId,
     tenancyId: report.tenancyId,
     inspectionJobId: report.inspectionJobId,
+    propertyLayoutVersionId: report.propertyLayoutVersionId,
     lifecycleStatus: report.lifecycleStatus ?? 'draft',
     reportType: report.reportType,
     templateId: report.templateId,
@@ -248,8 +259,10 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
     renderManifestObjectPath: report.renderManifestObjectPath,
     renderManifestSha256: report.renderManifestSha256,
     pdfGeneratedAt: report.pdfGeneratedAt,
+    archiveReportVersionId: report.archiveReportVersionId,
     archiveManifestObjectPath: report.archiveManifestObjectPath,
     archiveManifestSha256: report.archiveManifestSha256,
+    archiveCreatedAt: report.archiveCreatedAt,
     baselineReportId: report.baselineReportId,
     baselineReportVersionId: report.baselineReportVersionId,
     baselineInspectionJobId: report.baselineInspectionJobId,
@@ -291,18 +304,17 @@ function toAggregate(report: ReportData): ReportAggregatePayload {
             cleanlinessCategory: norm.cleanlinessCategory,
             workingStatus: norm.workingStatus,
             testStatus: norm.testStatus,
+            testRecord: norm.testRecord,
             defects: norm.defects || [],
             maintenanceRequired: norm.maintenanceRequired || false,
             commentary: norm.comment || '',
             photoReferences: norm.photoReferences || [],
             aiConfidence: norm.aiConfidence,
-            reviewStatus: norm.reviewStatus || (
-              room.status === 'complete'
-                ? 'reviewer_approved'
-                : room.status === 'analyzed'
-                  ? 'ai_generated'
-                  : 'draft'
-            ),
+            aiSuggestion: norm.aiSuggestion,
+            authoritativeSource: norm.authoritativeSource,
+            lastReviewedBy: norm.lastReviewedBy,
+            lastReviewedAt: norm.lastReviewedAt,
+            reviewStatus: norm.reviewStatus || 'draft',
             comparisonStatus: norm.comparisonStatus || 'not_compared',
             presenceComparison: norm.presenceComparison,
             conditionComparison: norm.conditionComparison,
@@ -359,6 +371,7 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
     propertyId: metadata.propertyId as string | undefined,
     tenancyId: metadata.tenancyId as string | undefined,
     inspectionJobId: metadata.inspectionJobId as string | undefined,
+    propertyLayoutVersionId: metadata.propertyLayoutVersionId as string | undefined,
     lifecycleStatus: metadata.lifecycleStatus as ReportData['lifecycleStatus'],
     currentVersionId: metadata.currentVersionId as string | undefined,
     templateId: metadata.templateId as string | undefined,
@@ -374,8 +387,10 @@ function reportMetadata(metadata: ReportAggregatePayload['report'], rooms: Room[
     renderManifestObjectPath: metadata.renderManifestObjectPath as string | undefined,
     renderManifestSha256: metadata.renderManifestSha256 as string | undefined,
     pdfGeneratedAt: metadata.pdfGeneratedAt as string | undefined,
+    archiveReportVersionId: metadata.archiveReportVersionId as string | undefined,
     archiveManifestObjectPath: metadata.archiveManifestObjectPath as string | undefined,
     archiveManifestSha256: metadata.archiveManifestSha256 as string | undefined,
+    archiveCreatedAt: metadata.archiveCreatedAt as string | undefined,
     propertyAddress: String(metadata.propertyAddress ?? ''),
     agentName: String(metadata.agentName ?? ''),
     agentCompany: String(metadata.agentCompany ?? ''),
@@ -517,7 +532,7 @@ export const deleteReportFromDB = async (id: string): Promise<void> => {
   const existing = await apiRequest<ReportAggregatePayload>(undefined, `/api/v1/reports/${id}/aggregate`);
   await apiRequest<Record<string, unknown>>(
     String(existing.report.agencyId),
-    `/api/v1/reports/${id}/transitions`,
+    `/api/v1/report-actions/${encodeURIComponent(id)}/lifecycle/transition`,
     {
       method: 'POST',
       body: {
