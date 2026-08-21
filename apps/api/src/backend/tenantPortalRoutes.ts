@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { MAINTENANCE_CATEGORIES, MAINTENANCE_PRIORITIES, type MaintenanceCategory, type MaintenancePriority } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -115,6 +116,15 @@ async function generateGrant(req: IncomingMessage, dependencies: ApiDependencies
   return { status: 201, body: { data: { grantId, grantToken: rawToken, expiresAt: grant.expiresAt, accessUrl: `/tenant-portal/${rawToken}` }, meta: { correlationId } } };
 }
 
+async function revokeGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, grantId: string): Promise<ApiResponse> {
+  const agencyId = agencyHeader(req);
+  const principal = await authenticateAndAuthorise(req, dependencies, 'tenant.portal.manage', { agencyId }, correlationId);
+  const grant = await dependencies.repository.get('tenantPortalGrants', agencyId, grantId);
+  if (!grant) throw new ApiError(404, 'PORTAL_GRANT_NOT_FOUND', 'Tenant portal grant not found.');
+  const updated = await dependencies.repository.update('tenantPortalGrants', agencyId, grantId, { revokedAt: new Date().toISOString() }, Number(grant.version || 1), principal.uid);
+  return { status: 200, body: { data: updated, meta: { correlationId } } };
+}
+
 async function portalGet(grant: TenantPortalGrant, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
   const [tenant, tenancy, property, jobs, reports, maintenance, actions, communications, documents] = await Promise.all([
     dependencies.repository.get('tenants', grant.agencyId, grant.tenantId),
@@ -143,7 +153,11 @@ async function portalGet(grant: TenantPortalGrant, dependencies: ApiDependencies
     maintenance: maintenance.items.filter((item) => item.tenancyId === grant.tenancyId).map((item) => ({ id: item.id, title: item.title, description: item.description, category: item.category, priority: item.priority, status: item.status, dueDate: item.dueDate })),
     actions: actions.items.filter((item) => item.tenancyId === grant.tenancyId).map((item) => ({ id: item.id, type: item.type, title: item.title, instruction: item.instruction, status: item.status, dueDate: item.dueDate, tenantResponseNote: item.tenantResponseNote })),
     communications: communications.items.filter((item) => item.tenantId === grant.tenantId && item.tenancyId === grant.tenancyId).map((item) => ({ id: item.id, channel: item.channel, direction: item.direction, subject: item.subject, message: item.message, status: item.status, createdAt: item.createdAt })),
-    documents: documents.items.filter((item) => item.tenancyId === grant.tenancyId && (!item.tenantId || item.tenantId === grant.tenantId)).map((item) => ({ id: item.id, type: item.type, title: item.title, status: item.status, issuedAt: item.issuedAt, signedAt: item.signedAt })),
+    documents: documents.items.filter((item) => item.tenancyId === grant.tenancyId && (!item.tenantId || item.tenantId === grant.tenantId)).map((item) => ({
+      id: item.id, type: item.type, title: item.title, status: item.status, content: item.content,
+      contentType: item.contentType, acknowledgementText: item.acknowledgementText, issuedAt: item.issuedAt,
+      signedAt: item.signedAt, signatureName: item.signatureName,
+    })),
   };
   await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: `external:${grant.id}`, actorRole: 'external', agencyId: grant.agencyId, capability: 'tenant.portal.manage', outcome: 'allowed', reason: 'tenant_portal.viewed', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId });
   return { status: 200, body: { data: response, meta: { correlationId } } };
@@ -157,21 +171,40 @@ async function portalPost(req: IncomingMessage, grant: TenantPortalGrant, depend
     const record = await dependencies.repository.create('tenantCommunications', grant.agencyId, randomUUID(), {
       tenantId: grant.tenantId, tenancyId: grant.tenancyId, channel: 'portal', direction: 'inbound', message, status: 'received',
     }, actor);
+    await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: actor, actorRole: 'external', agencyId: grant.agencyId, capability: 'tenant.portal.manage', outcome: 'allowed', reason: 'tenant_portal.message_received', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId });
     return { status: 201, body: { data: record, meta: { correlationId } } };
   }
   if (command === 'maintenance') {
     const title = requiredString(body, 'title');
     const description = requiredString(body, 'description');
+    const category = typeof body.category === 'string' && MAINTENANCE_CATEGORIES.includes(body.category as MaintenanceCategory) ? body.category as MaintenanceCategory : 'General Maintenance';
+    const priority = typeof body.priority === 'string' && MAINTENANCE_PRIORITIES.includes(body.priority as MaintenancePriority) ? body.priority as MaintenancePriority : 'routine';
     const tenancy = await dependencies.repository.get('tenancies', grant.agencyId, grant.tenancyId);
     if (!tenancy?.propertyId) throw new ApiError(409, 'TENANCY_PROPERTY_REQUIRED', 'Tenancy is not linked to a property.');
     const record = await dependencies.repository.create('maintenanceItems', grant.agencyId, randomUUID(), {
-      propertyId: tenancy.propertyId, tenancyId: grant.tenancyId, title, description,
-      category: typeof body.category === 'string' ? body.category : 'General Maintenance',
-      priority: typeof body.priority === 'string' ? body.priority : 'routine',
+      propertyId: tenancy.propertyId, tenancyId: grant.tenancyId, title, description, category, priority,
       status: 'triage_required', sourceEvidenceIds: [], approvalRequired: false, approvalStatus: 'not_required',
       verificationStatus: 'unverified', source: 'tenant', createdBy: actor,
     }, actor);
+    await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: actor, actorRole: 'external', agencyId: grant.agencyId, capability: 'tenant.portal.manage', outcome: 'allowed', reason: 'tenant_portal.maintenance_submitted', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId });
     return { status: 201, body: { data: record, meta: { correlationId } } };
+  }
+  if (command === 'sign-document') {
+    const documentId = requiredString(body, 'documentId');
+    const signatureName = requiredString(body, 'signatureName');
+    const document = await dependencies.repository.get('tenancyDocuments', grant.agencyId, documentId);
+    if (!document || document.tenancyId !== grant.tenancyId || (document.tenantId && document.tenantId !== grant.tenantId)) {
+      throw new ApiError(404, 'DOCUMENT_NOT_FOUND', 'Document is not available in this tenant portal.');
+    }
+    if (!['signature_required', 'partially_signed'].includes(String(document.status))) {
+      throw new ApiError(409, 'DOCUMENT_NOT_SIGNABLE', 'Document is not awaiting a portal signature.');
+    }
+    const signedAt = new Date().toISOString();
+    const updated = await dependencies.repository.update('tenancyDocuments', grant.agencyId, documentId, {
+      status: 'signed', signedAt, signedByTenantId: grant.tenantId, signatureMethod: 'portal_acknowledgement', signatureName,
+    }, Number(document.version || 1), actor);
+    await dependencies.audit.append({ id: randomUUID(), timestamp: signedAt, actorId: actor, actorRole: 'external', agencyId: grant.agencyId, capability: 'tenant.portal.manage', outcome: 'allowed', reason: 'tenant_portal.document_signed', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId });
+    return { status: 200, body: { data: updated, meta: { correlationId } } };
   }
   throw new ApiError(404, 'UNKNOWN_PORTAL_COMMAND', 'Unknown tenant portal action.');
 }
@@ -180,6 +213,7 @@ export async function routeTenantPortalRequest(req: IncomingMessage, dependencie
   const parts = new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean);
   if (parts[0] !== 'api' || parts[1] !== 'v1') return undefined;
   if (parts[2] === 'tenant-portal-grants' && parts[3] === 'generate' && req.method === 'POST') return generateGrant(req, dependencies, correlationId);
+  if (parts[2] === 'tenant-portal-grants' && parts[3] && parts[4] === 'revoke' && req.method === 'POST') return revokeGrant(req, dependencies, correlationId, parts[3]);
   if (parts[2] !== 'external' || parts[3] !== 'tenant-portal' || !parts[4]) return undefined;
   const grant = await resolveGrant(parts[4]);
   if (req.method === 'GET' && !parts[5]) return portalGet(grant, dependencies, correlationId);
