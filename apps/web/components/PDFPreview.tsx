@@ -30,44 +30,49 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
   const showExitSection = isExitReport(data.reportType);
 
   return (
-    <div className="bg-white text-black text-sm font-sans leading-tight max-w-[210mm] mx-auto shadow-none print:w-full print:max-w-none">
-      <div className="p-12 min-h-[297mm] flex flex-col relative page-break box-border">
-        <div className="flex justify-between items-start mb-12">
+    <div className="relative mx-auto max-w-[210mm] bg-white font-sans text-sm leading-tight text-black shadow-none print:w-full print:max-w-none">
+      <div className="sticky top-0 z-20 border-y-2 border-amber-500 bg-amber-100 px-4 py-2 text-center text-xs font-extrabold uppercase tracking-[0.2em] text-amber-950 print:static">
+        Draft Preview · Not the verified issued report
+      </div>
+
+      <div className="page-break relative flex min-h-[297mm] flex-col box-border p-12">
+        <div className="mb-12 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold text-2xl shadow-sm">RB</div>
-            <div className="flex flex-col justify-center h-14">
-              <h1 className="text-2xl font-bold text-blue-800 tracking-tight uppercase leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>
-                {data.agentCompany || 'REMOTE BUSINESS PARTNER'}
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-700 text-2xl font-bold text-white shadow-sm">PI</div>
+            <div className="flex h-14 flex-col justify-center">
+              <h1 className="text-2xl font-bold uppercase leading-none tracking-tight text-blue-800" style={{ fontFamily: 'Arial, sans-serif' }}>
+                {data.agentCompany || 'ProInspect'}
               </h1>
             </div>
           </div>
           <div className="text-right text-xs font-medium leading-relaxed">
-            <p className="font-bold text-black text-sm mb-1">{data.agentCompany || 'Remote Business Partner'}</p>
+            <p className="mb-1 text-sm font-bold text-black">{data.agentCompany || 'ProInspect'}</p>
             {data.agentAddress && <p>{data.agentAddress}</p>}
             {data.agentPhone && <p className="mt-2">T: {data.agentPhone}</p>}
             {data.agentEmail && <p>E: {data.agentEmail}</p>}
           </div>
         </div>
 
-        <div className="text-center mt-6 mb-8">
-          <h1 className="text-3xl font-bold text-black mb-4" style={{ fontFamily: 'Arial, sans-serif' }}>{reportTitle}</h1>
+        <div className="mb-8 mt-6 text-center">
+          <h1 className="mb-4 text-3xl font-bold text-black" style={{ fontFamily: 'Arial, sans-serif' }}>{reportTitle}</h1>
           <h2 className="text-xl font-bold text-black">{data.propertyAddress}</h2>
         </div>
 
         {data.heroPhoto && (
-          <div className="flex justify-center mb-8">
-            <div className="w-full max-w-[180mm] h-[100mm] border border-gray-300 bg-gray-100 overflow-hidden shadow-sm flex items-center justify-center">
-              <img src={data.heroPhoto.previewUrl} alt="Property Front" className="w-full h-full object-cover" />
+          <div className="mb-8 flex justify-center">
+            <div className="flex h-[100mm] w-full max-w-[180mm] items-center justify-center overflow-hidden border border-gray-300 bg-gray-100 shadow-sm">
+              <img src={data.heroPhoto.previewUrl} alt="Property Front" className="h-full w-full object-cover" />
             </div>
           </div>
         )}
 
-        <div className="mt-auto text-center space-y-4 mb-20">
+        <div className="mb-20 mt-auto space-y-4 text-center">
           <p className="text-sm">Report completed on {formatDate(data.inspectionDate)}</p>
-          <p className="text-sm">Prepared by {data.agentName}</p>
+          <p className="text-sm">Prepared by {data.agentName || 'Assigned inspector'}</p>
+          <p className="text-xs text-gray-500">Report ID {data.id}{data.currentVersionId ? ` · Current immutable version ${data.currentVersionId}` : ''}</p>
         </div>
 
-        <div className="absolute bottom-12 right-12 font-bold text-sm text-blue-800">{data.agentCompany || 'Remote Business Partner'}</div>
+        <div className="absolute bottom-12 right-12 text-sm font-bold text-blue-800">{data.agentCompany || 'ProInspect'}</div>
       </div>
 
       <style>{`
@@ -87,24 +92,22 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
             background: white;
             z-index: 100;
           }
-          .content-start {
-            margin-top: 15mm;
-          }
+          .content-start { margin-top: 15mm; }
           thead { display: table-header-group; }
           tr { page-break-inside: avoid; }
         }
         .running-header { display: none; }
       `}</style>
 
-      <div className="hidden print:flex running-header">
+      <div className="running-header hidden print:flex">
         <span>{data.propertyAddress}</span>
         <span>{reportTitle}</span>
       </div>
 
-      <div className="p-10 content-start">
-        <div className="bg-gray-200 border border-black text-center font-bold py-1 mb-1 text-sm">Agent section</div>
-        <div className="text-[10px] mb-4 text-center px-4">
-          Each item has been given a column description of clean, undamaged, and working. Tick each column that applies to the item and make any necessary comments.
+      <div className="content-start p-10">
+        <div className="mb-1 border border-black bg-gray-200 py-1 text-center text-sm font-bold">Agent section</div>
+        <div className="mb-4 px-4 text-center text-[10px]">
+          Each item records structured condition, cleanliness and operational observations. Operational confirmation requires a recorded qualifying test; an image alone is not a test.
         </div>
 
         {rooms.map((room) => {
@@ -115,11 +118,11 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
               <table className="w-full border-collapse border border-black text-[11px]">
                 <thead>
                   <tr className="bg-gray-100 print:bg-gray-100">
-                    <th className="border border-black p-1 text-left uppercase font-bold text-sm w-[30%]">{room.name}</th>
-                    <th className="border border-black p-1 w-[5%] text-center text-[10px]">Cln</th>
-                    <th className="border border-black p-1 w-[5%] text-center text-[10px]">Udg</th>
-                    <th className="border border-black p-1 w-[5%] text-center text-[10px]">Wkg</th>
-                    <th className="border border-black p-1 text-center font-bold text-xs bg-gray-100">Agent comments<br /><span className="text-[9px] font-normal italic">Cln = Clean, Udg = Undamaged, Wkg = Working</span></th>
+                    <th className="w-[30%] border border-black p-1 text-left text-sm font-bold uppercase">{room.name}</th>
+                    <th className="w-[5%] border border-black p-1 text-center text-[10px]">Cln</th>
+                    <th className="w-[5%] border border-black p-1 text-center text-[10px]">Udg</th>
+                    <th className="w-[5%] border border-black p-1 text-center text-[10px]">Wkg</th>
+                    <th className="border border-black bg-gray-100 p-1 text-center text-xs font-bold">Agent comments<br /><span className="text-[9px] font-normal italic">Cln = Clean, Udg = Undamaged, Wkg = Working</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -128,25 +131,30 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
                     <td className="border-r border-black p-1 text-center align-top">{formatChecklistValue(aggregateStatus.isClean)}</td>
                     <td className="border-r border-black p-1 text-center align-top">{formatChecklistValue(aggregateStatus.isUndamaged)}</td>
                     <td className="border-r border-black p-1 text-center align-top">{formatChecklistValue(aggregateStatus.isWorking)}</td>
-                    <td className="p-2 align-top text-blue-800 font-medium">{roomPhotosCount > 0 ? `(${roomPhotosCount} photos attached)` : 'No photos attached.'}</td>
+                    <td className="p-2 align-top font-medium text-blue-800">{roomPhotosCount > 0 ? `(${roomPhotosCount} photos attached)` : 'No photos attached.'}</td>
                   </tr>
                   <tr className="border-b border-black">
                     <td className="border-r border-black p-2 align-top">Overall Commentary</td>
-                    <td className="border-r border-black p-1 text-center align-top"></td>
-                    <td className="border-r border-black p-1 text-center align-top"></td>
-                    <td className="border-r border-black p-1 text-center align-top"></td>
-                    <td className="p-2 align-top whitespace-pre-wrap leading-relaxed">{room.overallComment || 'No general overview provided.'}</td>
+                    <td className="border-r border-black p-1 text-center align-top" />
+                    <td className="border-r border-black p-1 text-center align-top" />
+                    <td className="border-r border-black p-1 text-center align-top" />
+                    <td className="p-2 align-top leading-relaxed whitespace-pre-wrap">{room.overallComment || 'No general overview provided.'}</td>
                   </tr>
                   {(room.items || []).map((item) => (
                     <tr key={item.id} className="border-b border-black hover:bg-gray-50">
-                      <td className="border-r border-black p-2 align-top text-black font-medium">{item.name}</td>
-                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(item.cleanlinessCategory === 'clean')}</td>
-                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(['intact', 'minor_wear'].includes(item.conditionCategory))}</td>
-                      <td className="border-r border-black p-1 text-center align-top text-green-700 font-bold">{formatChecklistValue(['operation_confirmed', 'appears_operational'].includes(item.workingStatus))}</td>
-                      <td className="p-2 align-top text-black space-y-1">
+                      <td className="border-r border-black p-2 align-top font-medium text-black">{item.name}</td>
+                      <td className="border-r border-black p-1 text-center align-top font-bold text-green-700">{formatChecklistValue(item.cleanlinessCategory === 'clean')}</td>
+                      <td className="border-r border-black p-1 text-center align-top font-bold text-green-700">{formatChecklistValue(['intact', 'minor_wear'].includes(item.conditionCategory))}</td>
+                      <td className="border-r border-black p-1 text-center align-top font-bold text-green-700">{formatChecklistValue(['operation_confirmed', 'appears_operational'].includes(item.workingStatus))}</td>
+                      <td className="space-y-1 p-2 align-top text-black">
                         <div>{item.comment || 'Refer to overall commentary.'}</div>
+                        {item.testRecord?.status === 'tested' && (
+                          <div className="border-t border-gray-200 pt-1 text-[10px] text-gray-700">
+                            <strong>Operational test:</strong> {item.testRecord.result || 'inconclusive'}{item.testRecord.method ? ` · ${item.testRecord.method}` : ''}
+                          </div>
+                        )}
                         {showExitSection && (item.comparisonCommentary || item.baselineComponentData) && (
-                          <div className="text-[10px] text-indigo-900 border-t border-gray-200 pt-1 mt-1">
+                          <div className="mt-1 border-t border-gray-200 pt-1 text-[10px] text-indigo-900">
                             <strong className="text-black">Exit Comparison:</strong> {item.comparisonCommentary || 'Consistent with Entry baseline; no material change identified.'}
                           </div>
                         )}
@@ -160,17 +168,17 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
         })}
       </div>
 
-      <div className="p-10 page-break">
-        <div className="bg-gray-200 border border-black px-2 py-1 font-bold mb-4 text-sm">{showExitSection ? 'Exit Condition Report Notes' : `${reportTitle} Notes`}</div>
+      <div className="page-break p-10">
+        <div className="mb-4 border border-black bg-gray-200 px-2 py-1 text-sm font-bold">{showExitSection ? 'Exit Condition Report Notes' : `${reportTitle} Notes`}</div>
 
         {showExitSection && (
           <div className="mb-6">
-            <h3 className="font-bold text-sm mb-4">Approximate dates when work last done on residential premises</h3>
+            <h3 className="mb-4 text-sm font-bold">Approximate dates when work last done on residential premises</h3>
             <div className="space-y-2 text-sm">
               {['Painting of premises (external)', 'Painting of premises (internal)', 'Floorcoverings laid', 'Floorcoverings professionally cleaned'].map((label) => (
                 <div key={label} className="flex items-center">
                   <div className="w-1/3">{label}:</div>
-                  <div className="w-2/3 border border-black h-8 flex items-center justify-center bg-white"> / / </div>
+                  <div className="flex h-8 w-2/3 items-center justify-center border border-black bg-white"> / / </div>
                 </div>
               ))}
             </div>
@@ -178,47 +186,39 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
         )}
 
         <div className="mb-8">
-          <div className="font-bold text-sm mb-1">Additional Comments</div>
-          <div className="border border-black h-24 w-full"></div>
+          <div className="mb-1 text-sm font-bold">Additional Comments</div>
+          <div className="h-24 w-full border border-black" />
         </div>
 
-        <div className="bg-gray-200 border border-black px-2 py-1 font-bold mb-0 text-sm">Agent Signature</div>
-        <div className="border border-black border-t-0 p-4 flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <span>Print Name:</span>
-            <div className="border border-black px-4 py-2 min-w-[200px]">{data.agentName}</div>
+        <div className="mb-0 border border-black bg-gray-200 px-2 py-1 text-sm font-bold">Report Preparation / Approval Record</div>
+        <div className="border border-t-0 border-black p-4 text-sm">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div><span className="font-bold">Prepared by:</span><div>{data.agentName || 'Recorded in ProInspect'}</div></div>
+            <div><span className="font-bold">Inspection date:</span><div>{formatDate(data.inspectionDate)}</div></div>
+            <div><span className="font-bold">Report version:</span><div>{data.currentVersionId || 'Draft preview'}</div></div>
           </div>
-          <div className="flex items-center gap-2 flex-grow">
-            <span>Signature:</span>
-            <div className="border border-black h-10 flex-grow font-script text-2xl px-2"><span style={{ fontFamily: 'cursive' }}>{data.agentName.split(' ')[0]}</span></div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span>Date:</span>
-            <div className="border border-black px-4 py-2 min-w-[150px]">{formatDate(data.inspectionDate)}</div>
-          </div>
+          <p className="mt-3 text-[10px] text-gray-600">No synthetic signature is rendered. Reviewer approval, recipient acknowledgements and finalisation are separate audited records bound to the immutable report version and its content hash.</p>
         </div>
 
-        <div className="mt-8 text-[10px] text-justify leading-tight">
-          <p className="font-bold mb-1">DISCLAIMER:</p>
-          <p>
-            This tenancy inspection report is a visual inspection intended to document observed condition only. It does not replace specialist advice on structural, electrical, plumbing, gas, glazing, smoke alarm, or pool safety compliance matters. Furniture, personal belongings, enclosed cavities, and concealed building elements are outside the scope of this report unless specifically accessed and recorded.
-          </p>
+        <div className="mt-8 text-[10px] leading-tight text-justify">
+          <p className="mb-1 font-bold">DISCLAIMER:</p>
+          <p>This tenancy inspection report is a visual inspection intended to document observed condition only. It does not replace specialist advice on structural, electrical, plumbing, gas, glazing, smoke alarm, or pool safety compliance matters. Furniture, personal belongings, enclosed cavities, and concealed building elements are outside the scope of this report unless specifically accessed and recorded.</p>
         </div>
 
-        <div className="text-right font-bold text-sm mt-8">{getReportFooterLabel(data.reportType)}</div>
+        <div className="mt-8 text-right text-sm font-bold">{getReportFooterLabel(data.reportType)}</div>
       </div>
 
       {allPhotos.length > 0 && (
-        <div className="p-10 page-break">
-          <div className="bg-gray-200 border border-black px-2 py-1 font-bold mb-4 text-sm">Agent Inspection Photos ({totalPhotos} photos)</div>
+        <div className="page-break p-10">
+          <div className="mb-4 border border-black bg-gray-200 px-2 py-1 text-sm font-bold">Agent Inspection Photos ({totalPhotos} photos)</div>
           <div className="grid grid-cols-3 gap-4">
             {allPhotos.map((photo) => (
-              <div key={photo.id} className="mb-4 avoid-break">
-                <div className="text-[10px] font-bold mb-1 uppercase">{photo.roomName}: Overall (photo {photo.roomIndex} of {photo.totalInRoom})</div>
-                <div className="w-full aspect-[4/3] bg-gray-100 border border-gray-300 relative">
-                  <img src={photo.previewUrl} className="w-full h-full object-cover" alt={`${photo.roomName} inspection`} />
+              <div key={photo.id} className="avoid-break mb-4">
+                <div className="mb-1 text-[10px] font-bold uppercase">{photo.roomName}: Overall (photo {photo.roomIndex} of {photo.totalInRoom})</div>
+                <div className="relative aspect-[4/3] w-full border border-gray-300 bg-gray-100">
+                  <img src={photo.previewUrl} className="h-full w-full object-cover" alt={`${photo.roomName} inspection`} />
                 </div>
-                <div className="text-[9px] text-right text-gray-500 mt-0.5">{formatDate(data.inspectionDate)}</div>
+                <div className="mt-0.5 text-right text-[9px] text-gray-500">{formatDate(data.inspectionDate)}</div>
               </div>
             ))}
           </div>
