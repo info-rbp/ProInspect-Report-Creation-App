@@ -52,7 +52,7 @@ async function resolveGrant(rawToken: string): Promise<VersionedGrant> {
     throw new ApiError(401, 'AMBIGUOUS_GRANT_TOKEN', 'Access link cannot be resolved safely.');
   }
   const grant = snapshot.docs[0].data() as VersionedGrant;
-  if (!['work_request', 'tenant_instruction'].includes(grant.resourceType)) {
+  if (!['work_request', 'tenant_instruction', 'report_distribution'].includes(String(grant.resourceType))) {
     throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'This access link cannot upload evidence.');
   }
   if (grant.revokedAt) {
@@ -117,7 +117,7 @@ async function resourceContext(
   areaId?: string;
   componentIds: string[];
 }> {
-  if (grant.resourceType === 'work_request') {
+  if (String(grant.resourceType) === 'work_request') {
     const request = await dependencies.repository.get(
       'workRequests',
       grant.agencyId,
@@ -154,6 +154,27 @@ async function resourceContext(
         typeof item.sourceComponentId === 'string' && item.sourceComponentId
           ? [item.sourceComponentId]
           : [],
+    };
+  }
+
+  if (String(grant.resourceType) === 'report_distribution') {
+    const distribution = await dependencies.repository.get(
+      'reportDistributions',
+      grant.agencyId,
+      grant.resourceId,
+    );
+    if (!distribution) {
+      throw new ApiError(404, 'REPORT_DISTRIBUTION_NOT_FOUND', 'Scoped report distribution no longer exists.');
+    }
+    const reportId = typeof distribution.reportId === 'string' ? distribution.reportId : '';
+    if (!reportId) throw new ApiError(409, 'REPORT_REQUIRED', 'Report distribution is not linked to a report.');
+    const report = await dependencies.reports.load(grant.agencyId, reportId);
+    if (!report) throw new ApiError(404, 'REPORT_NOT_FOUND', 'Scoped report no longer exists.');
+    return {
+      propertyId: report.report.propertyId || `report-property-${reportId}`,
+      inspectionJobId: report.report.inspectionJobId || `report-response-${reportId}`,
+      reportId,
+      componentIds: [],
     };
   }
 
@@ -234,7 +255,7 @@ export async function routeExternalEvidenceRequest(
       size: body.size,
       sha256: body.sha256,
       externalGrantId: grant.id,
-      externalResourceType: grant.resourceType,
+      externalResourceType: String(grant.resourceType),
       externalResourceId: grant.resourceId,
     },
     externalPrincipal(grant),
@@ -254,7 +275,7 @@ export async function routeExternalEvidenceRequest(
     reason: 'external.evidence_upload_session_created',
     target: { agencyId: grant.agencyId },
     correlationId,
-    entityType: grant.resourceType,
+    entityType: String(grant.resourceType),
     entityId: grant.resourceId,
     eventType: 'external.evidence_upload_session_created',
     metadata: { uploadId, fileName: body.fileName, sha256: body.sha256 },
