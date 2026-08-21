@@ -181,11 +181,12 @@ export async function createTenancyDocument(input: Omit<TenancyDocument, 'id' | 
   });
 }
 
-export async function migrateLegacyTenancies(tenancies: ManagedTenancy[]): Promise<{ tenantsCreated: number; participantsCreated: number }> {
+export async function migrateLegacyTenancies(tenancies: ManagedTenancy[]): Promise<{ tenantsCreated: number; participantsCreated: number; reviewRequired: number }> {
   const existingTenants = await listTenants();
   const participants = await listTenancyParticipants();
   let tenantsCreated = 0;
   let participantsCreated = 0;
+  let reviewRequired = 0;
 
   for (const tenancy of tenancies) {
     const names = tenancy.tenantNames || [];
@@ -194,19 +195,27 @@ export async function migrateLegacyTenancies(tenancies: ManagedTenancy[]): Promi
       const fullName = names[index]?.trim();
       if (!fullName) continue;
       const email = emails[index]?.trim().toLowerCase();
-      let tenant = existingTenants.find((candidate) => email && candidate.email?.toLowerCase() === email)
-        || existingTenants.find((candidate) => candidate.fullName.trim().toLowerCase() === fullName.toLowerCase());
+      const emailMatches = email
+        ? existingTenants.filter((candidate) => candidate.email?.trim().toLowerCase() === email)
+        : [];
+      if (emailMatches.length > 1) {
+        reviewRequired += 1;
+        continue;
+      }
+      let tenant = emailMatches[0];
       if (!tenant) {
+        // Names are deliberately not used as an identity key. Two people can share a name;
+        // records without a verified email are created separately rather than silently merged.
         tenant = await createTenant({ fullName, ...(email ? { email } : {}) });
         existingTenants.push(tenant);
         tenantsCreated += 1;
       }
-      if (!participants.some((candidate) => candidate.tenancyId === tenancy.id && candidate.tenantId === tenant!.id)) {
+      if (!participants.some((candidate) => candidate.tenancyId === tenancy.id && candidate.tenantId === tenant.id)) {
         const participant = await addTenancyParticipant(tenancy.id, tenant.id, index === 0 ? 'primary_tenant' : 'co_tenant');
         participants.push(participant);
         participantsCreated += 1;
       }
     }
   }
-  return { tenantsCreated, participantsCreated };
+  return { tenantsCreated, participantsCreated, reviewRequired };
 }
