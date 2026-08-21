@@ -13,7 +13,7 @@ const capabilities: Record<UserRole, ReadonlySet<SecurityCapability>> = {
   ]),
   operations: new Set([
     'agency.read', 'property.read', 'property.manage', 'tenancy.read', 'tenancy.manage', 'job.read',
-    'job.manage', 'report.read', 'maintenance.manage', 'maintenance.read', 'maintenance.triage',
+    'job.manage', 'report.read', 'report.issue', 'maintenance.manage', 'maintenance.read', 'maintenance.triage',
     'maintenance.quote.prepare', 'maintenance.quote.send', 'maintenance.work_order.issue', 'maintenance.verify',
     'upload.create', 'analysis.create', 'pdf.create', 'notification.send', 'tenant_instruction.manage',
     'external_contact.manage', 'client_approval.manage',
@@ -38,7 +38,16 @@ const capabilities: Record<UserRole, ReadonlySet<SecurityCapability>> = {
 };
 
 const privilegedRoles = new Set<UserRole>(['super_admin', 'proinspect_admin', 'reviewer']);
-const immutableStatuses = new Set(['reviewer_approved', 'ready_to_issue', 'issued_to_tenant', 'tenant_viewed', 'tenant_submitted', 'finalisation_ready', 'finalised', 'archived']);
+const immutableStatuses = new Set([
+  'approved_for_issue',
+  'issued_to_tenant',
+  'tenant_response_in_progress',
+  'tenant_submitted',
+  'agent_response_required',
+  'finalisation_ready',
+  'finalised',
+  'archived',
+]);
 
 export function requiresMfa(role: UserRole): boolean {
   return privilegedRoles.has(role);
