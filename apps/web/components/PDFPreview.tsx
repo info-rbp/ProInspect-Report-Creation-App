@@ -1,229 +1,147 @@
-import React from 'react';
-import { ReportData } from '../types';
-import { formatChecklistValue, getAggregateRoomStatus, getReportDisplayTitle, getReportFooterLabel, isExitReport } from '../services/reportPresentation';
+import React, { useMemo } from 'react';
+import type { ReportBrandingSnapshot } from '@pcr/report-presentation';
+import { buildReportPresentationViewModel } from '@pcr/report-presentation/view-model';
+import { buildReportDocumentModel, type ReportDocumentBlock } from '@pcr/report-presentation/document-model';
+import { presentationTemplateForReportType } from '@pcr/report-presentation/presets';
+import type { ReportData } from '../types';
 
 interface PDFPreviewProps {
   data: ReportData;
 }
 
+function formatDate(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('en-AU', {
-      weekday: 'long',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+  const photoUrls = useMemo(() => {
+    const entries = data.rooms.flatMap((room) => room.photos.map((photo) => [photo.id, photo.previewUrl] as const));
+    if (data.heroPhoto) entries.push([data.heroPhoto.id, data.heroPhoto.previewUrl]);
+    return new Map(entries);
+  }, [data.heroPhoto, data.rooms]);
+
+  const document = useMemo(() => {
+    const view = buildReportPresentationViewModel({
+      reportId: data.id,
+      ...(data.currentVersionId ? { reportVersionId: data.currentVersionId } : {}),
+      reportType: data.reportType,
+      propertyAddress: data.propertyAddress,
+      inspectionDate: data.inspectionDate,
+      clientName: data.clientName,
+      tenantName: data.tenantName,
+      inspectorName: data.agentName,
+      agencyName: data.agentCompany,
+      areas: data.rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        overallComment: room.overallComment,
+        photoReferences: room.photos.map((photo, sequence) => ({ photoId: photo.id, sequence })),
+        components: room.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          conditionCategory: item.conditionCategory,
+          cleanlinessCategory: item.cleanlinessCategory,
+          workingStatus: item.workingStatus,
+          testStatus: item.testStatus,
+          comment: item.comment,
+          defects: item.defects,
+          maintenanceRequired: item.maintenanceRequired,
+          comparisonStatus: item.comparisonStatus,
+          comparisonCommentary: item.comparisonCommentary,
+          photoReferences: item.photoReferences,
+        })),
+      })),
     });
+    const branding: ReportBrandingSnapshot = {
+      profileId: 'preview-branding',
+      profileVersion: 1,
+      agencyName: data.agentCompany || 'ProInspect',
+      ...(data.agentAddress ? { address: data.agentAddress } : {}),
+      ...(data.agentPhone ? { phone: data.agentPhone } : {}),
+      ...(data.agentEmail ? { email: data.agentEmail } : {}),
+      primaryColour: '#1D4ED8',
+      secondaryColour: '#0F172A',
+      accentColour: '#0284C7',
+      headingFont: 'Inter',
+      bodyFont: 'Inter',
+      capturedAt: new Date(0).toISOString(),
+    };
+    return buildReportDocumentModel({ view, template: presentationTemplateForReportType(data.reportType, new Date(0).toISOString()), branding });
+  }, [data]);
+
+  const renderBlock = (block: ReportDocumentBlock, index: number) => {
+    if (block.type === 'cover') {
+      return (
+        <section key={index} className="page-break relative flex min-h-[297mm] flex-col p-12">
+          <div className="flex items-start justify-between border-b-4 border-blue-700 pb-5">
+            <div>
+              <div className="text-xs font-extrabold uppercase tracking-[0.24em] text-blue-700">Property Inspection</div>
+              <div className="mt-2 text-2xl font-black text-slate-950">{block.agencyName}</div>
+            </div>
+            <div className="text-right text-xs text-slate-600">Report {document.reportId}</div>
+          </div>
+          {data.heroPhoto && (
+            <div className="mt-10 h-[105mm] overflow-hidden rounded-xl bg-slate-100">
+              <img src={data.heroPhoto.previewUrl} alt="Property" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <div className="mt-auto pb-16">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950">{block.title}</h1>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-700">{block.propertyAddress}</h2>
+            <div className="mt-8 grid grid-cols-2 gap-5 text-sm text-slate-700">
+              {block.inspectionDate && <div><b>Inspection date</b><br />{formatDate(block.inspectionDate)}</div>}
+              {block.inspectorName && <div><b>Prepared by</b><br />{block.inspectorName}</div>}
+              {block.clientName && <div><b>Client</b><br />{block.clientName}</div>}
+              {document.reportVersionId && <div><b>Immutable version</b><br />{document.reportVersionId}</div>}
+            </div>
+          </div>
+        </section>
+      );
+    }
+    if (block.type === 'summary') {
+      return (
+        <section key={index} className="page-break p-10">
+          <h2 className="text-2xl font-black text-slate-950">{block.heading}</h2>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {block.metrics.map((metric) => <div key={metric.label} className="rounded-lg border border-slate-200 p-4"><div className="text-2xl font-black">{metric.value}</div><div className="mt-1 text-xs text-slate-600">{metric.label}</div></div>)}
+          </div>
+        </section>
+      );
+    }
+    if (block.type === 'finding-list') {
+      return (
+        <section key={index} className="p-10">
+          <h2 className="mb-4 text-xl font-black">{block.heading}</h2>
+          <div className="space-y-3">
+            {block.items.length ? block.items.map((item) => <div key={`${item.areaName}-${item.component.id}`} className="avoid-break rounded-lg border border-slate-200 p-4"><div className="text-xs font-bold uppercase tracking-wide text-slate-500">{item.areaName}</div><div className="mt-1 font-bold">{item.component.label}</div><div className="mt-2 text-sm">{item.component.commentary}</div></div>) : <p className="text-sm text-slate-500">No exceptions recorded.</p>}
+          </div>
+        </section>
+      );
+    }
+    if (block.type === 'area') {
+      return (
+        <section key={index} className="page-break p-10">
+          <h2 className="text-2xl font-black">{block.heading}</h2>
+          <p className="mt-2 text-sm text-slate-700">{block.commentary}</p>
+          <div className="mt-5 overflow-hidden rounded-lg border border-slate-300">
+            {block.components.map((component) => <div key={component.id} className="avoid-break border-b border-slate-200 p-4 last:border-b-0"><div className="flex justify-between gap-4"><div className="font-bold">{component.label}</div><div className="text-xs text-slate-500">{component.condition.replaceAll('_', ' ')} · {component.cleanliness.replaceAll('_', ' ')}</div></div><p className="mt-2 text-sm">{component.commentary}</p>{component.photos.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">{component.photos.slice(0, 3).map((photo) => photoUrls.get(photo.photoId) ? <img key={photo.photoId} src={photoUrls.get(photo.photoId)} alt={photo.caption || component.label} className="aspect-[4/3] w-full rounded object-cover" /> : null)}</div>}</div>)}
+          </div>
+        </section>
+      );
+    }
+    if (block.type === 'approval') return <section key={index} className="p-10"><h2 className="text-lg font-black">Approval Record</h2><p className="mt-3 text-sm">Prepared by {block.inspectorName || 'Recorded inspector'}{block.reportVersionId ? ` · Immutable version ${block.reportVersionId}` : ''}</p></section>;
+    if (block.type === 'text') return <section key={index} className="p-10"><h2 className="text-lg font-black">{block.heading}</h2><p className="mt-3 text-xs leading-relaxed text-slate-600">{block.body}</p></section>;
+    if (block.type === 'photo-index') return <section key={index} className="page-break p-10"><h2 className="text-xl font-black">{block.heading}</h2><div className="mt-5 grid grid-cols-2 gap-4">{block.photos.map((photo) => photoUrls.get(photo.photoId) ? <figure key={`${photo.photoId}-${photo.areaName}`} className="avoid-break"><img src={photoUrls.get(photo.photoId)} alt={photo.caption || photo.componentLabel || photo.areaName} className="aspect-[4/3] w-full rounded border border-slate-200 object-cover" /><figcaption className="mt-1 text-[10px] text-slate-600">{photo.areaName}{photo.componentLabel ? ` · ${photo.componentLabel}` : ''}{photo.caption ? ` · ${photo.caption}` : ''}</figcaption></figure> : null)}</div></section>;
+    return null;
   };
 
-  const rooms = data.rooms || [];
-  const totalPhotos = rooms.reduce((count, room) => count + (room.photos || []).length, 0);
-  const allPhotos = rooms.flatMap((room) => (room.photos || []).map((photo, index) => ({
-    ...photo,
-    roomName: room.name,
-    roomIndex: index + 1,
-    totalInRoom: (room.photos || []).length,
-  })));
-
-  const reportTitle = getReportDisplayTitle(data.reportType);
-  const showExitSection = isExitReport(data.reportType);
-
   return (
-    <div className="relative mx-auto max-w-[210mm] bg-white font-sans text-sm leading-tight text-black shadow-none print:w-full print:max-w-none">
-      <div className="sticky top-0 z-20 border-y-2 border-amber-500 bg-amber-100 px-4 py-2 text-center text-xs font-extrabold uppercase tracking-[0.2em] text-amber-950 print:static">
-        Draft Preview · Not the verified issued report
-      </div>
-
-      <div className="page-break relative flex min-h-[297mm] flex-col box-border p-12">
-        <div className="mb-12 flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-700 text-2xl font-bold text-white shadow-sm">PI</div>
-            <div className="flex h-14 flex-col justify-center">
-              <h1 className="text-2xl font-bold uppercase leading-none tracking-tight text-blue-800" style={{ fontFamily: 'Arial, sans-serif' }}>
-                {data.agentCompany || 'ProInspect'}
-              </h1>
-            </div>
-          </div>
-          <div className="text-right text-xs font-medium leading-relaxed">
-            <p className="mb-1 text-sm font-bold text-black">{data.agentCompany || 'ProInspect'}</p>
-            {data.agentAddress && <p>{data.agentAddress}</p>}
-            {data.agentPhone && <p className="mt-2">T: {data.agentPhone}</p>}
-            {data.agentEmail && <p>E: {data.agentEmail}</p>}
-          </div>
-        </div>
-
-        <div className="mb-8 mt-6 text-center">
-          <h1 className="mb-4 text-3xl font-bold text-black" style={{ fontFamily: 'Arial, sans-serif' }}>{reportTitle}</h1>
-          <h2 className="text-xl font-bold text-black">{data.propertyAddress}</h2>
-        </div>
-
-        {data.heroPhoto && (
-          <div className="mb-8 flex justify-center">
-            <div className="flex h-[100mm] w-full max-w-[180mm] items-center justify-center overflow-hidden border border-gray-300 bg-gray-100 shadow-sm">
-              <img src={data.heroPhoto.previewUrl} alt="Property Front" className="h-full w-full object-cover" />
-            </div>
-          </div>
-        )}
-
-        <div className="mb-20 mt-auto space-y-4 text-center">
-          <p className="text-sm">Report completed on {formatDate(data.inspectionDate)}</p>
-          <p className="text-sm">Prepared by {data.agentName || 'Assigned inspector'}</p>
-          <p className="text-xs text-gray-500">Report ID {data.id}{data.currentVersionId ? ` · Current immutable version ${data.currentVersionId}` : ''}</p>
-        </div>
-
-        <div className="absolute bottom-12 right-12 text-sm font-bold text-blue-800">{data.agentCompany || 'ProInspect'}</div>
-      </div>
-
-      <style>{`
-        @media print {
-          .running-header {
-            position: fixed;
-            top: 5mm;
-            left: 10mm;
-            right: 10mm;
-            height: 10mm;
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 1px solid black;
-            font-size: 10px;
-            font-style: italic;
-            align-items: center;
-            background: white;
-            z-index: 100;
-          }
-          .content-start { margin-top: 15mm; }
-          thead { display: table-header-group; }
-          tr { page-break-inside: avoid; }
-        }
-        .running-header { display: none; }
-      `}</style>
-
-      <div className="running-header hidden print:flex">
-        <span>{data.propertyAddress}</span>
-        <span>{reportTitle}</span>
-      </div>
-
-      <div className="content-start p-10">
-        <div className="mb-1 border border-black bg-gray-200 py-1 text-center text-sm font-bold">Agent section</div>
-        <div className="mb-4 px-4 text-center text-[10px]">
-          Each item records structured condition, cleanliness and operational observations. Operational confirmation requires a recorded qualifying test; an image alone is not a test.
-        </div>
-
-        {rooms.map((room) => {
-          const aggregateStatus = getAggregateRoomStatus(room.items || []);
-          const roomPhotosCount = (room.photos || []).length;
-          return (
-            <div key={room.id} className="mb-4">
-              <table className="w-full border-collapse border border-black text-[11px]">
-                <thead>
-                  <tr className="bg-gray-100 print:bg-gray-100">
-                    <th className="w-[30%] border border-black p-1 text-left text-sm font-bold uppercase">{room.name}</th>
-                    <th className="w-[5%] border border-black p-1 text-center text-[10px]">Cln</th>
-                    <th className="w-[5%] border border-black p-1 text-center text-[10px]">Udg</th>
-                    <th className="w-[5%] border border-black p-1 text-center text-[10px]">Wkg</th>
-                    <th className="border border-black bg-gray-100 p-1 text-center text-xs font-bold">Agent comments<br /><span className="text-[9px] font-normal italic">Cln = Clean, Udg = Undamaged, Wkg = Working</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-black">
-                    <td className="border-r border-black p-2 align-top"><div className="font-medium">Overall</div></td>
-                    <td className="border-r border-black p-1 text-center align-top">{formatChecklistValue(aggregateStatus.isClean)}</td>
-                    <td className="border-r border-black p-1 text-center align-top">{formatChecklistValue(aggregateStatus.isUndamaged)}</td>
-                    <td className="border-r border-black p-1 text-center align-top">{formatChecklistValue(aggregateStatus.isWorking)}</td>
-                    <td className="p-2 align-top font-medium text-blue-800">{roomPhotosCount > 0 ? `(${roomPhotosCount} photos attached)` : 'No photos attached.'}</td>
-                  </tr>
-                  <tr className="border-b border-black">
-                    <td className="border-r border-black p-2 align-top">Overall Commentary</td>
-                    <td className="border-r border-black p-1 text-center align-top" />
-                    <td className="border-r border-black p-1 text-center align-top" />
-                    <td className="border-r border-black p-1 text-center align-top" />
-                    <td className="p-2 align-top leading-relaxed whitespace-pre-wrap">{room.overallComment || 'No general overview provided.'}</td>
-                  </tr>
-                  {(room.items || []).map((item) => (
-                    <tr key={item.id} className="border-b border-black hover:bg-gray-50">
-                      <td className="border-r border-black p-2 align-top font-medium text-black">{item.name}</td>
-                      <td className="border-r border-black p-1 text-center align-top font-bold text-green-700">{formatChecklistValue(item.cleanlinessCategory === 'clean')}</td>
-                      <td className="border-r border-black p-1 text-center align-top font-bold text-green-700">{formatChecklistValue(['intact', 'minor_wear'].includes(item.conditionCategory))}</td>
-                      <td className="border-r border-black p-1 text-center align-top font-bold text-green-700">{formatChecklistValue(['operation_confirmed', 'appears_operational'].includes(item.workingStatus))}</td>
-                      <td className="space-y-1 p-2 align-top text-black">
-                        <div>{item.comment || 'Refer to overall commentary.'}</div>
-                        {item.testRecord?.status === 'tested' && (
-                          <div className="border-t border-gray-200 pt-1 text-[10px] text-gray-700">
-                            <strong>Operational test:</strong> {item.testRecord.result || 'inconclusive'}{item.testRecord.method ? ` · ${item.testRecord.method}` : ''}
-                          </div>
-                        )}
-                        {showExitSection && (item.comparisonCommentary || item.baselineComponentData) && (
-                          <div className="mt-1 border-t border-gray-200 pt-1 text-[10px] text-indigo-900">
-                            <strong className="text-black">Exit Comparison:</strong> {item.comparisonCommentary || 'Consistent with Entry baseline; no material change identified.'}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="page-break p-10">
-        <div className="mb-4 border border-black bg-gray-200 px-2 py-1 text-sm font-bold">{showExitSection ? 'Exit Condition Report Notes' : `${reportTitle} Notes`}</div>
-
-        {showExitSection && (
-          <div className="mb-6">
-            <h3 className="mb-4 text-sm font-bold">Approximate dates when work last done on residential premises</h3>
-            <div className="space-y-2 text-sm">
-              {['Painting of premises (external)', 'Painting of premises (internal)', 'Floorcoverings laid', 'Floorcoverings professionally cleaned'].map((label) => (
-                <div key={label} className="flex items-center">
-                  <div className="w-1/3">{label}:</div>
-                  <div className="flex h-8 w-2/3 items-center justify-center border border-black bg-white"> / / </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="mb-8">
-          <div className="mb-1 text-sm font-bold">Additional Comments</div>
-          <div className="h-24 w-full border border-black" />
-        </div>
-
-        <div className="mb-0 border border-black bg-gray-200 px-2 py-1 text-sm font-bold">Report Preparation / Approval Record</div>
-        <div className="border border-t-0 border-black p-4 text-sm">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div><span className="font-bold">Prepared by:</span><div>{data.agentName || 'Recorded in ProInspect'}</div></div>
-            <div><span className="font-bold">Inspection date:</span><div>{formatDate(data.inspectionDate)}</div></div>
-            <div><span className="font-bold">Report version:</span><div>{data.currentVersionId || 'Draft preview'}</div></div>
-          </div>
-          <p className="mt-3 text-[10px] text-gray-600">No synthetic signature is rendered. Reviewer approval, recipient acknowledgements and finalisation are separate audited records bound to the immutable report version and its content hash.</p>
-        </div>
-
-        <div className="mt-8 text-[10px] leading-tight text-justify">
-          <p className="mb-1 font-bold">DISCLAIMER:</p>
-          <p>This tenancy inspection report is a visual inspection intended to document observed condition only. It does not replace specialist advice on structural, electrical, plumbing, gas, glazing, smoke alarm, or pool safety compliance matters. Furniture, personal belongings, enclosed cavities, and concealed building elements are outside the scope of this report unless specifically accessed and recorded.</p>
-        </div>
-
-        <div className="mt-8 text-right text-sm font-bold">{getReportFooterLabel(data.reportType)}</div>
-      </div>
-
-      {allPhotos.length > 0 && (
-        <div className="page-break p-10">
-          <div className="mb-4 border border-black bg-gray-200 px-2 py-1 text-sm font-bold">Agent Inspection Photos ({totalPhotos} photos)</div>
-          <div className="grid grid-cols-3 gap-4">
-            {allPhotos.map((photo) => (
-              <div key={photo.id} className="avoid-break mb-4">
-                <div className="mb-1 text-[10px] font-bold uppercase">{photo.roomName}: Overall (photo {photo.roomIndex} of {photo.totalInRoom})</div>
-                <div className="relative aspect-[4/3] w-full border border-gray-300 bg-gray-100">
-                  <img src={photo.previewUrl} className="h-full w-full object-cover" alt={`${photo.roomName} inspection`} />
-                </div>
-                <div className="mt-0.5 text-right text-[9px] text-gray-500">{formatDate(data.inspectionDate)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="relative mx-auto max-w-[210mm] bg-white font-sans text-black print:w-full print:max-w-none">
+      <div className="sticky top-0 z-20 border-y-2 border-amber-500 bg-amber-100 px-4 py-2 text-center text-xs font-extrabold uppercase tracking-[0.2em] text-amber-950 print:hidden">Draft Preview · Shared presentation model</div>
+      {document.blocks.map(renderBlock)}
     </div>
   );
 };

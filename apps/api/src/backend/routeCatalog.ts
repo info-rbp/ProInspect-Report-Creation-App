@@ -55,6 +55,8 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   'integration-sync-exceptions': { collection: 'integrationSyncExceptions', readCapability: 'job.read', writeCapability: 'job.manage', target },
   reports: { collection: 'reports', readCapability: 'report.read', writeCapability: 'report.edit', target },
   templates: { collection: 'templates', readCapability: 'report.read', target },
+  'report-presentation-templates': { collection: 'reportPresentationTemplateVersions', readCapability: 'report.read', writeCapability: 'template.manage', target },
+  'report-branding-profiles': { collection: 'reportBrandingProfileVersions', readCapability: 'report.read', writeCapability: 'template.manage', target },
   'report-versions': { collection: 'reportVersions', readCapability: 'report.read', writeCapability: 'report.edit', target },
   uploads: { collection: 'uploadSessions', readCapability: 'report.read', writeCapability: 'upload.create', target },
   'analysis-jobs': { collection: 'analysisJobs', readCapability: 'report.read', writeCapability: 'analysis.create', target },
