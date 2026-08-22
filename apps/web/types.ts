@@ -36,8 +36,13 @@ export interface PreviousReportAttachment {
 }
 
 export interface InspectionItem {
+  /** Property-owned Component instance identity. */
   id: string;
   name: string;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
+  canonicalAreaComponentRuleId?: string;
+  canonicalAreaComponentRuleVersion?: number;
   subComponent?: string;
   material?: string;
   colour?: string;
@@ -82,8 +87,11 @@ export interface InspectionItem {
 export type RoomStatus = 'draft' | 'photos_uploaded' | 'analyzed' | 'complete';
 
 export interface Room {
+  /** Property-owned Area instance identity. */
   id: string;
   name: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
   status: RoomStatus;
   items: InspectionItem[];
   photos: Photo[];
