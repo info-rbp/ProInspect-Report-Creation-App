@@ -1,12 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { GoogleGenAI } from '@google/genai';
 import type { HistoricalExtractedFinding, RoomConfigItem } from '@pcr/domain';
-import { pcrStandardAreas } from '@pcr/templates';
 
-export const PROPERTY_DOCUMENT_PROMPT_VERSION = 'property-history-extraction-v1';
+export const PROPERTY_DOCUMENT_PROMPT_VERSION = 'property-history-extraction-v2-canonical';
 export const PROPERTY_DOCUMENT_MODEL = process.env.GEMINI_DOCUMENT_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
 const PROHIBITED_CAUSATION = /\b(tenant caused|tenant damage|tenant damaged|tenant is responsible|tenant responsibility|tenant negligence|negligent|misuse|bond deduction|deduct from bond|fair wear and tear|not fair wear and tear)\b/giu;
+
+type ConfiguredArea = Pick<
+  RoomConfigItem,
+  'id' | 'name' | 'roomType' | 'floorLevel' | 'canonicalAreaDefinitionId' | 'canonicalAreaDefinitionVersion' | 'componentRefs'
+>;
 
 export interface HistoricalDocumentExtraction {
   promptVersion: string;
@@ -21,7 +25,7 @@ export interface HistoricalDocumentExtractionInput {
   fileName: string;
   contentType: string;
   base64Data: string;
-  configuredAreas: Array<Pick<RoomConfigItem, 'id' | 'name' | 'roomType' | 'floorLevel'>>;
+  configuredAreas: ConfiguredArea[];
 }
 
 function client(): GoogleGenAI {
@@ -63,6 +67,7 @@ interface RawFinding {
   sourceWorkingStatus?: unknown;
   sourcePage?: unknown;
   proposedAreaId?: unknown;
+  proposedCanonicalComponentDefinitionId?: unknown;
   proposedComponentId?: unknown;
   confidence?: unknown;
   uncertainty?: unknown;
@@ -75,12 +80,21 @@ interface RawExtraction {
   findings?: unknown;
 }
 
+function configuredAreaById(configuredAreas: ConfiguredArea[], id: unknown): ConfiguredArea | undefined {
+  if (typeof id !== 'string') return undefined;
+  return configuredAreas.find((area) => area.id === id.trim());
+}
+
+function canonicalComponentForArea(area: ConfiguredArea | undefined, rawId: unknown) {
+  if (!area || typeof rawId !== 'string') return undefined;
+  const id = rawId.trim();
+  return area.componentRefs?.find((component) => component.canonicalComponentDefinitionId === id);
+}
+
 export function normaliseHistoricalExtraction(
   raw: RawExtraction,
-  configuredAreas: Array<Pick<RoomConfigItem, 'id' | 'name' | 'roomType' | 'floorLevel'>>,
+  configuredAreas: ConfiguredArea[],
 ): Omit<HistoricalDocumentExtraction, 'promptVersion' | 'model'> {
-  const validAreaIds = new Set(configuredAreas.map((area) => area.id));
-  const validComponentIds = new Set(pcrStandardAreas.flatMap((area) => area.components.map((component) => component.id)));
   const seen = new Set<string>();
   const findings: HistoricalExtractedFinding[] = [];
 
@@ -96,13 +110,17 @@ export function normaliseHistoricalExtraction(
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const proposedAreaId = typeof item.proposedAreaId === 'string' && validAreaIds.has(item.proposedAreaId)
-        ? item.proposedAreaId
-        : undefined;
-      const proposedComponentId = typeof item.proposedComponentId === 'string' && validComponentIds.has(item.proposedComponentId)
-        ? item.proposedComponentId
-        : undefined;
+      const proposedArea = configuredAreaById(configuredAreas, item.proposedAreaId);
+      const requestedCanonicalComponentId = typeof item.proposedCanonicalComponentDefinitionId === 'string'
+        ? item.proposedCanonicalComponentDefinitionId
+        : item.proposedComponentId;
+      const proposedComponent = canonicalComponentForArea(proposedArea, requestedCanonicalComponentId);
       const score = confidence(item.confidence);
+      const mappingComplete = Boolean(
+        proposedArea?.canonicalAreaDefinitionId &&
+        proposedArea.canonicalAreaDefinitionVersion &&
+        proposedComponent,
+      );
       findings.push({
         id: `historical-${randomUUID()}`,
         sourceArea,
@@ -112,10 +130,24 @@ export function normaliseHistoricalExtraction(
         ...(stringOrUndefined(item.sourceCleanliness) ? { sourceCleanliness: stringOrUndefined(item.sourceCleanliness) } : {}),
         ...(stringOrUndefined(item.sourceWorkingStatus) ? { sourceWorkingStatus: stringOrUndefined(item.sourceWorkingStatus) } : {}),
         ...(pageNumber(item.sourcePage) ? { sourcePage: pageNumber(item.sourcePage) } : {}),
-        ...(proposedAreaId ? { proposedAreaId } : {}),
-        ...(proposedComponentId ? { proposedComponentId } : {}),
-        confidence: score,
-        ...(stringOrUndefined(item.uncertainty, 500) ? { uncertainty: stringOrUndefined(item.uncertainty, 500) } : score < 0.7 ? { uncertainty: 'Low-confidence historical mapping requires manual review.' } : {}),
+        ...(proposedArea ? { proposedAreaId: proposedArea.id } : {}),
+        ...(proposedArea?.canonicalAreaDefinitionId ? {
+          proposedCanonicalAreaDefinitionId: proposedArea.canonicalAreaDefinitionId,
+          proposedCanonicalAreaDefinitionVersion: proposedArea.canonicalAreaDefinitionVersion,
+        } : {}),
+        ...(proposedComponent ? {
+          proposedComponentId: proposedComponent.canonicalComponentDefinitionId,
+          proposedCanonicalComponentDefinitionId: proposedComponent.canonicalComponentDefinitionId,
+          proposedCanonicalComponentDefinitionVersion: proposedComponent.canonicalComponentDefinitionVersion,
+        } : {}),
+        confidence: mappingComplete ? score : Math.min(score, 0.55),
+        ...(stringOrUndefined(item.uncertainty, 500)
+          ? { uncertainty: stringOrUndefined(item.uncertainty, 500) }
+          : !mappingComplete
+            ? { uncertainty: 'Historical finding could not be mapped to an exact current Property Area occurrence and canonical Component identity.' }
+            : score < 0.7
+              ? { uncertainty: 'Low-confidence historical canonical mapping requires manual review.' }
+              : {}),
         decision: 'suggested',
       });
     }
@@ -135,14 +167,20 @@ export async function extractHistoricalPropertyDocument(
   input: HistoricalDocumentExtractionInput,
 ): Promise<HistoricalDocumentExtraction> {
   const areaCatalog = input.configuredAreas.map((area) => ({
-    areaId: area.id,
-    name: area.name,
+    propertyAreaInstanceId: area.id,
+    displayName: area.name,
     roomType: area.roomType,
     floorLevel: area.floorLevel,
-  }));
-  const componentCatalog = pcrStandardAreas.map((area) => ({
-    canonicalArea: area.name,
-    components: area.components.map((component) => ({ componentId: component.id, name: component.name })),
+    canonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+    canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
+    components: (area.componentRefs || []).map((component) => ({
+      propertyComponentInstanceId: component.id,
+      displayName: component.name,
+      canonicalComponentDefinitionId: component.canonicalComponentDefinitionId,
+      canonicalComponentDefinitionVersion: component.canonicalComponentDefinitionVersion,
+      canonicalAreaComponentRuleId: component.canonicalAreaComponentRuleId,
+      canonicalAreaComponentRuleVersion: component.canonicalAreaComponentRuleVersion,
+    })),
   }));
 
   const prompt = `
@@ -155,16 +193,14 @@ Rules:
 - A historical source may state that an operational item was tested/working. Preserve that only when the source explicitly says so. Otherwise do not infer operation from appearance.
 - sourceCommentary must be supported by the source document.
 - sourcePage is the 1-based PDF page when identifiable.
-- proposedAreaId must be one of the configured area IDs supplied below or omitted.
-- proposedComponentId must be one of the canonical component IDs supplied below or omitted.
+- proposedAreaId must be one of the exact Property Area instance IDs supplied below or omitted.
+- proposedCanonicalComponentDefinitionId must be a canonical Component ID present inside that selected Property Area or omitted.
+- Never map by invented IDs. Display labels are evidence for a suggestion, not identity.
 - Mapping is only a suggestion. Set lower confidence when labels are ambiguous.
 - Extract no more than 500 material component findings.
 
-Configured property areas:
+Current canonical Property layout:
 ${JSON.stringify(areaCatalog)}
-
-Canonical component catalogue:
-${JSON.stringify(componentCatalog)}
 
 Return strictly valid JSON with this shape:
 {
@@ -180,8 +216,8 @@ Return strictly valid JSON with this shape:
       "sourceCleanliness": "source cleanliness wording if stated",
       "sourceWorkingStatus": "source operation/test wording if explicitly stated",
       "sourcePage": 1,
-      "proposedAreaId": "configured-area-id",
-      "proposedComponentId": "canonical-component-id",
+      "proposedAreaId": "exact-property-area-instance-id",
+      "proposedCanonicalComponentDefinitionId": "canonical-component-definition-id",
       "confidence": 0.8,
       "uncertainty": "reason when uncertain"
     }
