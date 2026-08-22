@@ -49,7 +49,6 @@ describe('canonical Property Layout catalogue', () => {
 
   it('adds commercial, retail, warehouse, strata, furnished and specialist definitions', () => {
     const areaIds = new Set(PROPERTY_LAYOUT_AREA_DEFINITIONS.map((area) => area.id));
-    expect(areaIds).toEqual(expect.objectContaining ? areaIds : areaIds);
     for (const id of [
       'commercial-reception',
       'retail-sales-area',
