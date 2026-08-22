@@ -11,7 +11,7 @@
     "dev:local": "node scripts/dev-local.mjs",
     "emulators": "firebase emulators:start --config infrastructure/firebase/firebase.json --import=.firebase-emulator-data --export-on-exit=.firebase-emulator-data",
     "build": "npm run build:packages && npm run build:apps",
-    "build:packages": "npm run build --workspace @pcr/domain && npm run build --workspace @pcr/config && npm run build --workspace @pcr/validation && npm run build --workspace @pcr/templates && npm run build --workspace @pcr/testing && npm run build --workspace @pcr/ui",
+    "build:packages": "npm run build --workspace @pcr/domain && npm run build --workspace @pcr/config && npm run build --workspace @pcr/validation && npm run build --workspace @pcr/templates && npm run build --workspace @pcr/report-presentation && npm run build --workspace @pcr/testing && npm run build --workspace @pcr/ui",
     "build:apps": "npm run build --workspace @pcr/web && npm run build --workspace @pcr/api && npm run build --workspace @pcr/ai-worker && npm run build --workspace @pcr/pdf-worker && npm run build --workspace @pcr/notification-worker",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "npm run build:packages && npm run typecheck:workspaces",
