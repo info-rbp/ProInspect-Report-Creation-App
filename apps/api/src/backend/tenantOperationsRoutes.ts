@@ -9,6 +9,16 @@ function agencyHeader(req: IncomingMessage): string {
   return agencyId;
 }
 
+async function authorizeTenantAggregate(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, agencyId: string, tenantId?: string): Promise<void> {
+  const target = { agencyId, ...(tenantId ? { tenantId } : {}) };
+  await authenticateAndAuthorise(req, dependencies, 'tenant.read', target, correlationId);
+  await authenticateAndAuthorise(req, dependencies, 'tenancy.read', target, correlationId);
+  await authenticateAndAuthorise(req, dependencies, 'maintenance.read', target, correlationId);
+  await authenticateAndAuthorise(req, dependencies, 'tenant_instruction.manage', target, correlationId);
+  await authenticateAndAuthorise(req, dependencies, 'tenant.communication.read', target, correlationId);
+  await authenticateAndAuthorise(req, dependencies, 'tenant.document.read', target, correlationId);
+}
+
 async function listAll(dependencies: ApiDependencies, collection: string, agencyId: string): Promise<StoredRecord[]> {
   const items: StoredRecord[] = [];
   let cursor: string | undefined;
@@ -35,7 +45,7 @@ function isTerminalAction(status: unknown): boolean {
 
 async function tenantOverview(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
-  await authenticateAndAuthorise(req, dependencies, 'tenant.read', { agencyId }, correlationId);
+  await authorizeTenantAggregate(req, dependencies, correlationId, agencyId);
   const [tenants, tenancies, participants, properties, jobs, maintenance, actions] = await Promise.all([
     listAll(dependencies, 'tenants', agencyId),
     listAll(dependencies, 'tenancies', agencyId),
@@ -89,7 +99,7 @@ async function tenantOverview(req: IncomingMessage, dependencies: ApiDependencie
 
 async function tenantWorkspace(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, tenantId: string): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
-  await authenticateAndAuthorise(req, dependencies, 'tenant.read', { agencyId, tenantId }, correlationId);
+  await authorizeTenantAggregate(req, dependencies, correlationId, agencyId, tenantId);
   const tenant = await dependencies.repository.get('tenants', agencyId, tenantId);
   if (!tenant) throw new ApiError(404, 'TENANT_NOT_FOUND', 'Tenant not found.');
 
