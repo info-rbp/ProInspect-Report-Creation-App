@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@pcr/domain": "*",
+    "@pcr/report-presentation": "*",
     "@pcr/templates": "*",
     "firebase": "^12.6.0",
     "heic2any": "^0.0.4",

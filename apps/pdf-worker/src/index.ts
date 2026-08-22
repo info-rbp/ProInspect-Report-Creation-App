@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { loadRuntimeConfig } from '@pcr/config';
 import type { RenderInput } from './renderer.js';
 
-export { pdfSafeText, renderReportPdf, wrapText } from './renderer.js';
+export { pdfSafeText, renderReportPdf, wrapText } from './rendererV2.js';
 export type { RenderAsset, RenderInput } from './renderer.js';
 
 const config = loadRuntimeConfig();
 
 export const DEFAULT_PRESENTATION_TEMPLATE_ID = 'system-standard-report';
 export const DEFAULT_PRESENTATION_TEMPLATE_VERSION = 1;
-export const REPORT_RENDERER_VERSION = 'pdf-lib-layout-v2';
+export const REPORT_RENDERER_VERSION = 'shared-document-layout-v2';
 export const REPORT_FONT_BUNDLE_VERSION = 'standard14-v1';
 
 export interface RenderPresentationIdentity {
@@ -273,10 +273,6 @@ export function submitTenantResponse(
   return { id: contentHash, ...structuredClone(input), contentHash };
 }
 
-/**
- * Kept as a lightweight smoke-test surface for the built-artifact verifier. Actual
- * production jobs are processed by processPdfGenerationTask in the server runtime.
- */
 export async function handlePdfTask(reportId: string): Promise<{ reportId: string; status: 'accepted' }> {
   console.log(JSON.stringify({ level: config.logLevel, message: 'pdf.accepted', reportId }));
   return { reportId, status: 'accepted' };
