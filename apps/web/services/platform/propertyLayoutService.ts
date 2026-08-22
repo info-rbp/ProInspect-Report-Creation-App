@@ -1,49 +1,343 @@
 import type {
   PhysicalPropertyType,
+  PropertyLayoutComponentReference,
   PropertyLayoutNode,
   PropertyLayoutVersion,
   PropertyRecord,
   PropertyUse,
   RoomConfigItem,
-  RoomType,
 } from '../../types/platform';
+import type { CatalogueAreaVersionView, ManagedAreaComponentRule } from '@pcr/templates/catalogueAdmin';
+import {
+  CANONICAL_PROPERTY_LAYOUT_TEMPLATES,
+  PROPERTY_LAYOUT_CATALOGUE_ID,
+  PROPERTY_LAYOUT_CATALOGUE_VERSION,
+  canonicalAreasForPropertyClassification,
+  findSystemAreaDefinition,
+  findSystemComponentDefinition,
+  resolvePropertyLayoutTemplateRooms,
+  systemAreaComponentRulesForArea,
+  type CanonicalPropertyLayoutRoom,
+  type CanonicalPropertyLayoutTemplate,
+  type SystemAreaDefinitionVersion,
+} from '@pcr/templates/propertyLayoutCatalogue';
 import { generateId } from '../../utils';
 
-export interface PropertyLayoutTemplate {
-  id: string;
-  name: string;
-  description: string;
-  propertyUse: PropertyUse;
-  physicalPropertyTypes: PhysicalPropertyType[];
-  rooms: Array<{ name: string; roomType: RoomType; floorLevel?: string; responsibility?: RoomConfigItem['responsibility'] }>;
-  furnished?: boolean;
+export type PropertyLayoutTemplate = CanonicalPropertyLayoutTemplate;
+export const PROPERTY_LAYOUT_TEMPLATES: PropertyLayoutTemplate[] = CANONICAL_PROPERTY_LAYOUT_TEMPLATES;
+
+function deterministicComponentInstanceId(areaInstanceId: string, componentDefinitionId: string): string {
+  return `${areaInstanceId}:component:${componentDefinitionId}`;
 }
 
-const room = (name: string, roomType: RoomType, floorLevel = 'Ground Floor', responsibility: RoomConfigItem['responsibility'] = 'lot') => ({ name, roomType, floorLevel, responsibility });
-const HOUSE_CORE = [room('Front Exterior', 'outdoor'), room('Entry', 'hallway'), room('Lounge Room', 'living'), room('Kitchen', 'kitchen'), room('Dining Area', 'dining'), room('Passage / Hallway', 'hallway')];
-const HOUSE_CLOSE = [room('Main Bathroom', 'bathroom'), room('Toilet / WC', 'bathroom'), room('Laundry', 'laundry'), room('Garage / Carport', 'garage'), room('Rear Exterior', 'outdoor'), room('Garden & External Items', 'outdoor'), room('Security & Safety', 'safety')];
+function componentReference(
+  areaInstanceId: string,
+  rule: Pick<ManagedAreaComponentRule,
+    | 'componentDefinitionId'
+    | 'componentDefinitionVersion'
+    | 'id'
+    | 'version'
+    | 'order'
+    | 'inclusion'
+    | 'photoRequired'
+    | 'legacyComponentName'
+  >,
+  fallbackName?: string,
+): PropertyLayoutComponentReference {
+  return {
+    id: deterministicComponentInstanceId(areaInstanceId, rule.componentDefinitionId),
+    name: rule.legacyComponentName || fallbackName || rule.componentDefinitionId,
+    canonicalComponentDefinitionId: rule.componentDefinitionId,
+    canonicalComponentDefinitionVersion: rule.componentDefinitionVersion,
+    canonicalAreaComponentRuleId: rule.id,
+    canonicalAreaComponentRuleVersion: rule.version,
+    order: rule.order,
+    inclusion: rule.inclusion,
+    photoRequired: rule.photoRequired,
+  };
+}
 
-export const PROPERTY_LAYOUT_TEMPLATES: PropertyLayoutTemplate[] = [
-  { id: 'res-house-3x2', name: 'Standard 3 x 2 House', description: 'Residential house with comprehensive internal, external and safety inspection areas.', propertyUse: 'residential', physicalPropertyTypes: ['house', 'villa', 'duplex', 'ancillary_dwelling'], rooms: [...HOUSE_CORE, room('Master Bedroom', 'bedroom'), room('Ensuite', 'bathroom'), room('Bedroom 2', 'bedroom'), room('Bedroom 3', 'bedroom'), ...HOUSE_CLOSE] },
-  { id: 'res-house-4x2', name: 'Standard 4 x 2 House', description: 'Four-bedroom residential house with common internal and external areas.', propertyUse: 'residential', physicalPropertyTypes: ['house', 'villa', 'duplex'], rooms: [room('Front Exterior', 'outdoor'), room('Entry', 'hallway'), room('Front Lounge', 'living'), room('Kitchen', 'kitchen'), room('Dining Area', 'dining'), room('Family / Living Area', 'living'), room('Master Bedroom', 'bedroom'), room('Ensuite', 'bathroom'), room('Bedroom 2', 'bedroom'), room('Bedroom 3', 'bedroom'), room('Bedroom 4', 'bedroom'), ...HOUSE_CLOSE] },
-  { id: 'res-apartment-1x1', name: '1 x 1 Apartment', description: 'Compact apartment without house-only external areas.', propertyUse: 'residential', physicalPropertyTypes: ['apartment', 'unit', 'studio'], rooms: [room('Entry', 'hallway'), room('Living / Dining', 'living'), room('Kitchen', 'kitchen'), room('Master Bedroom', 'bedroom'), room('Bathroom', 'bathroom'), room('Laundry', 'laundry'), room('Balcony / Courtyard', 'outdoor'), room('Storeroom', 'storage'), room('Car Bay', 'garage'), room('Security & Safety', 'safety')] },
-  { id: 'res-apartment-2x2', name: '2 x 2 Apartment', description: 'Two-bedroom apartment with ensuite, balcony, storage and allocated car bay.', propertyUse: 'residential', physicalPropertyTypes: ['apartment', 'unit'], rooms: [room('Entry', 'hallway'), room('Living / Dining', 'living'), room('Kitchen', 'kitchen'), room('Master Bedroom', 'bedroom'), room('Ensuite', 'bathroom'), room('Bedroom 2', 'bedroom'), room('Main Bathroom', 'bathroom'), room('Laundry', 'laundry'), room('Balcony', 'outdoor'), room('Storeroom', 'storage'), room('Car Bay', 'garage'), room('Security & Safety', 'safety')] },
-  { id: 'res-furnished-apartment', name: 'Furnished Apartment', description: 'Apartment layout with a dedicated furnishing and included-chattels inspection area.', propertyUse: 'residential', physicalPropertyTypes: ['apartment', 'unit', 'studio'], furnished: true, rooms: [room('Entry', 'hallway'), room('Living / Dining', 'living'), room('Kitchen', 'kitchen'), room('Master Bedroom', 'bedroom'), room('Bedroom 2', 'bedroom'), room('Bathroom / Ensuite', 'bathroom'), room('Laundry', 'laundry'), room('Balcony / Courtyard', 'outdoor'), room('Furniture & Included Chattels', 'other'), room('Storeroom / Car Bay', 'storage'), room('Security & Safety', 'safety')] },
-  { id: 'res-townhouse', name: 'Townhouse', description: 'Multi-level residential layout with internal stairs and private external areas.', propertyUse: 'residential', physicalPropertyTypes: ['townhouse'], rooms: [room('Front Exterior', 'outdoor'), room('Entry', 'hallway'), room('Living / Dining', 'living'), room('Kitchen', 'kitchen'), room('Laundry', 'laundry'), room('Ground Floor WC', 'bathroom'), room('Garage / Carport', 'garage'), room('Internal Stairs / Landing', 'hallway'), room('Master Bedroom', 'bedroom', 'First Floor'), room('Ensuite', 'bathroom', 'First Floor'), room('Bedroom 2', 'bedroom', 'First Floor'), room('Bedroom 3', 'bedroom', 'First Floor'), room('Main Bathroom', 'bathroom', 'First Floor'), room('Rear Courtyard / Patio', 'outdoor'), room('Security & Safety', 'safety')] },
-  { id: 'commercial-office', name: 'Commercial Office', description: 'Office premises including work areas, amenities, services and safety systems.', propertyUse: 'commercial', physicalPropertyTypes: ['office', 'medical_consulting', 'mixed_commercial'], rooms: [room('External Entry / Façade', 'outdoor'), room('Reception', 'office'), room('Open Office', 'office'), room('Private Offices', 'office'), room('Meeting Rooms', 'office'), room('Kitchenette', 'kitchen'), room('Amenities', 'amenities'), room('Server / Communications Room', 'plant'), room('Storage', 'storage'), room('HVAC & Mechanical Services', 'plant'), room('Electrical & Lighting', 'plant'), room('Fire & Safety Systems', 'safety'), room('Car Parking', 'garage')] },
-  { id: 'commercial-retail', name: 'Retail Premises', description: 'Retail/shopfront inspection structure covering customer, back-of-house and service areas.', propertyUse: 'retail', physicalPropertyTypes: ['retail_shop', 'showroom', 'hospitality', 'restaurant_cafe'], rooms: [room('Shopfront & Signage', 'retail'), room('Customer / Sales Area', 'retail'), room('Point of Sale / Counter', 'retail'), room('Display Fixtures', 'retail'), room('Storeroom', 'storage'), room('Office', 'office'), room('Kitchen / Preparation Area', 'kitchen'), room('Amenities', 'amenities'), room('HVAC & Mechanical Services', 'plant'), room('Electrical & Lighting', 'plant'), room('Fire & Safety Systems', 'safety'), room('External Areas', 'outdoor')] },
-  { id: 'industrial-warehouse', name: 'Warehouse / Industrial', description: 'Industrial premises with warehouse, loading, external yard, services and safety areas.', propertyUse: 'industrial', physicalPropertyTypes: ['warehouse', 'industrial_unit'], rooms: [room('Warehouse Floor', 'warehouse'), room('Loading Area', 'warehouse'), room('Roller Doors', 'warehouse'), room('Offices', 'office'), room('Amenities', 'amenities'), room('Mezzanine', 'storage', 'Mezzanine'), room('Racking / Storage', 'storage'), room('External Yard', 'outdoor'), room('Boundary Fencing', 'outdoor'), room('Car Parking', 'garage'), room('Electrical & Lighting', 'plant'), room('Fire & Safety Equipment', 'safety')] },
-  { id: 'strata-common-property', name: 'Strata Common Property', description: 'Shared building and common-property layout for strata inspection and maintenance records.', propertyUse: 'strata_common_property', physicalPropertyTypes: ['common_property'], rooms: [room('Building Entry', 'hallway', 'Ground Floor', 'common_property'), room('Lobby / Common Hallways', 'hallway', 'Ground Floor', 'common_property'), room('Lifts / Lift Lobby', 'plant', 'Ground Floor', 'common_property'), room('Stairwells', 'hallway', 'Ground Floor', 'common_property'), room('Common Amenities', 'amenities', 'Ground Floor', 'common_property'), room('Car Park', 'garage', 'Basement', 'common_property'), room('Common Storage', 'storage', 'Basement', 'common_property'), room('External Walls & Grounds', 'outdoor', 'External', 'common_property'), room('Plant & Services', 'plant', 'Plant', 'common_property'), room('Fire & Safety Systems', 'safety', 'Common', 'common_property')] },
-];
+function systemComponentRefs(
+  areaInstanceId: string,
+  areaDefinitionId: string,
+  areaDefinitionVersion: number,
+): PropertyLayoutComponentReference[] {
+  return systemAreaComponentRulesForArea(areaDefinitionId, areaDefinitionVersion).map((rule) => {
+    const component = findSystemComponentDefinition(rule.componentDefinitionId, rule.componentDefinitionVersion);
+    return componentReference(areaInstanceId, rule as ManagedAreaComponentRule, component?.name);
+  });
+}
 
-export function templatesForProperty(property: Pick<PropertyRecord, 'propertyUse' | 'physicalPropertyType'>): PropertyLayoutTemplate[] { return PROPERTY_LAYOUT_TEMPLATES.filter((template) => (!property.propertyUse || template.propertyUse === property.propertyUse) && (!property.physicalPropertyType || template.physicalPropertyTypes.includes(property.physicalPropertyType))); }
-export function roomsFromTemplate(template: PropertyLayoutTemplate): RoomConfigItem[] { return template.rooms.map((candidate) => ({ id: `area-${generateId()}`, name: candidate.name, roomType: candidate.roomType, floorLevel: candidate.floorLevel, responsibility: candidate.responsibility, notes: '', itemsPreset: [] })); }
+function roomFromBlueprint(
+  blueprint: CanonicalPropertyLayoutRoom,
+  areaInstanceId = `area-${generateId()}`,
+  existing?: RoomConfigItem,
+): RoomConfigItem {
+  return {
+    id: areaInstanceId,
+    name: existing?.name?.trim() || blueprint.name,
+    roomType: blueprint.roomType,
+    floorLevel: existing?.floorLevel || blueprint.floorLevel,
+    buildingName: existing?.buildingName,
+    parentAreaId: existing?.parentAreaId,
+    responsibility: existing?.responsibility || blueprint.responsibility,
+    notes: existing?.notes || '',
+    itemsPreset: [],
+    canonicalAreaDefinitionId: blueprint.canonicalAreaDefinitionId,
+    canonicalAreaDefinitionVersion: blueprint.canonicalAreaDefinitionVersion,
+    componentRefs: systemComponentRefs(
+      areaInstanceId,
+      blueprint.canonicalAreaDefinitionId,
+      blueprint.canonicalAreaDefinitionVersion,
+    ),
+  };
+}
+
+function roomsFromTemplate(
+  template: PropertyLayoutTemplate,
+  physicalPropertyType?: PhysicalPropertyType,
+): RoomConfigItem[] {
+  return resolvePropertyLayoutTemplateRooms(template, physicalPropertyType).map((blueprint) => roomFromBlueprint(blueprint));
+}
+
+export function templatesForProperty(input: Pick<PropertyRecord, 'propertyUse' | 'physicalPropertyType'>): PropertyLayoutTemplate[] {
+  const use = input.propertyUse;
+  const physical = input.physicalPropertyType;
+  return PROPERTY_LAYOUT_TEMPLATES.filter((template) => {
+    const useMatch = !use || template.propertyUses.includes(use as PropertyUse);
+    const physicalMatch = !physical || template.physicalPropertyTypes.includes(physical);
+    return useMatch && physicalMatch;
+  });
+}
+
+export function canonicalAreasForProperty(
+  property: Pick<PropertyRecord, 'propertyUse' | 'physicalPropertyType'>,
+): SystemAreaDefinitionVersion[] {
+  return canonicalAreasForPropertyClassification({
+    propertyUse: property.propertyUse,
+    physicalPropertyType: property.physicalPropertyType,
+  });
+}
+
+export function createRoomFromSystemArea(
+  areaDefinitionId: string,
+  options: {
+    name?: string;
+    floorLevel?: string;
+    responsibility?: RoomConfigItem['responsibility'];
+    roomType?: RoomConfigItem['roomType'];
+  } = {},
+): RoomConfigItem {
+  const definition = findSystemAreaDefinition(areaDefinitionId);
+  if (!definition || definition.status !== 'published') throw new Error('Select a published canonical Area definition.');
+  const areaInstanceId = `area-${generateId()}`;
+  return {
+    id: areaInstanceId,
+    name: options.name?.trim() || definition.name,
+    roomType: options.roomType || roomTypeForArea(definition),
+    floorLevel: options.floorLevel?.trim() || 'Ground Floor',
+    responsibility: options.responsibility || 'lot',
+    notes: '',
+    itemsPreset: [],
+    canonicalAreaDefinitionId: definition.id,
+    canonicalAreaDefinitionVersion: definition.version,
+    componentRefs: systemComponentRefs(areaInstanceId, definition.id, definition.version),
+  };
+}
+
+/** Supports published agency-defined Areas returned by the catalogue administration API. */
+export function createRoomFromCatalogueArea(
+  area: CatalogueAreaVersionView,
+  options: {
+    name?: string;
+    floorLevel?: string;
+    responsibility?: RoomConfigItem['responsibility'];
+    roomType?: RoomConfigItem['roomType'];
+  } = {},
+): RoomConfigItem {
+  if (area.definition.status !== 'published' || !area.immutable) throw new Error('Only an immutable published Area version can be added to a Property layout.');
+  const areaInstanceId = `area-${generateId()}`;
+  const refs = [...area.componentRules]
+    .sort((left, right) => left.order - right.order)
+    .map((rule) => componentReference(areaInstanceId, rule));
+  return {
+    id: areaInstanceId,
+    name: options.name?.trim() || area.definition.name,
+    roomType: options.roomType || roomTypeForArea(area.definition),
+    floorLevel: options.floorLevel?.trim() || 'Ground Floor',
+    responsibility: options.responsibility || 'lot',
+    notes: '',
+    itemsPreset: [],
+    canonicalAreaDefinitionId: area.definition.id,
+    canonicalAreaDefinitionVersion: area.definition.version,
+    componentRefs: refs,
+  };
+}
+
+function roomTypeForArea(area: Pick<SystemAreaDefinitionVersion, 'category' | 'id'>): RoomConfigItem['roomType'] {
+  switch (area.category) {
+    case 'sleeping': return 'bedroom';
+    case 'wet_area': return 'bathroom';
+    case 'living': return 'living';
+    case 'kitchen': return 'kitchen';
+    case 'circulation': return 'hallway';
+    case 'storage': return 'storage';
+    case 'external': return 'outdoor';
+    case 'safety': return 'safety';
+    case 'industrial': return 'warehouse';
+    case 'commercial': return area.id.includes('retail') || area.id.includes('showroom') ? 'retail' : 'office';
+    case 'common_property': return area.id.includes('car-park') ? 'garage' : area.id.includes('plant') ? 'plant' : 'hallway';
+    case 'service': return area.id.includes('amenities') ? 'amenities' : area.id.includes('garage') || area.id.includes('parking') ? 'garage' : 'plant';
+    default: return 'other';
+  }
+}
+
 export function hierarchyFromRooms(rooms: RoomConfigItem[]): PropertyLayoutNode[] {
-  const nodes: PropertyLayoutNode[] = [{ id: 'site', name: 'Property Site', kind: 'site', order: 0 }, { id: 'building-main', name: 'Main Building', kind: 'building', parentId: 'site', order: 0 }];
-  const levelIds = new Map<string, string>();
-  for (const [index, configuredRoom] of rooms.entries()) { const level = configuredRoom.floorLevel || 'Ground Floor'; let levelId = levelIds.get(level); if (!levelId) { levelId = `level-${level.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${levelIds.size + 1}`; levelIds.set(level, levelId); nodes.push({ id: levelId, name: level, kind: 'level', parentId: 'building-main', floorLevel: level, order: levelIds.size }); } nodes.push({ id: configuredRoom.id, name: configuredRoom.name, kind: 'area', parentId: configuredRoom.parentAreaId || levelId, roomType: configuredRoom.roomType, floorLevel: configuredRoom.floorLevel, responsibility: configuredRoom.responsibility, notes: configuredRoom.notes, itemsPreset: configuredRoom.itemsPreset, order: index }); }
+  const nodes: PropertyLayoutNode[] = [
+    { id: 'site-primary', name: 'Primary Site', kind: 'site', sequence: 1 },
+    { id: 'building-main', name: 'Main Building', kind: 'building', parentId: 'site-primary', sequence: 1 },
+  ];
+  const levels = [...new Set(rooms.map((room) => room.floorLevel || 'Ground Floor'))];
+  levels.forEach((level, index) => {
+    const levelId = `level-${level.toLowerCase().replace(/[^a-z0-9]+/gu, '-')}`;
+    nodes.push({ id: levelId, name: level, kind: 'level', parentId: 'building-main', sequence: index + 1 });
+    rooms.filter((candidate) => (candidate.floorLevel || 'Ground Floor') === level).forEach((area, areaIndex) => {
+      nodes.push({
+        id: area.id,
+        name: area.name,
+        kind: 'area',
+        parentId: levelId,
+        sequence: areaIndex + 1,
+        responsibility: area.responsibility,
+        notes: area.notes,
+        itemsPreset: area.itemsPreset,
+        canonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+        canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
+        componentRefs: structuredClone(area.componentRefs || []),
+      });
+    });
+  });
   return nodes;
 }
-export function createLayoutVersion(property: PropertyRecord, roomsConfig: RoomConfigItem[], reason: string, templateId?: string): PropertyLayoutVersion { const current = property.layoutVersions || []; const now = new Date().toISOString(); return { id: `layout-${generateId()}`, version: current.reduce((max, item) => Math.max(max, item.version), 0) + 1, label: `Property Layout Version ${current.length + 1}`, effectiveFrom: now, changeReason: reason.trim() || 'Property layout updated', templateId, nodes: hierarchyFromRooms(roomsConfig), roomsConfig: structuredClone(roomsConfig), createdAt: now }; }
-export function applyLayoutTemplate(property: PropertyRecord, template: PropertyLayoutTemplate, reason = `Applied ${template.name}`): Pick<PropertyRecord, 'layoutTemplateId' | 'roomsConfig' | 'layoutNodes' | 'layoutVersions' | 'currentLayoutVersionId' | 'features'> { const roomsConfig = roomsFromTemplate(template); const version = createLayoutVersion(property, roomsConfig, reason, template.id); const previous = (property.layoutVersions || []).map((item) => item.effectiveTo ? item : { ...item, effectiveTo: version.effectiveFrom }); return { layoutTemplateId: template.id, roomsConfig, layoutNodes: version.nodes, layoutVersions: [...previous, version], currentLayoutVersionId: version.id, features: { ...property.features, ...(template.furnished ? { furnished: true } : {}) } }; }
-export function cloneLayoutFromProperty(target: PropertyRecord, source: PropertyRecord): Pick<PropertyRecord, 'layoutTemplateId' | 'roomsConfig' | 'layoutNodes' | 'layoutVersions' | 'currentLayoutVersionId'> { const roomsConfig = (source.roomsConfig || []).map((item) => ({ ...structuredClone(item), id: `area-${generateId()}` })); const version = createLayoutVersion(target, roomsConfig, `Layout copied from ${source.address}`, source.layoutTemplateId); return { layoutTemplateId: source.layoutTemplateId, roomsConfig, layoutNodes: version.nodes, layoutVersions: [...(target.layoutVersions || []), version], currentLayoutVersionId: version.id }; }
+
+export function createLayoutVersion(
+  property: PropertyRecord,
+  rooms: RoomConfigItem[],
+  changeReason: string,
+  templateId?: string,
+): PropertyLayoutVersion {
+  const nextVersion = Math.max(0, ...(property.layoutVersions || []).map((version) => version.version)) + 1;
+  const now = new Date().toISOString();
+  return {
+    id: `layout-${generateId()}`,
+    version: nextVersion,
+    label: `Layout v${nextVersion}`,
+    effectiveFrom: now,
+    changeReason,
+    templateId,
+    canonicalCatalogueId: PROPERTY_LAYOUT_CATALOGUE_ID,
+    canonicalCatalogueVersion: PROPERTY_LAYOUT_CATALOGUE_VERSION,
+    roomsConfig: structuredClone(rooms),
+    nodes: hierarchyFromRooms(rooms),
+    createdAt: now,
+  };
+}
+
+export function applyLayoutTemplate(property: PropertyRecord, template: PropertyLayoutTemplate): Partial<PropertyRecord> {
+  const rooms = roomsFromTemplate(template, property.physicalPropertyType);
+  const version = createLayoutVersion(property, rooms, `Applied layout template: ${template.name}`, template.id);
+  const previousVersions = (property.layoutVersions || []).map((item) => item.effectiveTo ? item : { ...item, effectiveTo: version.effectiveFrom });
+  return {
+    roomsConfig: rooms,
+    layoutTemplateId: template.id,
+    layoutNodes: version.nodes,
+    layoutVersions: [...previousVersions, version],
+    currentLayoutVersionId: version.id,
+    ...(template.furnished ? { features: { ...property.features, furnished: true } } : {}),
+  };
+}
+
+/**
+ * Upgrades a known template-backed legacy layout without using Area display names.
+ * Matching is by persisted template id plus ordered RoomType slots. Unmatched custom
+ * Areas are retained untouched for human review rather than guessed into a definition.
+ */
+export function migrateTemplateBackedLayoutToCanonical(property: PropertyRecord): {
+  rooms: RoomConfigItem[];
+  migratedCount: number;
+  unmappedCount: number;
+  complete: boolean;
+} {
+  const current = structuredClone(property.roomsConfig || []);
+  if (current.length > 0 && current.every((room) => room.canonicalAreaDefinitionId && room.canonicalAreaDefinitionVersion && room.componentRefs?.length)) {
+    return { rooms: current, migratedCount: 0, unmappedCount: 0, complete: true };
+  }
+  const template = PROPERTY_LAYOUT_TEMPLATES.find((candidate) => candidate.id === property.layoutTemplateId);
+  if (!template) {
+    const unmapped = current.filter((room) => !room.canonicalAreaDefinitionId).length;
+    return { rooms: current, migratedCount: 0, unmappedCount: unmapped, complete: unmapped === 0 };
+  }
+
+  const blueprints = resolvePropertyLayoutTemplateRooms(template, property.physicalPropertyType);
+  const used = new Set<number>();
+  let cursor = 0;
+  let migratedCount = 0;
+  const migrated = blueprints.map((blueprint, blueprintIndex) => {
+    let matchedIndex = -1;
+    for (let index = cursor; index < current.length; index += 1) {
+      if (used.has(index)) continue;
+      if (current[index].roomType === blueprint.roomType) {
+        matchedIndex = index;
+        break;
+      }
+    }
+    if (matchedIndex < 0) {
+      for (let index = 0; index < current.length; index += 1) {
+        if (!used.has(index) && current[index].roomType === blueprint.roomType) {
+          matchedIndex = index;
+          break;
+        }
+      }
+    }
+    const existing = matchedIndex >= 0 ? current[matchedIndex] : undefined;
+    if (matchedIndex >= 0) {
+      used.add(matchedIndex);
+      cursor = Math.max(cursor, matchedIndex + 1);
+    }
+    const areaInstanceId = existing?.id || `area-${property.id}-${template.id}-${blueprintIndex + 1}`.replace(/[^a-zA-Z0-9:_-]+/gu, '-');
+    const next = roomFromBlueprint(blueprint, areaInstanceId, existing);
+    if (!existing?.canonicalAreaDefinitionId) migratedCount += 1;
+    return next;
+  });
+  const unmatched = current.filter((_room, index) => !used.has(index));
+  return {
+    rooms: [...migrated, ...unmatched],
+    migratedCount,
+    unmappedCount: unmatched.filter((room) => !room.canonicalAreaDefinitionId).length,
+    complete: unmatched.every((room) => Boolean(room.canonicalAreaDefinitionId)),
+  };
+}
+
+export function cloneLayoutFromProperty(target: PropertyRecord, source: PropertyRecord): Partial<PropertyRecord> {
+  const sourceRooms = migrateTemplateBackedLayoutToCanonical(source).rooms;
+  const rooms = sourceRooms.map((room) => {
+    const id = `area-${generateId()}`;
+    return {
+      ...structuredClone(room),
+      id,
+      componentRefs: (room.componentRefs || []).map((component) => ({
+        ...component,
+        id: deterministicComponentInstanceId(id, component.canonicalComponentDefinitionId),
+      })),
+    };
+  });
+  const version = createLayoutVersion(target, rooms, `Copied layout from ${source.address}`, source.layoutTemplateId);
+  const previousVersions = (target.layoutVersions || []).map((item) => item.effectiveTo ? item : { ...item, effectiveTo: version.effectiveFrom });
+  return {
+    roomsConfig: rooms,
+    layoutTemplateId: source.layoutTemplateId,
+    layoutNodes: version.nodes,
+    layoutVersions: [...previousVersions, version],
+    currentLayoutVersionId: version.id,
+  };
+}
