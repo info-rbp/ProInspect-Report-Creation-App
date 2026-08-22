@@ -10,14 +10,13 @@ import {
 } from '../src/index.js';
 
 function priceEntry(input: Partial<PriceBookEntry> & Pick<PriceBookEntry, 'id' | 'code'>): PriceBookEntry {
+  const { id, code, ...overrides } = input;
   return {
-    id: input.id,
-    code: input.code,
     active: true,
     trade: 'Carpentry',
     category: 'Doors / Locks',
     componentPattern: 'front door',
-    issueType: 'repair',
+    issueType: 'damaged',
     recommendedAction: 'Repair front door',
     keywords: ['front', 'door', 'repair'],
     propertyUses: ['residential'],
@@ -43,7 +42,9 @@ function priceEntry(input: Partial<PriceBookEntry> & Pick<PriceBookEntry, 'id' |
     exclusions: [],
     siteAssessmentRequired: false,
     automationConfidenceThreshold: 0.8,
-    ...input,
+    ...overrides,
+    id,
+    code,
   };
 }
 
@@ -99,7 +100,7 @@ describe('canonical cross-module identity', () => {
       sourceComponentId: 'area-entry:component:front-door',
       sourceCanonicalAreaDefinitionId: 'entry',
       sourceCanonicalComponentDefinitionId: 'front-door',
-      issueType: 'repair',
+      issueType: 'damaged',
     }, [wrong, exact], { propertyUse: 'residential' });
 
     expect(matches.map((match) => match.entry.id)).toEqual(['exact']);
