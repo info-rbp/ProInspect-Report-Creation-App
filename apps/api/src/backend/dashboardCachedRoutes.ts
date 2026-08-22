@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { ApiError, type ApiResponse } from './router.js';
 import { routeDashboardRequest } from './dashboardRoutes.js';
-import type { ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
 
 const LIVE_OVERVIEW_TTL_MS = 30_000;
@@ -20,11 +21,17 @@ function isOverviewRequest(req: IncomingMessage): boolean {
   return path === '/api/v1/dashboard/overview';
 }
 
+function agencyId(req: IncomingMessage): string {
+  const value = req.headers['x-agency-id']?.toString().trim();
+  if (!value) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.');
+  return value;
+}
+
 function requestIdentityKey(req: IncomingMessage): string {
-  const agencyId = req.headers['x-agency-id']?.toString().trim() || 'missing-agency';
+  const scopedAgencyId = req.headers['x-agency-id']?.toString().trim() || 'missing-agency';
   const authorisation = req.headers.authorization || '';
   const identityHash = createHash('sha256').update(authorisation).digest('hex');
-  return `${agencyId}:${identityHash}:${req.url || '/api/v1/dashboard/overview'}`;
+  return `${scopedAgencyId}:${identityHash}:${req.url || '/api/v1/dashboard/overview'}`;
 }
 
 function responseData(response: ApiResponse): unknown | undefined {
@@ -48,7 +55,8 @@ function compactCache(now: number): void {
  * when a browser refreshes, multiple dashboard widgets render together, or a
  * user revisits the page within a short interval. The key includes a one-way
  * hash of the bearer identity because dashboard visibility is role/assignment
- * scoped. Historical trends remain backed by persisted scheduled snapshots.
+ * scoped. Cached responses are still re-authorised on every request so account
+ * suspension, membership changes and App Check enforcement are never bypassed.
  */
 export async function routeCachedDashboardRequest(
   req: IncomingMessage,
@@ -61,6 +69,8 @@ export async function routeCachedDashboardRequest(
   const key = requestIdentityKey(req);
   const cached = overviewCache.get(key);
   if (cached && cached.expiresAt > now) {
+    const scopedAgencyId = agencyId(req);
+    await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId: scopedAgencyId }, correlationId);
     return {
       status: 200,
       body: {
