@@ -3,10 +3,13 @@ import './inspectionRequestAugmentation.js';
 import './maintenanceCommercial.js';
 import './reportOperations.js';
 import './reportMetadataAugmentation.js';
+import './clientAugmentation.js';
 
 export * from './platform.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
+export * from './clientManagement.js';
+export * from './clientCompatibility.js';
 export * from './security.js';
 export * from './reportModel.js';
 export * from './reportOperations.js';

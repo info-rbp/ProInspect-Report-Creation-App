@@ -11,6 +11,7 @@ export const INTERNAL_ROLES: UserRole[] = [
 
 export type InternalSection =
   | 'dashboard'
+  | 'clients'
   | 'properties'
   | 'jobs'
   | 'reports'
@@ -21,9 +22,9 @@ export type InternalSection =
   | 'settings';
 
 const ROLE_SECTIONS: Record<UserRole, InternalSection[]> = {
-  super_admin: ['dashboard', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup', 'users', 'templates', 'settings'],
-  proinspect_admin: ['dashboard', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup', 'users', 'templates', 'settings'],
-  operations: ['dashboard', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup'],
+  super_admin: ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup', 'users', 'templates', 'settings'],
+  proinspect_admin: ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup', 'users', 'templates', 'settings'],
+  operations: ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenant-followup'],
   inspector: ['dashboard', 'maintenance'],
   analyst: ['dashboard', 'reports', 'maintenance', 'tenant-followup'],
   reviewer: ['dashboard', 'reports', 'maintenance', 'tenant-followup'],
@@ -35,17 +36,11 @@ const ROLE_SECTIONS: Record<UserRole, InternalSection[]> = {
 export const isInternalRole = (role?: UserRole): boolean => Boolean(role && INTERNAL_ROLES.includes(role));
 
 export const canAccessSection = (role: UserRole | undefined, section: InternalSection): boolean => {
-  if (!role) {
-    return false;
-  }
-
+  if (!role) return false;
   return ROLE_SECTIONS[role].includes(section);
 };
 
 export const hasAnyRole = (currentRole: UserRole | undefined, allowedRoles: UserRole[]): boolean => {
-  if (!currentRole) {
-    return false;
-  }
-
+  if (!currentRole) return false;
   return allowedRoles.includes(currentRole);
 };

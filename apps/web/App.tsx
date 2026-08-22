@@ -9,6 +9,10 @@ import { AuthProvider } from './contexts/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import LoginRoutePage from './pages/LoginRoutePage';
 import AdminHomePage from './pages/admin/AdminHomePage';
+import ClientBulkImportPage from './pages/admin/ClientBulkImportPage';
+import ClientOnboardingPage from './pages/admin/ClientOnboardingPage';
+import ClientWorkspacePage from './pages/admin/ClientWorkspacePage';
+import ClientsPage from './pages/admin/ClientsPage';
 import InspectionJobConsolePage from './pages/admin/InspectionJobConsolePage';
 import InspectionJobsPage from './pages/admin/InspectionJobsPage';
 import InspectionOperationsConfigurationPage from './pages/admin/InspectionOperationsConfigurationPage';
@@ -50,6 +54,12 @@ const App: React.FC = () => (
             <Route element={<RoleProtectedRoute section="dashboard" />}>
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="admin" element={<AdminHomePage />} />
+            </Route>
+            <Route element={<RoleProtectedRoute section="clients" />}>
+              <Route path="admin/clients" element={<ClientsPage />} />
+              <Route path="admin/clients/new" element={<ClientOnboardingPage />} />
+              <Route path="admin/clients/import" element={<ClientBulkImportPage />} />
+              <Route path="admin/clients/:clientId" element={<ClientWorkspacePage />} />
             </Route>
             <Route element={<RoleProtectedRoute section="properties" />}>
               <Route path="admin/properties" element={<PropertiesPage />} />
