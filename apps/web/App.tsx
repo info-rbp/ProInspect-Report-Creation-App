@@ -9,6 +9,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import LoginRoutePage from './pages/LoginRoutePage';
 import AdminHomePage from './pages/admin/AdminHomePage';
+import AnalyticsPage from './pages/admin/AnalyticsPage';
 import ClientBulkImportPage from './pages/admin/ClientBulkImportPage';
 import ClientOnboardingPage from './pages/admin/ClientOnboardingPage';
 import ClientWorkspacePage from './pages/admin/ClientWorkspacePage';
@@ -57,6 +58,7 @@ const App: React.FC = () => (
     <Route element={<ProtectedRoute />}><Route path="/client-portal/:clientAccountId" element={<ClientPortalPage />} /></Route>
     <Route path="/app" element={<ProtectedRoute />}><Route element={<AppShell />}><Route index element={<Navigate to="/app/dashboard" replace />} />
       <Route element={<RoleProtectedRoute section="dashboard" />}><Route path="dashboard" element={<DashboardPage />} /><Route path="admin" element={<AdminHomePage />} /></Route>
+      <Route element={<RoleProtectedRoute section="analytics" />}><Route path="admin/analytics" element={<AnalyticsPage />} /></Route>
       <Route element={<RoleProtectedRoute section="clients" />}><Route path="admin/clients" element={<ClientsPage />} /><Route path="admin/clients/new" element={<ClientOnboardingPage />} /><Route path="admin/clients/import" element={<ClientBulkImportPage />} /><Route path="admin/clients/:clientId" element={<ClientWorkspacePage />} /></Route>
       <Route element={<RoleProtectedRoute section="properties" />}><Route path="admin/properties" element={<PropertiesPage />} /><Route path="admin/properties/new" element={<PropertyOnboardingPage />} /><Route path="admin/properties/import" element={<PropertyBulkImportPage />} /><Route path="admin/properties/:propertyId" element={<PropertyDetailWithHistoryPage />} /><Route path="admin/keys" element={<KeyRegisterPage />} /></Route>
       <Route element={<RoleProtectedRoute section="jobs" />}><Route path="admin/jobs" element={<InspectionJobsPage />} /><Route path="admin/jobs/planner" element={<InspectionPlannerPage />} /><Route path="admin/jobs/configuration" element={<InspectionOperationsConfigurationPage />} /><Route path="admin/jobs/:jobId" element={<InspectionJobConsolePage />} /></Route>
