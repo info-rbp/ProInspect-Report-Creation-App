@@ -9,6 +9,8 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, '.'),
       '@pcr/domain': path.resolve(import.meta.dirname, '../../packages/domain/src/index.ts'),
       '@pcr/templates/pcrPreset': path.resolve(import.meta.dirname, '../../packages/templates/src/pcrPreset.ts'),
+      '@pcr/templates/canonicalCatalogue': path.resolve(import.meta.dirname, '../../packages/templates/src/canonicalCatalogue.ts'),
+      '@pcr/templates/catalogueAdmin': path.resolve(import.meta.dirname, '../../packages/templates/src/catalogueAdmin.ts'),
       '@pcr/templates': path.resolve(import.meta.dirname, '../../packages/templates/src/index.ts'),
     },
   },
