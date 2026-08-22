@@ -8,7 +8,8 @@
   "exports": {
     ".": {"types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./dist/index.js"},
     "./view-model": {"types": "./dist/viewModel.d.ts", "import": "./dist/viewModel.js", "default": "./dist/viewModel.js"},
-    "./document-model": {"types": "./dist/documentModel.d.ts", "import": "./dist/documentModel.js", "default": "./dist/documentModel.js"}
+    "./document-model": {"types": "./dist/documentModel.d.ts", "import": "./dist/documentModel.js", "default": "./dist/documentModel.js"},
+    "./presets": {"types": "./dist/presets.d.ts", "import": "./dist/presets.js", "default": "./dist/presets.js"}
   },
   "scripts": {"typecheck": "tsc --noEmit -p tsconfig.json", "test:run": "vitest run --passWithNoTests", "build": "tsc -p tsconfig.build.json"},
   "dependencies": {"@pcr/domain": "*"},

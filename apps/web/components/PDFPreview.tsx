@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { defaultPresentationTemplate, type ReportBrandingSnapshot } from '@pcr/report-presentation';
+import type { ReportBrandingSnapshot } from '@pcr/report-presentation';
 import { buildReportPresentationViewModel } from '@pcr/report-presentation/view-model';
 import { buildReportDocumentModel, type ReportDocumentBlock } from '@pcr/report-presentation/document-model';
+import { presentationTemplateForReportType } from '@pcr/report-presentation/presets';
 import type { ReportData } from '../types';
 
 interface PDFPreviewProps {
@@ -68,7 +69,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data }) => {
       bodyFont: 'Inter',
       capturedAt: new Date(0).toISOString(),
     };
-    return buildReportDocumentModel({ view, template: defaultPresentationTemplate(new Date(0).toISOString()), branding });
+    return buildReportDocumentModel({ view, template: presentationTemplateForReportType(data.reportType, new Date(0).toISOString()), branding });
   }, [data]);
 
   const renderBlock = (block: ReportDocumentBlock, index: number) => {

@@ -1,7 +1,8 @@
 import { PDFDocument, PageSizes, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
-import { defaultPresentationTemplate, type ReportBrandingSnapshot } from '@pcr/report-presentation';
+import { type ReportBrandingSnapshot } from '@pcr/report-presentation';
 import { buildReportPresentationViewModel } from '@pcr/report-presentation/view-model';
 import { buildReportDocumentModel, type ReportDocumentBlock } from '@pcr/report-presentation/document-model';
+import { presentationTemplateForReportType } from '@pcr/report-presentation/presets';
 import type { RenderInput, RenderAsset } from './renderer.js';
 
 export type { RenderInput, RenderAsset } from './renderer.js';
@@ -89,7 +90,7 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     email: safe(input.report.agentEmail),
     primaryColour: '#1D4ED8', secondaryColour: '#0F172A', accentColour: '#0284C7', headingFont: 'Inter', bodyFont: 'Inter', capturedAt: input.approvedAt,
   };
-  const model = buildReportDocumentModel({ view, template: defaultPresentationTemplate(input.approvedAt), branding });
+  const model = buildReportDocumentModel({ view, template: presentationTemplateForReportType(view.identity.reportType, input.approvedAt), branding });
 
   doc.setTitle(model.title);
   doc.setAuthor(branding.agencyName);
