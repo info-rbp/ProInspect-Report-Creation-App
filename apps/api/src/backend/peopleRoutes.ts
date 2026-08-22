@@ -129,7 +129,7 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
     await membershipRef.update({ status: newStatus, updatedAt: new Date().toISOString(), version: (membership.version ?? 1) + 1 });
     if (action !== 'reactivate') await getAuth(adminApp()).revokeRefreshTokens(uid);
     await appendAudit(deps, principal, capability, `user_${action}`, uid, correlationId, { reason: input.reason, ...(assignmentImpact ? { assignmentImpact } : {}) });
-    return { status: 200, body: { data: { id: uid, status: newStatus, ...(assignmentImpact ? { assignmentImpact } : {}) } };
+    return { status: 200, body: { data: { id: uid, status: newStatus, ...(assignmentImpact ? { assignmentImpact } : {}) } } };
   }
   if (req.method === 'POST' && action === 'revoke-sessions') {
     const principal = await authenticateAndAuthorise(req, deps, 'user.session.revoke', { agencyId: agency }, correlationId);
