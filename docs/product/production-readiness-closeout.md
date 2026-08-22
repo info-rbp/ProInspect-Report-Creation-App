@@ -4,7 +4,7 @@ This document is the release gate for the repository changes that make agency se
 
 ## Repository validation
 
-A release candidate must pass the exact-head pull-request gates before merge:
+A normal release candidate must pass the exact-head pull-request gates before merge:
 
 - shared package builds;
 - web, API, AI worker, PDF worker, notification worker and dashboard worker type checks;
@@ -16,7 +16,27 @@ A release candidate must pass the exact-head pull-request gates before merge:
 - Terraform formatting and validation for bootstrap, development, staging, production and delivery roots;
 - combined `ci/full-validation` status on the exact merge candidate SHA.
 
-Do not merge around a repository validation failure. An infrastructure-level GitHub Actions failure where no workflow step is allocated must be distinguished from a test failure and rerun without changing application code.
+Do not merge around a repository validation failure. An infrastructure-level GitHub Actions failure where no workflow step is allocated must be distinguished from a test failure.
+
+### GitHub Actions quota fallback
+
+When hosted Actions is unavailable because the repository has exhausted its monthly allocation, use the explicitly documented exception in `docs/product/github-actions-quota-release-waiver.md` rather than treating the absent checks as green.
+
+The equivalent Google Cloud validation path is:
+
+```bash
+bash scripts/google-cloud-validate.sh PROJECT_ID
+```
+
+It submits `infrastructure/cloud-build/validate.yaml`, which runs the repository checks, Firebase emulator suite, browser E2E, and Terraform validation outside GitHub Actions using the dedicated Terraform-managed Cloud Build identity.
+
+The corresponding image-only release command is:
+
+```bash
+bash scripts/google-cloud-release.sh PROJECT_ID RELEASE_ID
+```
+
+`RELEASE_ID` should be the immutable source revision. The Cloud Build release updates only the image on Terraform-provisioned Cloud Run services, preserving Terraform-owned IAM, secrets, networking and scheduler settings.
 
 ## Deployment order
 
@@ -43,6 +63,8 @@ People & Access remains disabled for production administration until all control
 - refresh-token revocation is verified for suspension and role changes;
 - invitation delivery is verified through the configured communication provider;
 - cross-agency, privilege-escalation, last-admin, self-deactivation and invitation-expiry tests pass.
+
+Terraform now manages disabled public sign-up/deletion, multi-tenancy enablement, TOTP MFA capability, and guarded App Check provider/service enforcement. Environment-specific reCAPTCHA Enterprise site keys and the final switch from `UNENFORCED` to `ENFORCED` still require real environment configuration and acceptance evidence.
 
 ## Authoritative Settings acceptance
 
@@ -91,15 +113,17 @@ Then verify:
 - a new draft can be cloned from a historic layout;
 - a branding change affects only subsequently finalised reports;
 - an existing final report reproduces from its pinned presentation identity;
-- final PDF/archive manifests contain the same presentation identity as the report.
+- final PDF/archive manifests contain the same presentation identity as the report;
+- a governed PNG/JPEG logo is loaded by exact object generation, SHA-256 verified, included in render provenance and physically rendered on the cover.
 
 ## Branding asset acceptance
 
 - Upload PNG, JPEG, WebP and SVG samples below 5 MB.
 - Verify an incorrect declared SHA-256 is rejected and the object is removed.
 - Verify the completed asset stores exact object generation, file size and SHA-256.
-- Select an approved logo asset and save the active branding profile.
+- Select an approved PNG/JPEG logo asset and save the active branding profile for final-PDF use.
 - Confirm branding assets are agency-scoped and inaccessible across agencies.
+- Confirm SVG/WebP assets remain available for web branding but final PDF generation requires a governed PNG/JPEG raster variant.
 
 ## Dashboard history acceptance
 
@@ -111,14 +135,15 @@ Verify:
 - rerunning the scheduled task updates that daily record rather than creating duplicates;
 - scheduled snapshots are produced without a browser session or administrator action;
 - snapshot queries use server-side aggregate counts rather than downloading full collections;
-- historical dashboard views use snapshot history for trends while live operational queues remain current-state API reads.
+- historical dashboard views use snapshot history for trends while live operational queues remain current-state API reads;
+- repeated live overview requests within the short cache interval avoid repeating full collection scans while still re-authorising the caller on every request.
 
 ## Production evidence pack
 
 Retain the following with the release record:
 
 - exact Git commit and merged pull request;
-- CI and Terraform validation run URLs;
+- CI or explicitly authorised quota-waiver/Cloud Build validation evidence;
 - Terraform plan/apply evidence for each promoted environment;
 - deployed Cloud Run revisions for API and workers;
 - Firebase/Identity Platform and App Check evidence;
