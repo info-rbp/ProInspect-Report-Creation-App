@@ -29,10 +29,14 @@ import MaintenancePage from './pages/admin/MaintenancePage';
 import MaintenanceConfigurationPage from './pages/admin/MaintenanceConfigurationPage';
 import MaintenanceItemConsolePage from './pages/admin/MaintenanceItemConsolePage';
 import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
+import TenantsPage from './pages/admin/TenantsPage';
+import TenantWorkspacePage from './pages/admin/TenantWorkspacePage';
+import TenantPortalAccessPage from './pages/admin/TenantPortalAccessPage';
 import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
 import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
 import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
 import ExternalMaintenanceQuotePage from './pages/external/ExternalMaintenanceQuotePage';
+import TenantPortalPage from './pages/external/TenantPortalPage';
 import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPage';
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
@@ -45,6 +49,7 @@ const App: React.FC = () => (
         <Route path="/auth/login" element={<LoginRoutePage />} />
         <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} />
         <Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} />
+        <Route path="/tenant-portal/:grantToken" element={<TenantPortalPage />} />
         <Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} />
         <Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} />
         <Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
@@ -83,8 +88,12 @@ const App: React.FC = () => (
               <Route path="admin/maintenance/configuration" element={<MaintenanceConfigurationPage />} />
               <Route path="admin/maintenance/:maintenanceId" element={<MaintenanceItemConsolePage />} />
             </Route>
-            <Route element={<RoleProtectedRoute section="tenant-followup" />}>
-              <Route path="admin/tenant-followup" element={<TenantFollowUpPage />} />
+            <Route element={<RoleProtectedRoute section="tenants" />}>
+              <Route path="admin/tenants" element={<TenantsPage />} />
+              <Route path="admin/tenants/actions" element={<TenantFollowUpPage />} />
+              <Route path="admin/tenants/:tenantId/portal" element={<TenantPortalAccessPage />} />
+              <Route path="admin/tenants/:tenantId" element={<TenantWorkspacePage />} />
+              <Route path="admin/tenant-followup" element={<Navigate to="/app/admin/tenants/actions" replace />} />
             </Route>
             <Route element={<RoleProtectedRoute section="users" />}><Route path="admin/users" element={<UsersPage />} /></Route>
             <Route element={<RoleProtectedRoute section="templates" />}><Route path="admin/templates" element={<TemplatesPage />} /></Route>
