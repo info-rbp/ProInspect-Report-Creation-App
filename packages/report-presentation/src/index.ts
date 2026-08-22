@@ -186,6 +186,10 @@ export function captureBrandingSnapshot(profile: ReportBrandingProfile, captured
   if (profile.status !== 'published') throw new Error('Only a published branding profile can be captured.');
   validateBrandingProfile(profile);
   const { id: profileId, version: profileVersion, status: _status, createdAt: _createdAt, publishedAt: _publishedAt, retiredAt: _retiredAt, ...branding } = profile;
+  void _status;
+  void _createdAt;
+  void _publishedAt;
+  void _retiredAt;
   return { profileId, profileVersion, ...structuredClone(branding), capturedAt };
 }
 
