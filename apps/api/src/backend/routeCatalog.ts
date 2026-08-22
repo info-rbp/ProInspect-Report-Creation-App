@@ -80,8 +80,6 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   'contractor-quotes': { collection: 'contractorQuotes', readCapability: 'maintenance.read', target },
   'preventive-maintenance-schedules': { collection: 'preventiveMaintenanceSchedules', readCapability: 'maintenance.read', writeCapability: 'maintenance.manage', target },
   'warranty-claims': { collection: 'warrantyClaims', readCapability: 'maintenance.read', target },
-  'xero-connections': { collection: 'xeroConnections', readCapability: 'xero.manage', target },
-  'xero-sync-exceptions': { collection: 'xeroSyncExceptions', readCapability: 'maintenance.finance.sync', target },
   'work-requests': { collection: 'workRequests', readCapability: 'maintenance.read', target },
   'tenant-instructions': { collection: 'tenantInstructions', readCapability: 'tenant_instruction.manage', target },
   'external-contacts': { collection: 'externalContacts', readCapability: 'external_contact.manage', writeCapability: 'external_contact.manage', target },
