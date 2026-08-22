@@ -17,6 +17,7 @@ import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanc
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
+import { routeTenantInstructionGrantRequest } from './backend/tenantInstructionGrantRoutes.js';
 import { routeTenantPortalRequest } from './backend/tenantPortalRoutes.js';
 import { routeTenantAutomationRequest } from './backend/tenantAutomationRoutes.js';
 import { routeTenantOperationsRequest } from './backend/tenantOperationsRoutes.js';
@@ -110,6 +111,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const tenantOperationsResponse = await routeTenantOperationsRequest(req, dependencies, correlationId); if (tenantOperationsResponse) { send(res, tenantOperationsResponse, correlationId); return; }
       const tenantAutomationResponse = await routeTenantAutomationRequest(req, dependencies, correlationId); if (tenantAutomationResponse) { send(res, tenantAutomationResponse, correlationId); return; }
       const tenantPortalResponse = await routeTenantPortalRequest(req, dependencies, correlationId); if (tenantPortalResponse) { send(res, tenantPortalResponse, correlationId); return; }
+      const tenantGrantResponse = await routeTenantInstructionGrantRequest(req, dependencies, correlationId); if (tenantGrantResponse) { send(res, tenantGrantResponse, correlationId); return; }
       const maintenanceResponse = await routeMaintenanceRequest(req, dependencies, correlationId); if (maintenanceResponse) { send(res, maintenanceResponse, correlationId); return; }
       const templateResponse = await routeTemplateRequest(req, dependencies, correlationId); if (templateResponse) { send(res, templateResponse, correlationId); return; }
       const routed = await routeApiRequest(req, res, dependencies, correlationId); if (routed) { send(res, routed, correlationId); return; }
