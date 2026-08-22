@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import type { User } from 'firebase/auth';
 import type { InternalSection } from '../services/platform/roleAccess';
 import { canAccessSection, hasAnyRole } from '../services/platform/roleAccess';
+import { ensureAppCheck } from '../services/appCheckService';
 import { getOrCreateUserProfile } from '../services/platform/userProfileService';
 import { auth, isFirebaseConfigured, onAuthStateChanged, signInWithEmailPassword, signOutUser } from '../services/storageService';
 import type { UserProfile, UserRole } from '../types/platform';
@@ -32,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    ensureAppCheck();
     return onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setCurrentUser(null);
@@ -64,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Identity Platform must be configured before signing in.');
     }
 
+    ensureAppCheck();
     const firebaseUser = await signInWithEmailPassword(email.trim(), password);
     try {
       const profile = await getOrCreateUserProfile(firebaseUser);
