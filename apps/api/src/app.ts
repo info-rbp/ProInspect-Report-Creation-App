@@ -30,6 +30,7 @@ import { routeTenantAutomationRequest } from './backend/tenantAutomationRoutes.j
 import { routeTenantOperationsRequest } from './backend/tenantOperationsRoutes.js';
 import { routePropertyIntelligenceRequest } from './backend/propertyIntelligenceRoutes.js';
 import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.js';
+import { routePropertyHistoryRequest } from './backend/propertyHistoryRoutes.js';
 import { routeCatalogueRequest } from './backend/catalogueRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
@@ -116,6 +117,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const inspectionOperationsResponse = await routeInspectionOperationsRequest(req, dependencies, correlationId); if (inspectionOperationsResponse) { send(res, inspectionOperationsResponse, correlationId); return; }
       const propertyIntelligenceResponse = await routePropertyIntelligenceRequest(req, dependencies, correlationId); if (propertyIntelligenceResponse) { send(res, propertyIntelligenceResponse, correlationId); return; }
       const propertyDocumentResponse = await routePropertyDocumentRequest(req, dependencies, correlationId); if (propertyDocumentResponse) { send(res, propertyDocumentResponse, correlationId); return; }
+      const propertyHistoryResponse = await routePropertyHistoryRequest(req, dependencies, correlationId); if (propertyHistoryResponse) { send(res, propertyHistoryResponse, correlationId); return; }
       const inspectionReportResponse = await routeInspectionReportRequest(req, dependencies, correlationId); if (inspectionReportResponse) { send(res, inspectionReportResponse, correlationId); return; }
 
       const specialReportRoute = reportRoute(req.url);
