@@ -126,6 +126,7 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
         bodyFont: template.typography.bodyFont,
         capturedAt: input.approvedAt,
       };
+  const brandingLogoId = safe(branding.logoDocumentId);
   const model = buildReportDocumentModel({ view, template, branding });
 
   const margin = Math.max(14, Math.min(115, template.page.marginMm * 72 / 25.4));
@@ -156,6 +157,10 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     if (template.page.showPageNumbers) {
       page.drawLine({ start: { x: margin, y: 28 }, end: { x: PAGE_WIDTH - margin, y: 28 }, thickness: 0.5, color: accent });
       page.drawText(`Report ${input.reportId} | Page ${pageNumber}`, { x: margin, y: 15, size: 7, font: regular, color: secondary });
+      if (branding.footerText) {
+        const footer = pdfSafeText(branding.footerText).slice(0, 120);
+        page.drawText(footer, { x: PAGE_WIDTH - margin - Math.min(contentWidth / 2, regular.widthOfTextAtSize(footer, 6)), y: 15, size: 6, font: regular, color: secondary });
+      }
     }
     return { page, y: PAGE_HEIGHT - margin, pageNumber };
   };
@@ -195,6 +200,10 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     const block: ReportDocumentBlock = model.blocks[index]!;
     if (index > 0 && (block.type === 'summary' || block.type === 'area' || block.type === 'photo-index')) state = newPage();
     if (block.type === 'cover') {
+      if (brandingLogoId) {
+        await drawImage(brandingLogoId, template.cover.style === 'minimal' ? 42 : 64);
+        state.y -= template.cover.style === 'minimal' ? 6 : 10;
+      }
       text(block.agencyName.toUpperCase(), { font: bold, size: 15, leading: 20, colour: primary });
       state.y -= template.cover.style === 'minimal' ? 24 : 44;
       heading(block.title, true);
