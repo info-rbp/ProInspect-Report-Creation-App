@@ -18,8 +18,8 @@ The following controls replace the unavailable hosted Actions gate for this exce
 2. PR #48 changes are retained in one mergeable branch and reviewed through repository diffs/static contract checks before merge.
 3. Known defects discovered during the static review are corrected before merge rather than deferred.
 4. `infrastructure/cloud-build/validate.yaml` reproduces the repository validation suite outside GitHub Actions: workspace typechecks, formatting, lint, unit/rules tests, application builds, artifact verification, Firebase emulator tests, Playwright browser tests, and Terraform formatting/provider validation.
-5. `scripts/google-cloud-validate.sh` invokes that validation using the Terraform-managed Cloud Build service account once an authenticated Google Cloud operator/control plane is available.
-6. `infrastructure/cloud-build/release.yaml` and `scripts/google-cloud-release.sh` provide an image-only release path that preserves Terraform-owned Cloud Run IAM, secrets, networking and schedulers.
+5. `bash scripts/google-cloud-validate.sh PROJECT_ID` invokes that validation using the Terraform-managed Cloud Build service account once an authenticated Google Cloud operator/control plane is available.
+6. `infrastructure/cloud-build/release.yaml` and `bash scripts/google-cloud-release.sh PROJECT_ID RELEASE_ID` provide an image-only release path that preserves Terraform-owned Cloud Run IAM, secrets, networking and schedulers.
 7. Production rollout remains blocked until development and staging acceptance evidence is captured.
 
 ## Merge rules under this exception
@@ -36,7 +36,13 @@ The PR may be merged without a green GitHub Actions check only because the month
 
 When GitHub Actions capacity becomes available again, run the normal full validation against the then-current `main`. A failure is a release defect even if the quota-waived merge has already occurred and must be corrected immediately.
 
-Branch protection should then require `ci/full-validation` again so this exception cannot silently become the permanent operating model. Human systems do have a talent for turning temporary bypasses into architecture.
+After the quota resets, branch protection can be applied with:
+
+```bash
+CONFIRM_ACTIONS_CAPACITY=available bash scripts/configure-main-branch-protection.sh info-rbp/ProInspect-Report-Creation-App main
+```
+
+That policy requires pull requests, conversation resolution and `ci/full-validation`. It is intentionally guarded so the unavailable status check cannot lock the repository during the quota-exhausted period. Human systems do have a talent for turning temporary bypasses into architecture.
 
 ## Deliberate non-waived gates
 
