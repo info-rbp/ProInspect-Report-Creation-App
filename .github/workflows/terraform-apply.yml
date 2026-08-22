@@ -32,7 +32,7 @@ jobs:
     environment: ${{ inputs.stack == 'delivery' && 'production' || inputs.stack }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: hashicorp/setup-terraform@v4
         with:
