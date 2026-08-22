@@ -194,20 +194,20 @@ function roomTypeForArea(area: Pick<SystemAreaDefinitionVersion, 'category' | 'i
 
 export function hierarchyFromRooms(rooms: RoomConfigItem[]): PropertyLayoutNode[] {
   const nodes: PropertyLayoutNode[] = [
-    { id: 'site-primary', name: 'Primary Site', kind: 'site', sequence: 1 },
-    { id: 'building-main', name: 'Main Building', kind: 'building', parentId: 'site-primary', sequence: 1 },
+    { id: 'site-primary', name: 'Primary Site', kind: 'site', order: 1 },
+    { id: 'building-main', name: 'Main Building', kind: 'building', parentId: 'site-primary', order: 1 },
   ];
   const levels = [...new Set(rooms.map((room) => room.floorLevel || 'Ground Floor'))];
   levels.forEach((level, index) => {
     const levelId = `level-${level.toLowerCase().replace(/[^a-z0-9]+/gu, '-')}`;
-    nodes.push({ id: levelId, name: level, kind: 'level', parentId: 'building-main', sequence: index + 1 });
+    nodes.push({ id: levelId, name: level, kind: 'level', parentId: 'building-main', order: index + 1 });
     rooms.filter((candidate) => (candidate.floorLevel || 'Ground Floor') === level).forEach((area, areaIndex) => {
       nodes.push({
         id: area.id,
         name: area.name,
         kind: 'area',
         parentId: levelId,
-        sequence: areaIndex + 1,
+        order: areaIndex + 1,
         responsibility: area.responsibility,
         notes: area.notes,
         itemsPreset: area.itemsPreset,
@@ -243,9 +243,13 @@ export function createLayoutVersion(
   };
 }
 
-export function applyLayoutTemplate(property: PropertyRecord, template: PropertyLayoutTemplate): Partial<PropertyRecord> {
+export function applyLayoutTemplate(
+  property: PropertyRecord,
+  template: PropertyLayoutTemplate,
+  changeReason = `Applied layout template: ${template.name}`,
+): Partial<PropertyRecord> {
   const rooms = roomsFromTemplate(template, property.physicalPropertyType);
-  const version = createLayoutVersion(property, rooms, `Applied layout template: ${template.name}`, template.id);
+  const version = createLayoutVersion(property, rooms, changeReason, template.id);
   const previousVersions = (property.layoutVersions || []).map((item) => item.effectiveTo ? item : { ...item, effectiveTo: version.effectiveFrom });
   return {
     roomsConfig: rooms,
