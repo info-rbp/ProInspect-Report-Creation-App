@@ -19,6 +19,7 @@ import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
 import { routePropertyIntelligenceRequest } from './backend/propertyIntelligenceRoutes.js';
 import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.js';
+import { routeCatalogueRequest } from './backend/catalogueRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
@@ -232,6 +233,12 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceResponse = await routeMaintenanceRequest(req, dependencies, correlationId);
       if (maintenanceResponse) {
         send(res, maintenanceResponse, correlationId);
+        return;
+      }
+
+      const catalogueResponse = await routeCatalogueRequest(req, dependencies, correlationId);
+      if (catalogueResponse) {
+        send(res, catalogueResponse, correlationId);
         return;
       }
 
