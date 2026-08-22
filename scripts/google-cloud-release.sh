@@ -31,8 +31,11 @@ fi
 
 command -v gcloud >/dev/null 2>&1 || { echo 'gcloud is required.' >&2; exit 69; }
 
-echo "Validating active project and required Cloud Run services..."
+BUILD_SERVICE_ACCOUNT="projects/$PROJECT_ID/serviceAccounts/cloud-build@$PROJECT_ID.iam.gserviceaccount.com"
+
+echo "Validating project, build identity and required Cloud Run services..."
 gcloud projects describe "$PROJECT_ID" --format='value(projectId)' >/dev/null
+gcloud iam service-accounts describe "cloud-build@$PROJECT_ID.iam.gserviceaccount.com" --project="$PROJECT_ID" --format='value(email)' >/dev/null
 for service in api pdf-worker notification-worker dashboard-worker; do
   gcloud run services describe "$service" --project="$PROJECT_ID" --region="$REGION" --format='value(metadata.name)' >/dev/null
 done
@@ -41,6 +44,7 @@ echo "Submitting release $RELEASE_ID to $PROJECT_ID ($REGION)..."
 gcloud builds submit \
   --project="$PROJECT_ID" \
   --region="$REGION" \
+  --service-account="$BUILD_SERVICE_ACCOUNT" \
   --config=infrastructure/cloud-build/release.yaml \
   --substitutions="_REGION=$REGION,_RELEASE_ID=$RELEASE_ID" \
   .
