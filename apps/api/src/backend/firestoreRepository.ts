@@ -28,6 +28,10 @@ function assertReportMetadata(collection: string, data: Record<string, unknown>)
   });
 }
 
+function isSystemCatalogueSeed(collection: string, data: Record<string, unknown>): boolean {
+  return collection.startsWith('catalogue') && data.systemDefault === true;
+}
+
 export class FirestoreOperationalRepository implements OperationalRepository {
   async list(collection: string, agencyId: string, limit: number, cursor?: string): Promise<Page<StoredRecord>> {
     let query = getFirestore(adminApp())
@@ -60,8 +64,16 @@ export class FirestoreOperationalRepository implements OperationalRepository {
       updatedBy: actorId,
     };
     const reference = getFirestore(adminApp()).collection(collectionPath(collection, agencyId)).doc(id);
-    await reference.create(record);
-    return record;
+    try {
+      await reference.create(record);
+      return record;
+    } catch (error) {
+      if (isSystemCatalogueSeed(collection, data)) {
+        const existing = await reference.get();
+        if (existing.exists) return { id: existing.id, ...existing.data() } as StoredRecord;
+      }
+      throw error;
+    }
   }
 
   async update(collection: string, agencyId: string, id: string, data: Record<string, unknown>, expectedVersion: number, actorId: string): Promise<StoredRecord> {
