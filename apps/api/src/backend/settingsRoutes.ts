@@ -38,7 +38,7 @@ export async function routeSettingsRequest(req: IncomingMessage, dependencies: A
   if (req.method === 'GET') { const principal = await authenticateAndAuthorise(req, dependencies, config.readCapability, { agencyId }, correlationId); const record = await dependencies.repository.get('agencySettings', agencyId, config.id); return { status: 200, body: { data: record ?? null, meta: { actor: principal.uid, correlationId } } }; }
   if (req.method !== 'PUT' && req.method !== 'PATCH') throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Settings sections support GET, PUT and PATCH only.');
   const body = await readJson(req); const principal = await authenticateAndAuthorise(req, dependencies, config.writeCapability, { agencyId }, correlationId); const suppliedVersion = expectedVersion(body.expectedVersion); const cleanBody = { ...body };
-  delete cleanBody.expectedVersion; delete cleanBody.id; delete cleanBody.agencyId; delete cleanBody.version; delete cleanBody.createdAt; delete cleanBody.updatedAt;
+  delete cleanBody.expectedVersion; delete cleanBody.id; delete cleanBody.agencyId; delete cleanBody.version; delete cleanBody.createdAt; delete cleanBody.updatedAt; delete cleanBody.changeReason;
   const validated = validate(config.schema.parse(cleanBody)); const current = await dependencies.repository.get('agencySettings', agencyId, config.id);
   if (current) {
     if (!suppliedVersion) throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion is required when updating settings.');
