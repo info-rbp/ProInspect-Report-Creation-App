@@ -68,7 +68,7 @@ export interface UploadSessionRecord {
   issuedTo: string;
   expiresAt: string;
   externalGrantId?: string;
-  externalResourceType?: 'work_request' | 'tenant_instruction';
+  externalResourceType?: 'work_request' | 'tenant_instruction' | 'tenant_portal';
   externalResourceId?: string;
   createdAt: string;
   updatedAt: string;
