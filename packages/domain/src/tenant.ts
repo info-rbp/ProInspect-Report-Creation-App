@@ -61,6 +61,19 @@ export type TenancyDocumentType =
   | 'signed_form'
   | 'other';
 
+export interface TenancyDocumentSigner {
+  id: string;
+  kind: 'tenant' | 'agent';
+  tenantId?: string;
+  userId?: string;
+  name?: string;
+  email?: string;
+  required: boolean;
+  status: 'pending' | 'signed';
+  signedAt?: string;
+  signatureName?: string;
+}
+
 export interface TenancyDocument {
   id: string;
   agencyId: string;
@@ -76,13 +89,18 @@ export interface TenancyDocument {
   objectPath?: string;
   sha256?: string;
   generation?: string;
+  documentVersion?: number;
+  immutable?: boolean;
   issuedAt?: string;
-  issuedTo?: string;
+  issuedTo?: string | string[];
   acknowledgementText?: string;
+  signers?: TenancyDocumentSigner[];
   signedAt?: string;
   signedByTenantId?: string;
   signatureMethod?: 'portal_acknowledgement' | 'external_esign';
   signatureName?: string;
+  signatureManifestSha256?: string;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
   version?: number;
