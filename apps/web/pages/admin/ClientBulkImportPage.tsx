@@ -14,7 +14,7 @@ interface PreparedImport {
 const EXPECTED_COLUMNS = [
   'client', 'legalName', 'tradingName', 'clientType', 'entityType', 'abn', 'acn',
   'primaryContactName', 'primaryEmail', 'primaryPhone', 'accountsEmail', 'billingMethod',
-  'paymentTermsDays', 'xeroContactId', 'shopifyCustomerId', 'propertyId', 'relationshipType',
+  'paymentTermsDays', 'shopifyCustomerId', 'propertyId', 'relationshipType',
   'propertyManagerApprovalLimit', 'landlordApprovalThreshold', 'emergencyAuthorisationLimit',
 ] as const;
 
