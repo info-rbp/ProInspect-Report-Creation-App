@@ -65,6 +65,7 @@ declare module './platform.js' {
 
   interface PropertyAsset {
     /** Property occurrence and canonical semantic binding for cross-report asset history. */
+    componentInstanceId?: string;
     canonicalAreaDefinitionId?: string;
     canonicalAreaDefinitionVersion?: number;
     canonicalComponentDefinitionId?: string;
