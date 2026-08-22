@@ -1,4 +1,11 @@
-import type { DeactivationImpact, PeopleDirectoryEntry, UserRole, WorkforceProfile } from '../../types/platform';
+import type {
+  DeactivationImpact,
+  PeopleDirectoryEntry,
+  ReassignmentResult,
+  UserRole,
+  WorkforceProfile,
+  WorkloadSummary,
+} from '../../types/platform';
 import { apiRequest } from '../apiClient';
 
 export async function listPeople(): Promise<PeopleDirectoryEntry[]> {
@@ -11,6 +18,21 @@ export async function invitePerson(input: { email: string; displayName?: string;
 
 export async function getDeactivationImpact(userId: string): Promise<DeactivationImpact> {
   return apiRequest(undefined, `/api/v1/people/${encodeURIComponent(userId)}/impact`);
+}
+
+export async function getPersonWorkload(userId: string): Promise<WorkloadSummary> {
+  return apiRequest(undefined, `/api/v1/people/${encodeURIComponent(userId)}/workload`);
+}
+
+export async function reassignPersonWork(
+  userId: string,
+  replacementUserId: string,
+  reason: string,
+): Promise<ReassignmentResult> {
+  return apiRequest(undefined, `/api/v1/people/${encodeURIComponent(userId)}/reassign`, {
+    method: 'POST',
+    body: { replacementUserId, reason },
+  });
 }
 
 export async function changePersonRole(userId: string, role: UserRole, reason: string): Promise<void> {
