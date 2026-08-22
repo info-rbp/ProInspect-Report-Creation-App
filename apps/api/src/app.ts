@@ -17,8 +17,12 @@ import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanc
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
+import { routeNotificationCallbackRequest } from './backend/notificationCallbackRoutes.js';
+import { routeTenantActionQueueRequest } from './backend/tenantActionQueueRoutes.js';
+import { routeTenantActionSourceRequest } from './backend/tenantActionSourceRoutes.js';
 import { routeTenantDocumentRequest } from './backend/tenantDocumentRoutes.js';
 import { routeTenantInstructionGrantRequest } from './backend/tenantInstructionGrantRoutes.js';
+import { routeTenantMigrationRequest } from './backend/tenantMigrationRoutes.js';
 import { routeTenantPortalRequest } from './backend/tenantPortalRoutes.js';
 import { routeTenantAutomationRequest } from './backend/tenantAutomationRoutes.js';
 import { routeTenantOperationsRequest } from './backend/tenantOperationsRoutes.js';
@@ -80,6 +84,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
     try {
       if (req.method === 'GET' && req.url === '/health') { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', correlationId } }, correlationId); return; }
       if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: buildOpenApiDocument() }, correlationId); return; }
+      const callbackResponse = await routeNotificationCallbackRequest(req, correlationId); if (callbackResponse) { send(res, callbackResponse, correlationId); return; }
       if (req.method === 'POST' && req.url === '/v1/security/authorise') {
         const body = await readJson(req); const capability = body.capability as SecurityCapability; const target = body.target as AuthorisationTarget;
         const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId);
@@ -110,6 +115,9 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceCreateResponse = await routeMaintenanceCreateRequest(req, dependencies, correlationId); if (maintenanceCreateResponse) { send(res, maintenanceCreateResponse, correlationId); return; }
       const maintenanceActionResponse = await routeMaintenanceActionRequest(req, dependencies, correlationId); if (maintenanceActionResponse) { send(res, maintenanceActionResponse, correlationId); return; }
       const tenantDocumentResponse = await routeTenantDocumentRequest(req, dependencies, correlationId); if (tenantDocumentResponse) { send(res, tenantDocumentResponse, correlationId); return; }
+      const tenantMigrationResponse = await routeTenantMigrationRequest(req, dependencies, correlationId); if (tenantMigrationResponse) { send(res, tenantMigrationResponse, correlationId); return; }
+      const tenantActionSourceResponse = await routeTenantActionSourceRequest(req, dependencies, correlationId); if (tenantActionSourceResponse) { send(res, tenantActionSourceResponse, correlationId); return; }
+      const tenantActionQueueResponse = await routeTenantActionQueueRequest(req, dependencies, correlationId); if (tenantActionQueueResponse) { send(res, tenantActionQueueResponse, correlationId); return; }
       const tenantOperationsResponse = await routeTenantOperationsRequest(req, dependencies, correlationId); if (tenantOperationsResponse) { send(res, tenantOperationsResponse, correlationId); return; }
       const tenantAutomationResponse = await routeTenantAutomationRequest(req, dependencies, correlationId); if (tenantAutomationResponse) { send(res, tenantAutomationResponse, correlationId); return; }
       const tenantPortalResponse = await routeTenantPortalRequest(req, dependencies, correlationId); if (tenantPortalResponse) { send(res, tenantPortalResponse, correlationId); return; }
