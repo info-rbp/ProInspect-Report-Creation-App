@@ -49,6 +49,15 @@ variable "report_retention_days" {
   type    = number
   default = null
 }
+variable "app_check_recaptcha_enterprise_site_key" {
+  type     = string
+  default  = null
+  nullable = true
+}
+variable "app_check_enforcement_mode" {
+  type    = string
+  default = "UNENFORCED"
+}
 
 module "environment" {
   source = "../../modules/environment"
@@ -56,16 +65,18 @@ module "environment" {
     google      = google
     google-beta = google-beta
   }
-  project_id                  = var.project_id
-  environment                 = "development"
-  billing_account_id          = var.billing_account_id
-  region                      = var.region
-  identity_authorized_domains = var.identity_authorized_domains
-  firebase_hosting_site_id    = var.firebase_hosting_site_id
-  monthly_budget_aud          = var.monthly_budget_aud
-  notification_emails         = var.notification_emails
-  report_retention_days       = var.report_retention_days
-  api_allow_unauthenticated   = true
+  project_id                                  = var.project_id
+  environment                                 = "development"
+  billing_account_id                          = var.billing_account_id
+  region                                      = var.region
+  identity_authorized_domains                 = var.identity_authorized_domains
+  firebase_hosting_site_id                    = var.firebase_hosting_site_id
+  monthly_budget_aud                          = var.monthly_budget_aud
+  notification_emails                         = var.notification_emails
+  report_retention_days                       = var.report_retention_days
+  app_check_recaptcha_enterprise_site_key     = var.app_check_recaptcha_enterprise_site_key
+  app_check_enforcement_mode                  = var.app_check_enforcement_mode
+  api_allow_unauthenticated                   = true
 }
 
 output "landing_zone" { value = module.environment }
