@@ -6,6 +6,7 @@ import {
   assertTemplateEditable,
   validateTemplate,
   createInitialPcrTemplate,
+  systemInspectionTemplateContract,
 } from '@pcr/templates';
 import { apiRequest } from './apiClient';
 
@@ -38,6 +39,34 @@ function versionPath(id: string, version: number): string {
   return `/api/v1/templates/${encodeURIComponent(id)}/versions/${version}`;
 }
 
+function defaultPropertyUses(template: InspectionTypeTemplate) {
+  const contract = systemInspectionTemplateContract(template.inspectionType);
+  const propertyType = template.propertyType.trim().toLowerCase();
+  if (propertyType === 'residential') return ['residential'] as const;
+  if (propertyType === 'strata' || propertyType === 'common_property') return ['strata_common_property'] as const;
+  if (propertyType === 'commercial') return ['commercial', 'retail', 'industrial', 'mixed_use'] as const;
+  return contract.propertyUses;
+}
+
+/**
+ * The UI may still expose the legacy Area list for compatibility and commentary navigation, but
+ * draft persistence never treats those cloned objects as report structure. Structure is stored as
+ * canonical catalogue references and resolved against the Property Layout by the API.
+ */
+function canonicalDraft(template: InspectionTypeTemplate): InspectionTypeTemplate {
+  if (template.structureMode === 'property_layout_catalogue') return template;
+  const contract = systemInspectionTemplateContract(template.inspectionType);
+  return {
+    ...template,
+    areas: [],
+    structureMode: 'property_layout_catalogue',
+    includeUnreferencedPropertyAreas: true,
+    canonicalAreaReferences: [],
+    propertyUses: [...defaultPropertyUses(template)],
+    physicalPropertyTypes: [...contract.physicalPropertyTypes],
+  };
+}
+
 export async function getTemplates(): Promise<InspectionTypeTemplate[]> {
   const templates = await apiRequest<ServerTemplate[]>(undefined, '/api/v1/templates');
   return templates.map(remember);
@@ -50,18 +79,19 @@ export async function getActiveTemplateForType(type: string = 'entry'): Promise<
     .sort((left, right) => right.version - left.version);
   const published = matches.find((template) => template.status === 'published');
   const draft = matches.find((template) => template.status === 'draft');
-  return published || draft || templates[0] || createInitialPcrTemplate();
+  return published || draft || templates[0] || canonicalDraft(createInitialPcrTemplate());
 }
 
 export async function saveTemplate(template: InspectionTypeTemplate): Promise<void> {
-  validateTemplate(template);
-  if (template.status !== 'draft') throw new Error('Published and retired template versions are immutable. Duplicate to a new draft before editing.');
+  const canonical = canonicalDraft(template);
+  validateTemplate(canonical);
+  if (canonical.status !== 'draft') throw new Error('Published and retired template versions are immutable. Duplicate to a new draft before editing.');
 
-  const knownVersion = recordVersions.get(key(template.id, template.version)) || (template as Partial<ServerTemplate>).recordVersion;
+  const knownVersion = recordVersions.get(key(canonical.id, canonical.version)) || (template as Partial<ServerTemplate>).recordVersion;
   if (knownVersion) {
-    const updated = await apiRequest<ServerTemplate>(undefined, versionPath(template.id, template.version), {
+    const updated = await apiRequest<ServerTemplate>(undefined, versionPath(canonical.id, canonical.version), {
       method: 'PUT',
-      body: { expectedRecordVersion: knownVersion, template },
+      body: { expectedRecordVersion: knownVersion, template: canonical },
     });
     remember(updated);
     return;
@@ -69,7 +99,7 @@ export async function saveTemplate(template: InspectionTypeTemplate): Promise<vo
 
   const created = await apiRequest<ServerTemplate>(undefined, '/api/v1/templates/drafts', {
     method: 'POST',
-    body: { template },
+    body: { template: canonical },
   });
   remember(created);
 }
