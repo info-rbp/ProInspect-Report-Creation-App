@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+import type { SettingsSection } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { recordSettingsVersion } from '../services/settingsHistoryService.js';
 import { ApiError, type ApiResponse } from './router.js';
@@ -20,7 +21,8 @@ export async function routeSettingsHistoryRequest(req:IncomingMessage,dependenci
     const current=await dependencies.repository.get(collection,agencyId,recordId);if(!current)throw new ApiError(404,'SETTINGS_RECORD_NOT_FOUND','Current settings record was not found.');
     const snapshot={...(version.snapshot as Record<string,unknown>)};delete snapshot.id;delete snapshot.version;delete snapshot.createdAt;delete snapshot.updatedAt;delete snapshot.agencyId;
     const restored=await dependencies.repository.update(collection,agencyId,recordId,snapshot,Number(current.version),principal.uid);
-    await recordSettingsVersion(dependencies,{agencyId,section:String(version.section||'security') as any,collection,recordId,before:current,after:restored,actorId:principal.uid,correlationId,reason:`restored_from_${version.id}`});
+    const section = String(version.section || 'security') as SettingsSection;
+    await recordSettingsVersion(dependencies,{agencyId,section,collection,recordId,before:current,after:restored,actorId:principal.uid,correlationId,reason:`restored_from_${version.id}`});
     return{status:200,body:{data:restored,meta:{actor:principal.uid,correlationId}}};
   }
   throw new ApiError(405,'METHOD_NOT_ALLOWED','Unsupported settings history operation.');
