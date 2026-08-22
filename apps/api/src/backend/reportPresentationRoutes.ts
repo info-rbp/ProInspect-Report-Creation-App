@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import {
   publishPresentationTemplate,
@@ -53,6 +54,36 @@ function asTemplate(record: StoredRecord): ReportPresentationTemplate {
   return template;
 }
 
+async function auditLifecycle(
+  dependencies: ApiDependencies,
+  input: {
+    agencyId: string;
+    actorId: string;
+    actorRole: string;
+    correlationId: string;
+    id: string;
+    action: 'published' | 'retired';
+    version: number;
+  },
+): Promise<void> {
+  await dependencies.audit.append({
+    id: randomUUID(),
+    timestamp: new Date().toISOString(),
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    agencyId: input.agencyId,
+    capability: 'template.manage',
+    outcome: 'allowed',
+    reason: `report_presentation.${input.action}`,
+    target: { agencyId: input.agencyId },
+    correlationId: input.correlationId,
+    entityType: 'report_presentation_template',
+    entityId: input.id,
+    eventType: `report_presentation.${input.action}`,
+    metadata: { version: input.version },
+  });
+}
+
 export async function routeReportPresentationRequest(
   req: IncomingMessage,
   dependencies: ApiDependencies,
@@ -84,21 +115,14 @@ export async function routeReportPresentationRequest(
       expectedVersion(body),
       principal.uid,
     );
-    await dependencies.audit.append({
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
+    await auditLifecycle(dependencies, {
+      agencyId,
       actorId: principal.uid,
       actorRole: principal.role,
-      agencyId,
-      capability: 'template.manage',
-      outcome: 'allowed',
-      reason: 'report_presentation.published',
-      target: { agencyId },
       correlationId,
-      entityType: 'report_presentation_template',
-      entityId: id,
-      eventType: 'report_presentation.published',
-      metadata: { version: updated.version },
+      id,
+      action: 'published',
+      version: Number(updated.version),
     });
     return { status: 200, body: { data: updated, meta: { correlationId } } };
   }
@@ -115,21 +139,14 @@ export async function routeReportPresentationRequest(
       expectedVersion(body),
       principal.uid,
     );
-    await dependencies.audit.append({
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
+    await auditLifecycle(dependencies, {
+      agencyId,
       actorId: principal.uid,
       actorRole: principal.role,
-      agencyId,
-      capability: 'template.manage',
-      outcome: 'allowed',
-      reason: 'report_presentation.retired',
-      target: { agencyId },
       correlationId,
-      entityType: 'report_presentation_template',
-      entityId: id,
-      eventType: 'report_presentation.retired',
-      metadata: { version: updated.version },
+      id,
+      action: 'retired',
+      version: Number(updated.version),
     });
     return { status: 200, body: { data: updated, meta: { correlationId } } };
   }
