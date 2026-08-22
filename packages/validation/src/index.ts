@@ -72,3 +72,4 @@ export * from './reportModel.js';
 export * from './photoUpload.js';
 export * from './maintenance.js';
 export * from './people.js';
+export * from './agencySettings.js';
