@@ -22,6 +22,7 @@ export interface OfflinePackage {
   packageHash: string;
 }
 
+type SyncSummary = Awaited<ReturnType<typeof syncStateSummary>>;
 function agencyId(): string | undefined { if (typeof window === 'undefined') return undefined; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined; }
 
 export async function downloadInspectionForOffline(jobId: string): Promise<OfflinePackage> {
@@ -45,7 +46,7 @@ async function replayMutation(item: MutationOutboxItem): Promise<number> {
   return Number(response.version || item.expectedVersion + 1);
 }
 
-export async function syncOfflineJob(jobId: string): Promise<ReturnType<typeof syncStateSummary>> {
+export async function syncOfflineJob(jobId: string): Promise<SyncSummary> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return syncStateSummary(jobId);
   await syncPendingPhotos(jobId);
   const mutations = await pendingMutations(jobId);
