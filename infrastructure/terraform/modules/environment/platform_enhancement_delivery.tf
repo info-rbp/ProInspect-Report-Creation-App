@@ -6,13 +6,13 @@
 
 locals {
   enhancement_workers = {
-    document-worker = {
+    "document-worker" = {
       account_id   = "document-worker"
       display_name = "PCR tenancy document worker"
       topic        = "document-generation-requests"
       subscription = "document-generation-worker"
     }
-    integration-worker = {
+    "integration-worker" = {
       account_id   = "integration-worker"
       display_name = "PCR PMS integration worker"
       topic        = "integration-sync-requests"
@@ -90,23 +90,45 @@ resource "google_cloud_run_v2_service" "enhancement_worker" {
 
   template {
     service_account = google_service_account.enhancement_worker[each.key].email
+
     scaling {
       min_instance_count = 0
       max_instance_count = local.production ? 10 : 3
     }
+
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
-      env { name = "APP_ENV" value = var.environment }
-      env { name = "GOOGLE_CLOUD_PROJECT" value = var.project_id }
-      env { name = "DOCUMENT_BUCKET" value = google_storage_bucket.reports.name }
+
+      env {
+        name  = "APP_ENV"
+        value = var.environment
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "DOCUMENT_BUCKET"
+        value = google_storage_bucket.reports.name
+      }
+
       resources {
-        limits = { cpu = "1", memory = "512Mi" }
+        limits = {
+          cpu    = "1"
+          memory = "512Mi"
+        }
       }
     }
   }
 
-  lifecycle { ignore_changes = [template[0].containers[0].image] }
-  depends_on = [google_project_service.required, google_project_iam_member.enhancement_worker_datastore]
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
+  }
+
+  depends_on = [
+    google_project_service.required,
+    google_project_iam_member.enhancement_worker_datastore,
+  ]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "enhancement_worker_pubsub_invoker" {
@@ -126,14 +148,14 @@ resource "google_service_account_iam_member" "pubsub_enhancement_token_creator" 
 }
 
 resource "google_pubsub_subscription" "enhancement_worker" {
-  for_each                    = local.enhancement_workers
-  project                     = var.project_id
-  name                        = each.value.subscription
-  topic                       = google_pubsub_topic.enhancement_worker[each.key].name
-  ack_deadline_seconds        = 600
-  message_retention_duration  = "604800s"
-  retain_acked_messages       = false
-  labels                      = local.labels
+  for_each                   = local.enhancement_workers
+  project                    = var.project_id
+  name                       = each.value.subscription
+  topic                      = google_pubsub_topic.enhancement_worker[each.key].name
+  ack_deadline_seconds       = 600
+  message_retention_duration = "604800s"
+  retain_acked_messages      = false
+  labels                     = local.labels
 
   retry_policy {
     minimum_backoff = "10s"
@@ -142,11 +164,15 @@ resource "google_pubsub_subscription" "enhancement_worker" {
 
   push_config {
     push_endpoint = google_cloud_run_v2_service.enhancement_worker[each.key].uri
+
     oidc_token {
       service_account_email = google_service_account.enhancement_worker[each.key].email
       audience              = google_cloud_run_v2_service.enhancement_worker[each.key].uri
     }
-    attributes = { x-goog-version = "v1" }
+
+    attributes = {
+      x-goog-version = "v1"
+    }
   }
 
   depends_on = [
