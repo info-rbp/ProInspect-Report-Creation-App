@@ -127,6 +127,18 @@ export async function routeMaintenanceCandidateCommercialRequest(
       ...(candidate.inspectionJobId ? { sourceInspectionJobId: candidate.inspectionJobId } : {}),
       ...(candidate.areaId ? { sourceAreaId: candidate.areaId } : {}),
       ...(candidate.componentId ? { sourceComponentId: candidate.componentId } : {}),
+      ...(candidate.sourceCanonicalAreaDefinitionId ? {
+        sourceCanonicalAreaDefinitionId: candidate.sourceCanonicalAreaDefinitionId,
+        sourceCanonicalAreaDefinitionVersion: candidate.sourceCanonicalAreaDefinitionVersion,
+      } : {}),
+      ...(candidate.sourceCanonicalComponentDefinitionId ? {
+        sourceCanonicalComponentDefinitionId: candidate.sourceCanonicalComponentDefinitionId,
+        sourceCanonicalComponentDefinitionVersion: candidate.sourceCanonicalComponentDefinitionVersion,
+      } : {}),
+      ...(candidate.sourceCanonicalAreaComponentRuleId ? {
+        sourceCanonicalAreaComponentRuleId: candidate.sourceCanonicalAreaComponentRuleId,
+        sourceCanonicalAreaComponentRuleVersion: candidate.sourceCanonicalAreaComponentRuleVersion,
+      } : {}),
       ...(candidate.observationId ? { sourceObservationId: candidate.observationId } : {}),
       candidateId: candidate.id,
       title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : candidate.title,
@@ -197,6 +209,12 @@ export async function routeMaintenanceCandidateCommercialRequest(
         candidateId: candidate.id,
         reportId: candidate.reportId,
         reportVersionId: candidate.reportVersionId,
+        sourceAreaId: candidate.areaId,
+        sourceCanonicalAreaDefinitionId: candidate.sourceCanonicalAreaDefinitionId ?? null,
+        sourceComponentId: candidate.componentId,
+        sourceCanonicalComponentDefinitionId: candidate.sourceCanonicalComponentDefinitionId ?? null,
+        sourceCanonicalAreaComponentRuleId: candidate.sourceCanonicalAreaComponentRuleId ?? null,
+        identityMode: candidate.sourceCanonicalComponentDefinitionId ? 'canonical' : 'legacy_fallback',
         approvalRequired,
       },
     });
