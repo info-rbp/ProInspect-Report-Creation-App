@@ -2,12 +2,48 @@ import { describe, expect, it } from 'vitest';
 import { normaliseHistoricalExtraction } from '../src/services/propertyDocumentIntelligenceService.js';
 
 const configuredAreas = [
-  { id: 'area-kitchen', name: 'Kitchen', roomType: 'kitchen' as const, floorLevel: 'Ground Floor' },
-  { id: 'area-bedroom-1', name: 'Bedroom 1', roomType: 'bedroom' as const, floorLevel: 'Ground Floor' },
+  {
+    id: 'area-kitchen',
+    name: 'Kitchen',
+    roomType: 'kitchen' as const,
+    floorLevel: 'Ground Floor',
+    canonicalAreaDefinitionId: 'kitchen',
+    canonicalAreaDefinitionVersion: 1,
+    componentRefs: [{
+      id: 'area-kitchen:component:sink-taps-spout',
+      name: 'Sink / Taps / Spout',
+      canonicalComponentDefinitionId: 'sink-taps-spout',
+      canonicalComponentDefinitionVersion: 1,
+      canonicalAreaComponentRuleId: 'kitchen:sink-taps-spout',
+      canonicalAreaComponentRuleVersion: 1,
+      order: 1,
+      inclusion: 'default' as const,
+      photoRequired: false,
+    }],
+  },
+  {
+    id: 'area-bedroom-1',
+    name: 'Bedroom 1',
+    roomType: 'bedroom' as const,
+    floorLevel: 'Ground Floor',
+    canonicalAreaDefinitionId: 'bedroom',
+    canonicalAreaDefinitionVersion: 1,
+    componentRefs: [{
+      id: 'area-bedroom-1:component:walls',
+      name: 'Walls',
+      canonicalComponentDefinitionId: 'walls',
+      canonicalComponentDefinitionVersion: 1,
+      canonicalAreaComponentRuleId: 'bedroom:walls',
+      canonicalAreaComponentRuleVersion: 1,
+      order: 1,
+      inclusion: 'default' as const,
+      photoRequired: false,
+    }],
+  },
 ];
 
 describe('historical property document extraction', () => {
-  it('keeps only valid property and canonical component mappings', () => {
+  it('keeps only valid Property occurrence and canonical Component mappings', () => {
     const result = normaliseHistoricalExtraction({
       detectedReportType: 'Property Condition Report',
       detectedInspectionDate: '2025-01-10',
@@ -18,7 +54,7 @@ describe('historical property document extraction', () => {
           sourceComponent: 'Sink',
           sourceCommentary: 'Stainless steel sink clean and intact.',
           proposedAreaId: 'area-kitchen',
-          proposedComponentId: 'sink-taps-spout',
+          proposedCanonicalComponentDefinitionId: 'sink-taps-spout',
           confidence: 0.94,
         },
         {
@@ -26,7 +62,7 @@ describe('historical property document extraction', () => {
           sourceComponent: 'Imaginary Component',
           sourceCommentary: 'Recorded in the source.',
           proposedAreaId: 'area-does-not-exist',
-          proposedComponentId: 'component-does-not-exist',
+          proposedCanonicalComponentDefinitionId: 'component-does-not-exist',
           confidence: 0.65,
         },
       ],
@@ -35,14 +71,18 @@ describe('historical property document extraction', () => {
     expect(result.detectedInspectionDate).toBe('2025-01-10');
     expect(result.findings).toHaveLength(2);
     expect(result.findings[0].proposedAreaId).toBe('area-kitchen');
+    expect(result.findings[0].proposedCanonicalAreaDefinitionId).toBe('kitchen');
     expect(result.findings[0].proposedComponentId).toBe('sink-taps-spout');
+    expect(result.findings[0].proposedCanonicalComponentDefinitionId).toBe('sink-taps-spout');
+    expect(result.findings[0].confidence).toBe(0.94);
     expect(result.findings[0].decision).toBe('suggested');
     expect(result.findings[1].proposedAreaId).toBeUndefined();
     expect(result.findings[1].proposedComponentId).toBeUndefined();
-    expect(result.findings[1].uncertainty).toContain('Low-confidence');
+    expect(result.findings[1].confidence).toBeLessThanOrEqual(0.55);
+    expect(result.findings[1].uncertainty).toContain('could not be mapped');
   });
 
-  it('removes liability language and de-duplicates repeated findings', () => {
+  it('removes liability language, de-duplicates repeated findings and preserves confidence for a complete canonical mapping', () => {
     const result = normaliseHistoricalExtraction({
       summary: 'Tenant damage was alleged in a historical report.',
       findings: [
@@ -51,7 +91,7 @@ describe('historical property document extraction', () => {
           sourceComponent: 'Walls',
           sourceCommentary: 'Tenant damage to wall near doorway.',
           proposedAreaId: 'area-bedroom-1',
-          proposedComponentId: 'walls',
+          proposedCanonicalComponentDefinitionId: 'walls',
           confidence: 1.4,
           sourcePage: 7,
         },
@@ -60,7 +100,7 @@ describe('historical property document extraction', () => {
           sourceComponent: 'Walls',
           sourceCommentary: 'Tenant damage to wall near doorway.',
           proposedAreaId: 'area-bedroom-1',
-          proposedComponentId: 'walls',
+          proposedCanonicalComponentDefinitionId: 'walls',
           confidence: 0.8,
         },
       ],
@@ -69,6 +109,8 @@ describe('historical property document extraction', () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0].sourceCommentary).toContain('[liability statement omitted]');
     expect(result.findings[0].sourceCommentary.toLowerCase()).not.toContain('tenant damage');
+    expect(result.findings[0].proposedCanonicalAreaDefinitionId).toBe('bedroom');
+    expect(result.findings[0].proposedCanonicalComponentDefinitionId).toBe('walls');
     expect(result.findings[0].confidence).toBe(1);
     expect(result.findings[0].sourcePage).toBe(7);
     expect(result.summary.toLowerCase()).not.toContain('tenant damage');
