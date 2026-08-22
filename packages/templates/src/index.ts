@@ -1,6 +1,11 @@
-import type { InspectionType } from '@pcr/domain';
+import type { InspectionType, PhysicalPropertyType, PropertyUse } from '@pcr/domain';
+import {
+  validateCanonicalInspectionTemplate,
+  type CanonicalInspectionTemplateAreaReference,
+} from './inspectionTemplateCatalogue.js';
 
 export * from './pcrPreset.js';
+export * from './inspectionTemplateCatalogue.js';
 
 export type TemplateStatus = 'draft' | 'published' | 'retired';
 export type VisibilityState = 'visible' | 'partially_visible' | 'not_visible' | 'not_applicable';
@@ -33,6 +38,7 @@ export interface CommentaryEntry {
   updatedAt?: string;
 }
 
+/** @deprecated Canonical templates retain this only for legacy compatibility and commentary UI. */
 export interface TemplateComponent {
   id: string;
   name: string;
@@ -40,6 +46,7 @@ export interface TemplateComponent {
   photoRequired: boolean;
 }
 
+/** @deprecated Canonical templates use canonicalAreaReferences rather than cloned Area objects. */
 export interface TemplateArea {
   id: string;
   name: string;
@@ -52,7 +59,14 @@ export interface InspectionTypeTemplate {
   inspectionType: InspectionType;
   propertyType: string;
   status: TemplateStatus;
+  /** Legacy cloned structure. Canonical templates persist this as an empty array. */
   areas: TemplateArea[];
+  /** Canonical structure policy. When set, report structure resolves from Property Layout + Catalogue. */
+  structureMode?: 'property_layout_catalogue';
+  includeUnreferencedPropertyAreas?: boolean;
+  canonicalAreaReferences?: CanonicalInspectionTemplateAreaReference[];
+  propertyUses?: PropertyUse[];
+  physicalPropertyTypes?: PhysicalPropertyType[];
   commentaryBank: CommentaryEntry[];
   createdAt: string;
   publishedAt?: string;
@@ -157,19 +171,37 @@ export function validateCommentaryText(text: string): void {
 
 export function validateTemplate(template: InspectionTypeTemplate): void {
   if (!template.id.trim() || template.version < 1) throw new Error('Template identity and positive version are required.');
-  if (!template.areas.length) throw new Error('Template must contain at least one area.');
-  const areaIds = new Set<string>();
-  for (const area of template.areas) {
-    if (!area.id.trim() || !area.name.trim()) throw new Error('Area identity and name are required.');
-    if (areaIds.has(area.id)) throw new Error(`Duplicate area id: ${area.id}`);
-    areaIds.add(area.id);
-    const componentIds = new Set<string>();
-    for (const component of area.components) {
-      if (!component.id.trim() || !component.name.trim()) throw new Error('Component identity and name are required.');
-      if (componentIds.has(component.id)) throw new Error(`Duplicate component id in ${area.id}: ${component.id}`);
-      componentIds.add(component.id);
+
+  if (template.structureMode === 'property_layout_catalogue') {
+    const issues = validateCanonicalInspectionTemplate({
+      id: template.id,
+      version: template.version,
+      inspectionType: template.inspectionType,
+      status: template.status,
+      structureMode: 'property_layout_catalogue',
+      includeUnreferencedPropertyAreas: template.includeUnreferencedPropertyAreas !== false,
+      areaReferences: structuredClone(template.canonicalAreaReferences || []),
+      propertyUses: structuredClone(template.propertyUses || []),
+      physicalPropertyTypes: structuredClone(template.physicalPropertyTypes || []),
+      source: template.id.startsWith('system-') ? 'system' : 'agency',
+    });
+    if (issues.length) throw new Error(issues.join(' '));
+  } else {
+    if (!template.areas.length) throw new Error('Legacy templates must contain at least one area.');
+    const areaIds = new Set<string>();
+    for (const area of template.areas) {
+      if (!area.id.trim() || !area.name.trim()) throw new Error('Area identity and name are required.');
+      if (areaIds.has(area.id)) throw new Error(`Duplicate area id: ${area.id}`);
+      areaIds.add(area.id);
+      const componentIds = new Set<string>();
+      for (const component of area.components) {
+        if (!component.id.trim() || !component.name.trim()) throw new Error('Component identity and name are required.');
+        if (componentIds.has(component.id)) throw new Error(`Duplicate component id in ${area.id}: ${component.id}`);
+        componentIds.add(component.id);
+      }
     }
   }
+
   for (const entry of template.commentaryBank) {
     validateCommentaryText(entry.text);
   }
@@ -216,7 +248,7 @@ export function importCommentaryBank(rows: ImportRow[], existingBank: Commentary
     for (const match of placeholderMatches) {
       const ph = match[1]?.trim();
       if (ph && !ALLOWED_PLACEHOLDERS.has(ph)) {
-        issues.push({ row: rowNumber, code: 'INVALID_PLACEHOLDER', message: `Unknown placeholder: {{${ph}}}` });
+        issues.push({ row: rowNumber, code: 'INVALID_PLACEHOLDER', message: `Unknown placeholder: {{${ph}}` });
         invalidPlaceholder = true;
         break;
       }
