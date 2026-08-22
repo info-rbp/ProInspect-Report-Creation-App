@@ -91,6 +91,8 @@ export interface TenancyDocument {
   generation?: string;
   documentVersion?: number;
   immutable?: boolean;
+  supersedesDocumentId?: string;
+  supersededByDocumentId?: string;
   issuedAt?: string;
   issuedTo?: string | string[];
   acknowledgementText?: string;
