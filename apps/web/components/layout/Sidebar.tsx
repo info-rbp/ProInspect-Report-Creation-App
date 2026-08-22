@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Building2, ClipboardList, FileSignature, FileText, Gauge, Hammer, Home, KeyRound, MessagesSquare, Route, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { BarChart3, Building2, ClipboardList, FileSignature, FileText, Gauge, Hammer, Home, KeyRound, MessagesSquare, Route, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { InternalSection } from '../../services/platform/roleAccess';
 
 interface NavItem { label: string; to: string; section: InternalSection; icon: React.ComponentType<{ size?: number }>; }
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', to: '/app/dashboard', section: 'dashboard', icon: Gauge },
+  { label: 'Analytics', to: '/app/admin/analytics', section: 'analytics', icon: BarChart3 },
   { label: 'Clients', to: '/app/admin/clients', section: 'clients', icon: Building2 },
   { label: 'Properties', to: '/app/admin/properties', section: 'properties', icon: Home },
   { label: 'Inspection Jobs', to: '/app/admin/jobs', section: 'jobs', icon: ClipboardList },
