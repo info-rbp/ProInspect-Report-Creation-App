@@ -10,11 +10,7 @@ import {
   type PropertyRecord,
   type QuoteApprovalPolicy,
 } from '@pcr/domain';
-import type {
-  OperationalRepository,
-  Page,
-  StoredRecord,
-} from '../backend/types.js';
+import type { OperationalRepository, Page, StoredRecord } from '../backend/types.js';
 
 const TERMINAL_JOB_STATUSES = new Set(['finalised', 'archived', 'cancelled']);
 
@@ -28,6 +24,10 @@ function text(value: unknown): string {
 
 function positiveNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function repositoryConflict(code: string, message: string): Error {
+  return Object.assign(new Error(message), { status: 409, code });
 }
 
 async function listAll(
@@ -212,13 +212,18 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
         {
           reportType: reportType as never,
           propertyUse: record<PropertyRecord>(property)?.propertyUse,
-          suburbOrPostcode: [record<PropertyRecord>(property)?.suburb, record<PropertyRecord>(property)?.postcode]
+          suburbOrPostcode: [
+            record<PropertyRecord>(property)?.suburb,
+            record<PropertyRecord>(property)?.postcode,
+          ]
             .filter(Boolean)
             .join(' '),
           scheduledAt: text(next.scheduledAt) || undefined,
           jobs: jobs as never,
         },
-      ).filter((candidate) => candidate.capacityRemaining === undefined || candidate.capacityRemaining > 0);
+      ).filter(
+        (candidate) => candidate.capacityRemaining === undefined || candidate.capacityRemaining > 0,
+      );
 
       if (settings.assignmentStrategy === 'workload' || settings.assignmentStrategy === 'round_robin') {
         candidates = [...candidates].sort(
@@ -242,10 +247,21 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
     }
 
     const property = text(next.propertyId)
-      ? record<PropertyRecord>(await this.delegate.get('properties', agencyId, text(next.propertyId)))
+      ? record<PropertyRecord>(
+          await this.delegate.get('properties', agencyId, text(next.propertyId)),
+        )
       : undefined;
     const reviewerRequired = defaults?.requireReviewerApproval ?? true;
-    const paymentRequired = mapping?.paymentRequired ?? defaults?.requirePayment ?? request?.source === 'shopify';
+    const paymentRequired =
+      mapping?.paymentRequired ?? defaults?.requirePayment ?? request?.source === 'shopify';
+    const existingReadiness =
+      next.readiness && typeof next.readiness === 'object'
+        ? (next.readiness as Record<string, unknown>)
+        : undefined;
+    const existingGates =
+      existingReadiness?.gates && typeof existingReadiness.gates === 'object'
+        ? (existingReadiness.gates as Record<string, unknown>)
+        : undefined;
     next.readiness = calculateInspectionReadiness({
       request,
       job: next as never,
@@ -254,7 +270,8 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
       bookingRequired: true,
       reviewerRequired,
       baselineRequired: reportType === 'Exit Inspection',
-      entryBaselineAvailable: reportType !== 'Exit Inspection',
+      entryBaselineAvailable:
+        reportType !== 'Exit Inspection' || existingGates?.entryBaselineAvailable === true,
     });
 
     return next;
@@ -295,7 +312,11 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
 
   async get(collection: string, agencyId: string, id: string): Promise<StoredRecord | undefined> {
     const existing = await this.delegate.get(collection, agencyId, id);
-    if (existing || collection !== 'quoteApprovalPolicies' || !id.startsWith('agency-settings-maintenance-v')) {
+    if (
+      existing ||
+      collection !== 'quoteApprovalPolicies' ||
+      !id.startsWith('agency-settings-maintenance-v')
+    ) {
       return existing;
     }
     const settings = await this.maintenanceSettings(agencyId);
@@ -314,6 +335,15 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
     let next = data;
     if (collection === 'inspectionJobs') next = await this.enrichInspectionJob(agencyId, next);
     if (collection === 'maintenanceItems') next = await this.enrichMaintenanceItem(agencyId, next);
+    if (
+      collection === 'reportPresentationTemplateVersions' &&
+      text(next.status) !== 'draft'
+    ) {
+      throw repositoryConflict(
+        'PRESENTATION_TEMPLATE_DRAFT_REQUIRED',
+        'New report presentation templates must be created as drafts and published through the lifecycle command.',
+      );
+    }
     return this.delegate.create(collection, agencyId, id, next, actorId);
   }
 
@@ -329,8 +359,47 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
     if (collection === 'maintenanceItems') {
       const current = await this.delegate.get(collection, agencyId, id);
       next = await this.enrichMaintenanceItem(agencyId, { ...(current || {}), ...data });
-      for (const key of ['id', 'agencyId', 'version', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy']) {
+      for (const key of [
+        'id',
+        'agencyId',
+        'version',
+        'createdAt',
+        'updatedAt',
+        'createdBy',
+        'updatedBy',
+      ]) {
         delete next[key];
+      }
+    }
+    if (collection === 'reportPresentationTemplateVersions') {
+      const current = await this.delegate.get(collection, agencyId, id);
+      if (!current) {
+        throw Object.assign(new Error('Report presentation template was not found.'), {
+          status: 404,
+          code: 'PRESENTATION_TEMPLATE_NOT_FOUND',
+        });
+      }
+      const currentStatus = text(current.status);
+      const nextStatus = text(next.status) || currentStatus;
+      const publishing = currentStatus === 'draft' && nextStatus === 'published';
+      const retiring = currentStatus === 'published' && nextStatus === 'retired';
+      if (currentStatus === 'retired') {
+        throw repositoryConflict(
+          'PRESENTATION_TEMPLATE_IMMUTABLE',
+          'Retired report presentation template versions are immutable. Create a new draft version instead.',
+        );
+      }
+      if (currentStatus === 'published' && !retiring) {
+        throw repositoryConflict(
+          'PRESENTATION_TEMPLATE_IMMUTABLE',
+          'Published report presentation template versions are immutable. Create a new draft version instead.',
+        );
+      }
+      if (nextStatus !== currentStatus && !publishing && !retiring) {
+        throw repositoryConflict(
+          'PRESENTATION_TEMPLATE_LIFECYCLE_INVALID',
+          'Report presentation lifecycle changes must use draft to published or published to retired transitions.',
+        );
       }
     }
     return this.delegate.update(collection, agencyId, id, next, expectedVersion, actorId);
