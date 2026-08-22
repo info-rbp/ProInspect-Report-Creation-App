@@ -119,7 +119,6 @@ const MaintenanceOperationsPage: React.FC = () => {
         category: newItem.category as MaintenanceItem['category'],
         priority: newItem.priority as MaintenanceItem['priority'],
         status: 'triage_required',
-        source: 'manual',
       });
       setShowCreate(false); setNewItem({ propertyId: '', title: '', description: '', category: 'General Maintenance', priority: 'routine' }); await load();
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Maintenance item could not be created.'); }
