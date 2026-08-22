@@ -24,6 +24,7 @@ export * from './maintenanceCommercial.js';
 export * from './maintenanceWorkflow.js';
 export * from './inspectionPolicy.js';
 export * from './legacyBaseline.js';
+export * from './canonicalIdentity.js';
 
 export type InspectionType = 'entry' | 'routine' | 'exit' | 'comparison' | 'maintenance';
 
