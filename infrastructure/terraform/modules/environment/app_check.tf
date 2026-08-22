@@ -33,7 +33,7 @@ resource "google_firebase_app_check_recaptcha_enterprise_config" "web" {
 
   project   = var.project_id
   app_id    = google_firebase_web_app.web.app_id
-  site_key  = var.app_check_recaptcha_enterprise_site_key
+  site_key  = coalesce(var.app_check_recaptcha_enterprise_site_key, "not-configured")
   token_ttl = "3600s"
 
   depends_on = [
@@ -67,7 +67,7 @@ resource "google_firebase_app_check_service_config" "protected_service" {
 
 output "app_check" {
   value = {
-    enforcement_mode = var.app_check_enforcement_mode
+    enforcement_mode        = var.app_check_enforcement_mode
     web_provider_configured = var.app_check_recaptcha_enterprise_site_key != null
   }
 }
