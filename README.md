@@ -24,7 +24,7 @@ npm install --ignore-scripts --no-audit --no-fund
 npm run dev
 ```
 
-The repository intentionally retains `bun.lock` as the dependency lock source while the established CI/build path installs workspaces through npm.
+The repository currently retains `bun.lock`, while the established CI and container build path installs the npm workspaces using the dependency ranges in `package.json`.
 
 ## Validation
 
