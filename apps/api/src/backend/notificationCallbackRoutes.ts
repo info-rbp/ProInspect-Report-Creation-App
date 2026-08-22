@@ -11,23 +11,56 @@ function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
 }
 
-function callbackSecret(): string {
-  if (process.env.NOTIFICATION_CALLBACK_SECRET?.trim()) return process.env.NOTIFICATION_CALLBACK_SECRET.trim();
-  const raw = process.env.NOTIFICATION_PROVIDER_CONFIG?.trim();
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as ProviderConfig;
-      if (parsed.callbackSecret?.trim()) return parsed.callbackSecret.trim();
-    } catch {
-      throw new ApiError(503, 'NOTIFICATION_CONFIG_INVALID', 'Notification provider configuration is invalid.');
-    }
-  }
-  throw new ApiError(503, 'NOTIFICATION_CALLBACK_SECRET_REQUIRED', 'Notification callback secret is not configured.');
+async function metadataAccessToken(): Promise<string> {
+  const response = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
+    headers: { 'Metadata-Flavor': 'Google' },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) throw new ApiError(503, 'METADATA_TOKEN_FAILED', `Metadata token request failed with ${response.status}.`);
+  const body = await response.json() as { access_token?: string };
+  if (!body.access_token) throw new ApiError(503, 'METADATA_TOKEN_FAILED', 'Metadata token response did not contain access_token.');
+  return body.access_token;
 }
 
-function authorize(url: URL): void {
+async function secretConfig(): Promise<ProviderConfig> {
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
+  if (!projectId) return {};
+  try {
+    const token = await metadataAccessToken();
+    const response = await fetch(`https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/secrets/email-provider-config/versions/latest:access`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(7_000),
+    });
+    if (!response.ok) return {};
+    const body = await response.json() as { payload?: { data?: string } };
+    const encoded = body.payload?.data;
+    return encoded ? JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as ProviderConfig : {};
+  } catch {
+    return {};
+  }
+}
+
+let secretCache: { value?: string; expiresAt: number } | undefined;
+async function callbackSecret(): Promise<string> {
+  if (process.env.NOTIFICATION_CALLBACK_SECRET?.trim()) return process.env.NOTIFICATION_CALLBACK_SECRET.trim();
+  if (secretCache && secretCache.expiresAt > Date.now() && secretCache.value) return secretCache.value;
+  const raw = process.env.NOTIFICATION_PROVIDER_CONFIG?.trim();
+  let parsed: ProviderConfig = {};
+  if (raw) {
+    try { parsed = JSON.parse(raw) as ProviderConfig; }
+    catch { throw new ApiError(503, 'NOTIFICATION_CONFIG_INVALID', 'Notification provider configuration is invalid.'); }
+  } else {
+    parsed = await secretConfig();
+  }
+  const value = parsed.callbackSecret?.trim();
+  secretCache = { value, expiresAt: Date.now() + 5 * 60_000 };
+  if (!value) throw new ApiError(503, 'NOTIFICATION_CALLBACK_SECRET_REQUIRED', 'Notification callback secret is not configured.');
+  return value;
+}
+
+async function authorize(url: URL): Promise<void> {
   const supplied = url.searchParams.get('token')?.trim() || '';
-  if (!supplied || supplied !== callbackSecret()) throw new ApiError(401, 'INVALID_CALLBACK_TOKEN', 'Notification callback token is invalid.');
+  if (!supplied || supplied !== await callbackSecret()) throw new ApiError(401, 'INVALID_CALLBACK_TOKEN', 'Notification callback token is invalid.');
 }
 
 async function readRaw(req: IncomingMessage, maxBytes = 1_000_000): Promise<string> {
@@ -47,16 +80,13 @@ async function updateStatus(agencyId: string, notificationId: string, communicat
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { status, updatedAt: now, ...metadata };
   if (status === 'sent') patch.sentAt = now;
-  if (status === 'delivered') {
-    patch.sentAt = now;
-    patch.deliveredAt = now;
-  }
+  if (status === 'delivered') { patch.sentAt = now; patch.deliveredAt = now; }
   await database.doc(`agencies/${agencyId}/notificationJobs/${notificationId}`).set(patch, { merge: true });
   if (communicationId) await database.doc(`agencies/${agencyId}/tenantCommunications/${communicationId}`).set(patch, { merge: true });
 }
 
 async function handleTwilio(req: IncomingMessage, url: URL, correlationId: string): Promise<ApiResponse> {
-  authorize(url);
+  await authorize(url);
   const agencyId = url.searchParams.get('agencyId')?.trim() || '';
   const notificationId = url.searchParams.get('notificationId')?.trim() || '';
   const communicationId = url.searchParams.get('communicationId')?.trim() || undefined;
@@ -69,8 +99,7 @@ async function handleTwilio(req: IncomingMessage, url: URL, correlationId: strin
   const delivered = providerStatus === 'delivered';
   const sent = ['sent', 'sending'].includes(providerStatus);
   await updateStatus(agencyId, notificationId, communicationId, delivered ? 'delivered' : failed ? 'failed' : sent ? 'sent' : 'queued', {
-    provider: 'twilio',
-    providerStatus,
+    provider: 'twilio', providerStatus,
     ...(providerMessageId ? { providerMessageId } : {}),
     ...(errorCode ? { providerErrorCode: errorCode } : {}),
   });
@@ -78,7 +107,7 @@ async function handleTwilio(req: IncomingMessage, url: URL, correlationId: strin
 }
 
 async function handleSendGrid(req: IncomingMessage, url: URL, correlationId: string): Promise<ApiResponse> {
-  authorize(url);
+  await authorize(url);
   let events: unknown;
   try { events = JSON.parse(await readRaw(req)); }
   catch { throw new ApiError(400, 'INVALID_CALLBACK_JSON', 'SendGrid callback must be valid JSON.'); }
@@ -97,8 +126,7 @@ async function handleSendGrid(req: IncomingMessage, url: URL, correlationId: str
     const sent = ['processed', 'deferred'].includes(providerEvent);
     if (!delivered && !failed && !sent) continue;
     await updateStatus(agencyId, notificationId, communicationId, delivered ? 'delivered' : failed ? 'failed' : 'sent', {
-      provider: 'sendgrid',
-      providerStatus: providerEvent,
+      provider: 'sendgrid', providerStatus: providerEvent,
       ...(typeof event.sg_message_id === 'string' ? { providerMessageId: event.sg_message_id } : {}),
       ...(typeof event.reason === 'string' ? { providerReason: event.reason } : {}),
     });
