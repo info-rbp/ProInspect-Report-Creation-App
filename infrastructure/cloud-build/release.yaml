@@ -1,0 +1,65 @@
+# Manual release pipeline used when GitHub Actions is unavailable.
+# Terraform remains authoritative for Cloud Run service configuration. This
+# pipeline only builds immutable source-revision images and updates the image on
+# already-provisioned services so IAM, secrets, networking and scheduler settings
+# are not replaced by deployment manifests.
+substitutions:
+  _REGION: australia-southeast1
+  _RELEASE_ID: manual
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
+steps:
+  - id: build-api
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/api/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}', '.']
+  - id: build-pdf-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/pdf-worker/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/pdf-worker:${_RELEASE_ID}', '.']
+  - id: build-notification-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/notification-worker/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/notification-worker:${_RELEASE_ID}', '.']
+  - id: build-dashboard-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/dashboard-worker/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}', '.']
+  - id: push-api
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}']
+    waitFor: ['build-api']
+  - id: push-pdf-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/pdf-worker:${_RELEASE_ID}']
+    waitFor: ['build-pdf-worker']
+  - id: push-notification-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/notification-worker:${_RELEASE_ID}']
+    waitFor: ['build-notification-worker']
+  - id: push-dashboard-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}']
+    waitFor: ['build-dashboard-worker']
+  - id: deploy-api
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ['run', 'services', 'update', 'api', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}', '--quiet']
+    waitFor: ['push-api']
+  - id: deploy-pdf-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ['run', 'services', 'update', 'pdf-worker', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/pdf-worker:${_RELEASE_ID}', '--quiet']
+    waitFor: ['push-pdf-worker']
+  - id: deploy-notification-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ['run', 'services', 'update', 'notification-worker', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/notification-worker:${_RELEASE_ID}', '--quiet']
+    waitFor: ['push-notification-worker']
+  - id: deploy-dashboard-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ['run', 'services', 'update', 'dashboard-worker', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}', '--quiet']
+    waitFor: ['push-dashboard-worker']
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/pdf-worker:${_RELEASE_ID}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/notification-worker:${_RELEASE_ID}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}'
