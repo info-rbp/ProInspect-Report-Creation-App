@@ -94,13 +94,14 @@ describe('property module layout services', () => {
     const template = PROPERTY_LAYOUT_TEMPLATES.find((item) => item.id === 'res-house-4x2')!;
     const sourcePatch = applyLayoutTemplate(sourceBase, template);
     const source = { ...sourceBase, ...sourcePatch } as PropertyRecord;
+    const sourceRooms = source.roomsConfig!;
     const target = property('target');
     const patch = cloneLayoutFromProperty(target, source);
-    expect(patch.roomsConfig?.length).toBe(source.roomsConfig.length);
-    expect(patch.roomsConfig?.[0].id).not.toBe(source.roomsConfig[0].id);
-    expect(patch.roomsConfig?.[0].canonicalAreaDefinitionId).toBe(source.roomsConfig[0].canonicalAreaDefinitionId);
-    expect(patch.roomsConfig?.[0].componentRefs?.[0].id).not.toBe(source.roomsConfig[0].componentRefs?.[0].id);
-    expect(patch.roomsConfig?.[0].componentRefs?.[0].canonicalComponentDefinitionId).toBe(source.roomsConfig[0].componentRefs?.[0].canonicalComponentDefinitionId);
+    expect(patch.roomsConfig?.length).toBe(sourceRooms.length);
+    expect(patch.roomsConfig?.[0].id).not.toBe(sourceRooms[0].id);
+    expect(patch.roomsConfig?.[0].canonicalAreaDefinitionId).toBe(sourceRooms[0].canonicalAreaDefinitionId);
+    expect(patch.roomsConfig?.[0].componentRefs?.[0].id).not.toBe(sourceRooms[0].componentRefs?.[0].id);
+    expect(patch.roomsConfig?.[0].componentRefs?.[0].canonicalComponentDefinitionId).toBe(sourceRooms[0].componentRefs?.[0].canonicalComponentDefinitionId);
   });
 
   it('migrates a renamed known-template layout without matching the display name', () => {
