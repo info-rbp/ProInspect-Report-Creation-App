@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies } from './types.js';
+import type { ApiDependencies, StoredRecord } from './types.js';
 
 function agencyHeader(req: IncomingMessage): string {
   const agencyId = req.headers['x-agency-id']?.toString().trim();
@@ -20,6 +20,17 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   } catch {
     throw new ApiError(400, 'INVALID_JSON', 'Request body must be valid JSON.');
   }
+}
+
+async function listAll(dependencies: ApiDependencies, collection: string, agencyId: string): Promise<StoredRecord[]> {
+  const records: StoredRecord[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await dependencies.repository.list(collection, agencyId, 100, cursor);
+    records.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return records;
 }
 
 function daysUntil(value: string | undefined, now: Date): number | undefined {
@@ -41,61 +52,96 @@ export async function routeTenantAutomationRequest(req: IncomingMessage, depende
   const dateKey = now.toISOString().slice(0, 10);
   const dryRun = body.dryRun === true;
   const [tenancies, participants, tenants, actions, documents, priorEvents] = await Promise.all([
-    dependencies.repository.list('tenancies', agencyId, 100),
-    dependencies.repository.list('tenancyParticipants', agencyId, 100),
-    dependencies.repository.list('tenants', agencyId, 100),
-    dependencies.repository.list('tenantInstructions', agencyId, 100),
-    dependencies.repository.list('tenancyDocuments', agencyId, 100),
-    dependencies.repository.list('tenantAutomationEvents', agencyId, 100),
+    listAll(dependencies, 'tenancies', agencyId),
+    listAll(dependencies, 'tenancyParticipants', agencyId),
+    listAll(dependencies, 'tenants', agencyId),
+    listAll(dependencies, 'tenantInstructions', agencyId),
+    listAll(dependencies, 'tenancyDocuments', agencyId),
+    listAll(dependencies, 'tenantAutomationEvents', agencyId),
   ]);
 
   const emitted: Array<{ rule: string; tenantId: string; tenancyId: string; recipient: string; subject: string }> = [];
-  const existingKeys = new Set(priorEvents.items.map((item) => String(item.eventKey || '')));
+  const existingKeys = new Set(priorEvents.map((item) => String(item.eventKey || '')));
 
-  const primaryTenantFor = (tenancyId: string) => {
-    const participant = participants.items.find((item) => item.tenancyId === tenancyId && item.role === 'primary_tenant' && item.status !== 'ended')
-      || participants.items.find((item) => item.tenancyId === tenancyId && item.status !== 'ended');
-    return participant ? tenants.items.find((item) => item.id === participant.tenantId) : undefined;
+  const recipientsFor = (tenancyId: string) => {
+    const ids = participants
+      .filter((item) => item.tenancyId === tenancyId && item.status !== 'ended' && ['primary_tenant', 'co_tenant'].includes(String(item.role)))
+      .map((item) => String(item.tenantId));
+    return tenants.filter((item) => ids.includes(item.id) && typeof item.email === 'string' && item.email.trim());
   };
 
-  const emit = async (rule: string, tenancyId: string, subject: string, message: string, entityId: string) => {
-    const tenant = primaryTenantFor(tenancyId);
-    const recipient = typeof tenant?.email === 'string' ? tenant.email.trim().toLowerCase() : '';
-    if (!tenant || !recipient) return;
-    const eventKey = `${rule}:${entityId}:${dateKey}`;
+  const emit = async (rule: string, tenancyId: string, subject: string, message: string, entityId: string, recipientTenant: StoredRecord) => {
+    const recipient = typeof recipientTenant.email === 'string' ? recipientTenant.email.trim().toLowerCase() : '';
+    if (!recipient) return;
+    const eventKey = `${rule}:${entityId}:${recipientTenant.id}:${dateKey}`;
     if (existingKeys.has(eventKey)) return;
-    emitted.push({ rule, tenantId: String(tenant.id), tenancyId, recipient, subject });
+    emitted.push({ rule, tenantId: recipientTenant.id, tenancyId, recipient, subject });
     if (dryRun) return;
     const communicationId = randomUUID();
     await dependencies.repository.create('tenantCommunications', agencyId, communicationId, {
-      tenantId: tenant.id, tenancyId, channel: 'email', direction: 'outbound', subject, message, status: 'queued', relatedEntityType: rule.startsWith('action') ? 'tenant_instruction' : rule.startsWith('document') ? 'tenancy_document' : 'general', relatedEntityId: entityId,
+      tenantId: recipientTenant.id,
+      tenancyId,
+      channel: 'email',
+      direction: 'outbound',
+      subject,
+      message,
+      status: 'queued',
+      relatedEntityType: rule.startsWith('action') ? 'tenant_instruction' : rule.startsWith('document') ? 'tenancy_document' : 'general',
+      relatedEntityId: entityId,
     }, principal.uid);
     const notificationId = randomUUID();
     const notification = await dependencies.repository.create('notificationJobs', agencyId, notificationId, {
-      tenantId: tenant.id, tenancyId, channel: 'email', recipient, subject, message, communicationId, status: 'queued', queuedAt: now.toISOString(),
+      tenantId: recipientTenant.id,
+      tenancyId,
+      channel: 'email',
+      recipient,
+      subject,
+      message,
+      communicationId,
+      status: 'queued',
+      queuedAt: now.toISOString(),
     }, principal.uid);
     await dependencies.tasks.dispatch('notification', agencyId, notificationId, notification);
-    await dependencies.repository.create('tenantAutomationEvents', agencyId, randomUUID(), { eventKey, rule, tenantId: tenant.id, tenancyId, entityId, occurredAt: now.toISOString() }, principal.uid);
+    await dependencies.repository.create('tenantAutomationEvents', agencyId, randomUUID(), {
+      eventKey,
+      rule,
+      tenantId: recipientTenant.id,
+      tenancyId,
+      entityId,
+      occurredAt: now.toISOString(),
+    }, principal.uid);
     existingKeys.add(eventKey);
   };
 
-  for (const action of actions.items) {
+  for (const action of actions) {
     if (!action.tenancyId || ['resolved', 'closed', 'cancelled', 'withdrawn'].includes(String(action.status))) continue;
     const remaining = daysUntil(typeof action.dueDate === 'string' ? action.dueDate : undefined, now);
-    if (remaining === 1) await emit('action_due_tomorrow', String(action.tenancyId), `Action due tomorrow: ${String(action.title || 'Tenant action')}`, `Your requested action is due tomorrow. Please open the ProInspect tenant portal to review and respond.`, String(action.id));
-    if (remaining !== undefined && remaining < 0) await emit('action_overdue', String(action.tenancyId), `Action overdue: ${String(action.title || 'Tenant action')}`, `This tenant action is overdue. Please review the request in the ProInspect tenant portal and provide an update.`, String(action.id));
+    for (const tenant of recipientsFor(String(action.tenancyId))) {
+      if (remaining === 1) await emit('action_due_tomorrow', String(action.tenancyId), `Action due tomorrow: ${String(action.title || 'Tenant action')}`, 'Your requested action is due tomorrow. Please open your ProInspect tenant portal to review and respond.', String(action.id), tenant);
+      if (remaining !== undefined && remaining < 0) await emit('action_overdue', String(action.tenancyId), `Action overdue: ${String(action.title || 'Tenant action')}`, 'This tenant action is overdue. Please open your ProInspect tenant portal and provide an update.', String(action.id), tenant);
+    }
   }
 
-  for (const document of documents.items) {
-    if (!document.tenancyId || document.status !== 'signature_required') continue;
-    await emit('document_signature_required', String(document.tenancyId), `Signature required: ${String(document.title || 'Tenancy document')}`, `A tenancy document is awaiting your signature or acknowledgement in ProInspect.`, String(document.id));
+  for (const document of documents) {
+    if (!document.tenancyId || !['signature_required', 'partially_signed'].includes(String(document.status))) continue;
+    const signerTenantIds = new Set(
+      (Array.isArray(document.signers) ? document.signers : [])
+        .filter((item) => item && typeof item === 'object' && (item as Record<string, unknown>).kind === 'tenant' && (item as Record<string, unknown>).status !== 'signed')
+        .map((item) => String((item as Record<string, unknown>).tenantId || ''))
+        .filter(Boolean),
+    );
+    for (const tenant of recipientsFor(String(document.tenancyId)).filter((item) => signerTenantIds.has(item.id))) {
+      await emit('document_signature_required', String(document.tenancyId), `Signature required: ${String(document.title || 'Tenancy document')}`, 'A tenancy document is awaiting your signature or acknowledgement in ProInspect.', String(document.id), tenant);
+    }
   }
 
-  for (const tenancy of tenancies.items) {
+  for (const tenancy of tenancies) {
     if (!tenancy.id || ['ended', 'cancelled'].includes(String(tenancy.lifecycleStatus || tenancy.status))) continue;
     const remaining = daysUntil(typeof tenancy.leaseEndDate === 'string' ? tenancy.leaseEndDate : undefined, now);
     if (remaining === 60 || remaining === 30 || remaining === 14) {
-      await emit(`tenancy_expiry_${remaining}`, String(tenancy.id), `Tenancy ends in ${remaining} days`, `Your recorded tenancy end date is ${String(tenancy.leaseEndDate)}. Your property manager will contact you if any action is required.`, String(tenancy.id));
+      for (const tenant of recipientsFor(String(tenancy.id))) {
+        await emit(`tenancy_expiry_${remaining}`, String(tenancy.id), `Tenancy ends in ${remaining} days`, `Your recorded tenancy end date is ${String(tenancy.leaseEndDate)}. Your property manager will contact you if any action is required.`, String(tenancy.id), tenant);
+      }
     }
   }
 
