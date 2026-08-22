@@ -22,7 +22,7 @@ const agency: ClientAccount = {
   abn: '12 345 678 901',
   generalEmail: 'office@examplepm.test',
   primaryContactId: 'contact-pm',
-  billingProfile: { method: 'monthly_consolidated_invoice', xeroContactId: 'xero-example' },
+  billingProfile: { method: 'monthly_consolidated_invoice', invoiceRecipientEmail: 'accounts@examplepm.test' },
   maintenancePolicy: {
     propertyManagerApprovalLimit: 500,
     landlordApprovalThreshold: 500,
@@ -68,7 +68,7 @@ const engagement: ClientEngagement = {
 };
 
 describe('Client management domain', () => {
-  it('requires identity, a primary contact and billing before activation', () => {
+  it('requires identity, a primary contact and commercial terms before activation', () => {
     const incomplete = evaluateClientOnboarding({ legalName: 'New Client', clientType: 'private_landlord', entityType: 'individual' }, [], []);
     expect(incomplete.readyForActivation).toBe(false);
     expect(incomplete.blockers).toContain('Add a primary client contact with an email address or telephone number.');
@@ -88,7 +88,7 @@ describe('Client management domain', () => {
     expect(matches[0]?.reasons).toContain('ABN matches');
   });
 
-  it('resolves the current Property Client snapshot and report recipients', () => {
+  it('resolves the current Property Client snapshot and report recipients without accounting-provider metadata', () => {
     const snapshot = resolveClientSnapshot({
       propertyId: 'property-1', accounts: [agency], contacts, relationships, engagements: [engagement], capturedAt: now,
     });
@@ -99,7 +99,6 @@ describe('Client management domain', () => {
       clientName: 'Example Property Management',
       propertyManager: { contactId: 'contact-pm', name: 'Sarah Manager' },
       maintenanceApprover: { contactId: 'contact-owner', name: 'Olivia Owner' },
-      xeroContactId: 'xero-example',
     });
     expect(snapshot?.reportRecipients.map((recipient) => recipient.contactId)).toContain('contact-pm');
   });
