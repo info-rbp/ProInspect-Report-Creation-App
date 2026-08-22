@@ -32,7 +32,7 @@ const capabilities: Record<UserRole, ReadonlySet<SecurityCapability>> = {
   analyst: new Set([
     'property.read', 'tenant.read', 'tenancy.read', 'job.read', 'report.read', 'report.edit', 'maintenance.read',
     'maintenance.triage', 'maintenance.quote.prepare', 'analysis.create', 'tenant_instruction.manage',
-    'tenant.communication.read', 'external_contact.manage', 'client_approval.manage',
+    'tenant.communication.read', 'tenant.document.read', 'external_contact.manage', 'client_approval.manage',
   ]),
   reviewer: new Set([
     'property.read', 'tenant.read', 'tenancy.read', 'job.read', 'report.read', 'report.review', 'audit.read', 'pdf.create',
