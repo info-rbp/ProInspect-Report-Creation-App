@@ -44,8 +44,6 @@ The PR may be merged without a green GitHub Actions check only because the month
 - the rollback point is the pre-merge `main` SHA above;
 - cloud deployment must use the same immutable merge revision across environments.
 
-The PR body/merge message is the authoritative place for the final head SHA because this waiver document itself changes the branch SHA when edited.
-
 ## Mandatory post-quota reconciliation
 
 When GitHub Actions capacity becomes available again, run the normal full validation against the then-current `main`. A failure is a release defect even if the quota-waived merge has already occurred and must be corrected immediately.
