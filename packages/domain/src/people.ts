@@ -71,6 +71,15 @@ export interface DeactivationImpact {
   totalImpactedAssignments: number;
 }
 
+export interface ReassignmentResult {
+  fromUserId: string;
+  toUserId: string;
+  inspectionJobsUpdated: number;
+  reportsUpdated: number;
+  maintenanceItemsUpdated: number;
+  totalUpdated: number;
+}
+
 export interface PeopleDirectoryEntry {
   id: string;
   agencyId: string;
