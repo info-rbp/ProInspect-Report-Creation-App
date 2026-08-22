@@ -184,10 +184,14 @@ export function validateCanonicalInspectionTemplate(contract: CanonicalInspectio
 
 export function templateAppliesToProperty(
   contract: CanonicalInspectionTemplateContract,
-  property: { propertyUse?: PropertyUse; physicalPropertyType?: PhysicalPropertyType },
+  property: Record<string, unknown> | { propertyUse?: PropertyUse; physicalPropertyType?: PhysicalPropertyType },
 ): boolean {
-  const useMatch = !property.propertyUse || contract.propertyUses.length === 0 || contract.propertyUses.includes(property.propertyUse);
-  const physicalMatch = !property.physicalPropertyType || contract.physicalPropertyTypes.length === 0 || contract.physicalPropertyTypes.includes(property.physicalPropertyType);
+  const rawUse = property.propertyUse;
+  const rawPhysicalType = property.physicalPropertyType;
+  const propertyUse = typeof rawUse === 'string' ? rawUse as PropertyUse : undefined;
+  const physicalPropertyType = typeof rawPhysicalType === 'string' ? rawPhysicalType as PhysicalPropertyType : undefined;
+  const useMatch = !propertyUse || contract.propertyUses.length === 0 || contract.propertyUses.includes(propertyUse);
+  const physicalMatch = !physicalPropertyType || contract.physicalPropertyTypes.length === 0 || contract.physicalPropertyTypes.includes(physicalPropertyType);
   return useMatch && physicalMatch;
 }
 
