@@ -1,6 +1,5 @@
 import type { InspectionType, PhysicalPropertyType, PropertyUse } from '@pcr/domain';
 import {
-  CANONICAL_AREA_COMPONENT_RULES,
   CANONICAL_AREA_DEFINITIONS,
   CANONICAL_COMPONENT_DEFINITIONS,
   type AreaCategory,
@@ -12,9 +11,18 @@ import {
   type ComponentCategory,
   type ComponentDefinition,
 } from './canonicalCatalogue.js';
+import {
+  SYSTEM_CANONICAL_AREA_DEFINITION_VERSIONS,
+  SYSTEM_CANONICAL_COMPONENT_DEFINITION_VERSIONS,
+  findSystemComponentDefinition,
+  systemAreaComponentRulesForArea,
+  type SystemAreaDefinitionVersion,
+  type SystemComponentDefinitionVersion,
+} from './propertyLayoutCatalogue.js';
 
 export type CatalogueRecordSource =
   | 'legacy_pcr_standard_areas'
+  | 'system_property_layouts'
   | 'agency_custom'
   | 'duplicated';
 
@@ -129,53 +137,24 @@ export interface NewComponentDraftInput {
 }
 
 const ALL_INSPECTION_TYPES: InspectionType[] = [
-  'entry',
-  'routine',
-  'exit',
-  'comparison',
-  'maintenance',
+  'entry', 'routine', 'exit', 'comparison', 'maintenance',
 ];
 
 const ALL_PROPERTY_USES: PropertyUse[] = [
-  'residential',
-  'commercial',
-  'industrial',
-  'retail',
-  'mixed_use',
-  'strata_common_property',
-  'other',
+  'residential', 'commercial', 'industrial', 'retail', 'mixed_use',
+  'strata_common_property', 'other',
 ];
 
 const ALL_PHYSICAL_PROPERTY_TYPES: PhysicalPropertyType[] = [
-  'house',
-  'apartment',
-  'unit',
-  'townhouse',
-  'villa',
-  'duplex',
-  'studio',
-  'ancillary_dwelling',
-  'retirement_supported',
-  'office',
-  'retail_shop',
-  'warehouse',
-  'industrial_unit',
-  'showroom',
-  'medical_consulting',
-  'hospitality',
-  'restaurant_cafe',
-  'childcare',
-  'mixed_commercial',
-  'common_property',
-  'other',
+  'house', 'apartment', 'unit', 'townhouse', 'villa', 'duplex', 'studio',
+  'ancillary_dwelling', 'retirement_supported', 'office', 'retail_shop',
+  'warehouse', 'industrial_unit', 'showroom', 'medical_consulting',
+  'hospitality', 'restaurant_cafe', 'childcare', 'mixed_commercial',
+  'common_property', 'other',
 ];
 
 const OPERATIONAL_CATEGORIES = new Set<ComponentCategory>([
-  'electrical',
-  'plumbing',
-  'appliance',
-  'hvac',
-  'safety_security',
+  'electrical', 'plumbing', 'appliance', 'hvac', 'safety_security',
 ]);
 
 function unique(values: string[]): string[] {
@@ -183,11 +162,7 @@ function unique(values: string[]): string[] {
 }
 
 export function catalogueMachineCode(prefix: 'AREA' | 'COMPONENT' | 'RULE', value: string): string {
-  const body = value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/gu, '_')
-    .replace(/^_+|_+$/gu, '');
+  const body = value.trim().toUpperCase().replace(/[^A-Z0-9]+/gu, '_').replace(/^_+|_+$/gu, '');
   return `${prefix}_${body || 'UNNAMED'}`;
 }
 
@@ -197,19 +172,13 @@ export function normaliseCatalogueApplicability(
 ): CatalogueApplicability {
   const propertyUses = (value?.propertyUses?.length
     ? value.propertyUses
-    : fallback?.propertyUses?.length
-      ? fallback.propertyUses
-      : ALL_PROPERTY_USES) as PropertyUse[];
+    : fallback?.propertyUses?.length ? fallback.propertyUses : ALL_PROPERTY_USES) as PropertyUse[];
   const physicalPropertyTypes = (value?.physicalPropertyTypes?.length
     ? value.physicalPropertyTypes
-    : fallback?.physicalPropertyTypes?.length
-      ? fallback.physicalPropertyTypes
-      : ALL_PHYSICAL_PROPERTY_TYPES) as PhysicalPropertyType[];
+    : fallback?.physicalPropertyTypes?.length ? fallback.physicalPropertyTypes : ALL_PHYSICAL_PROPERTY_TYPES) as PhysicalPropertyType[];
   const inspectionTypes = (value?.inspectionTypes?.length
     ? value.inspectionTypes
-    : fallback?.inspectionTypes?.length
-      ? fallback.inspectionTypes
-      : ALL_INSPECTION_TYPES) as InspectionType[];
+    : fallback?.inspectionTypes?.length ? fallback.inspectionTypes : ALL_INSPECTION_TYPES) as InspectionType[];
   return {
     propertyUses: unique(propertyUses) as PropertyUse[],
     physicalPropertyTypes: unique(physicalPropertyTypes) as PhysicalPropertyType[],
@@ -235,9 +204,7 @@ export function defaultAssessmentDefaults(
   };
 }
 
-export function defaultEvidenceDefaults(
-  photoRequired = false,
-): CatalogueEvidenceDefaults {
+export function defaultEvidenceDefaults(photoRequired = false): CatalogueEvidenceDefaults {
   return {
     componentPhotoRequired: photoRequired,
     exceptionPhotoRequired: true,
@@ -254,12 +221,12 @@ function componentOperational(category: ComponentCategory): boolean {
 }
 
 export function managedComponentFromCanonical(
-  component: ComponentDefinition,
+  component: SystemComponentDefinitionVersion,
 ): ManagedComponentDefinition {
   const operational = componentOperational(component.category);
   return {
     ...structuredClone(component),
-    source: 'legacy_pcr_standard_areas',
+    source: component.source,
     operational,
     testable: operational,
     repeatable: false,
@@ -267,21 +234,16 @@ export function managedComponentFromCanonical(
 }
 
 export function managedAreaFromCanonical(
-  area: AreaDefinition,
+  area: SystemAreaDefinitionVersion,
 ): CatalogueAreaVersionView {
-  const componentsById = new Map(
-    CANONICAL_COMPONENT_DEFINITIONS.map((component) => [component.id, component]),
-  );
-  const rules = CANONICAL_AREA_COMPONENT_RULES
-    .filter((rule) => rule.areaDefinitionId === area.id)
-    .sort((left, right) => left.order - right.order)
+  const rules = systemAreaComponentRulesForArea(area.id, area.version)
     .map((rule): ManagedAreaComponentRule => {
-      const component = componentsById.get(rule.componentDefinitionId);
-      if (!component) throw new Error(`Missing canonical component ${rule.componentDefinitionId}.`);
+      const component = findSystemComponentDefinition(rule.componentDefinitionId, rule.componentDefinitionVersion);
+      if (!component) throw new Error(`Missing canonical component ${rule.componentDefinitionId}@${rule.componentDefinitionVersion}.`);
       return {
         ...structuredClone(rule),
-        source: 'legacy_pcr_standard_areas',
-        componentDefinitionVersion: component.version,
+        source: rule.source,
+        componentDefinitionVersion: rule.componentDefinitionVersion,
         assessmentDefaults: defaultAssessmentDefaults(component),
         evidenceDefaults: defaultEvidenceDefaults(rule.photoRequired),
       };
@@ -289,7 +251,7 @@ export function managedAreaFromCanonical(
   return {
     definition: {
       ...structuredClone(area),
-      source: 'legacy_pcr_standard_areas',
+      source: area.source,
     },
     componentRules: rules,
     recordVersion: 1,
@@ -298,10 +260,20 @@ export function managedAreaFromCanonical(
   };
 }
 
-export const MANAGED_CANONICAL_AREA_V1 = CANONICAL_AREA_DEFINITIONS.map(
-  managedAreaFromCanonical,
-);
+/** Legacy aliases retained for existing tests/imports. */
+export const MANAGED_CANONICAL_AREA_V1 = CANONICAL_AREA_DEFINITIONS.map(managedAreaFromCanonical);
 export const MANAGED_CANONICAL_COMPONENT_V1 = CANONICAL_COMPONENT_DEFINITIONS.map(
+  (definition): CatalogueComponentVersionView => ({
+    definition: managedComponentFromCanonical(definition),
+    recordVersion: 1,
+    immutable: true,
+    systemDefault: true,
+  }),
+);
+
+/** Complete system seed set used by the server, including Property Layout extension versions. */
+export const MANAGED_SYSTEM_AREA_VERSIONS = SYSTEM_CANONICAL_AREA_DEFINITION_VERSIONS.map(managedAreaFromCanonical);
+export const MANAGED_SYSTEM_COMPONENT_VERSIONS = SYSTEM_CANONICAL_COMPONENT_DEFINITION_VERSIONS.map(
   (definition): CatalogueComponentVersionView => ({
     definition: managedComponentFromCanonical(definition),
     recordVersion: 1,
@@ -360,9 +332,7 @@ export function createComponentDraftDefinition(
     operational,
     testable: input.testable ?? operational,
     repeatable: input.repeatable ?? false,
-    ...(input.maintenanceCategory?.trim()
-      ? { maintenanceCategory: input.maintenanceCategory.trim() }
-      : {}),
+    ...(input.maintenanceCategory?.trim() ? { maintenanceCategory: input.maintenanceCategory.trim() } : {}),
     ...(input.defaultTrade?.trim() ? { defaultTrade: input.defaultTrade.trim() } : {}),
   };
 }
@@ -398,25 +368,10 @@ export function createAreaComponentAssignment(
 }
 
 const FIELD_REQUIREMENTS = new Set<CatalogueFieldRequirement>(['required', 'optional', 'hidden']);
-const TEST_REQUIREMENTS = new Set<CatalogueOperationalTestRequirement>([
-  'required',
-  'recommended',
-  'optional',
-  'not_applicable',
-]);
-const COMMENTARY_REQUIREMENTS = new Set<CatalogueCommentaryRequirement>([
-  'always',
-  'exception_only',
-  'optional',
-  'hidden',
-]);
+const TEST_REQUIREMENTS = new Set<CatalogueOperationalTestRequirement>(['required', 'recommended', 'optional', 'not_applicable']);
+const COMMENTARY_REQUIREMENTS = new Set<CatalogueCommentaryRequirement>(['always', 'exception_only', 'optional', 'hidden']);
 const STATUSES = new Set<CatalogueStatus>(['draft', 'published', 'retired']);
-const INCLUSIONS = new Set<AreaComponentInclusion>([
-  'required',
-  'default',
-  'optional',
-  'conditional',
-]);
+const INCLUSIONS = new Set<AreaComponentInclusion>(['required', 'default', 'optional', 'conditional']);
 
 function validateApplicability(value: CatalogueApplicability): void {
   if (!value.propertyUses.length) throw new Error('At least one Property Use is required.');
@@ -455,9 +410,7 @@ export function normaliseAreaComponentRuleOrder(
     .map((rule, index) => ({ ...rule, order: index + 1 }));
 }
 
-export function validateManagedComponent(
-  definition: ManagedComponentDefinition,
-): void {
+export function validateManagedComponent(definition: ManagedComponentDefinition): void {
   if (!definition.id.trim() || !definition.code.trim() || !definition.name.trim()) throw new Error('Component ID, code and name are required.');
   if (!/^COMPONENT_[A-Z0-9_]+$/u.test(definition.code)) throw new Error('Component code must use COMPONENT_* machine-code format.');
   if (!Number.isInteger(definition.version) || definition.version < 1) throw new Error('Component version must be a positive integer.');
@@ -494,11 +447,17 @@ export function validateManagedArea(
   }
 }
 
-export function withCatalogueLifecycle<T extends { status: CatalogueStatus; version: number; createdAt: string; publishedAt?: string; retiredAt?: string; updatedAt?: string; source: CatalogueRecordSource }>(
-  record: T,
-  status: CatalogueStatus,
-  timestamp = new Date().toISOString(),
-): T {
+export function withCatalogueLifecycle<
+  T extends {
+    status: CatalogueStatus;
+    version: number;
+    createdAt: string;
+    publishedAt?: string;
+    retiredAt?: string;
+    updatedAt?: string;
+    source: CatalogueRecordSource;
+  },
+>(record: T, status: CatalogueStatus, timestamp = new Date().toISOString()): T {
   return {
     ...record,
     status,
