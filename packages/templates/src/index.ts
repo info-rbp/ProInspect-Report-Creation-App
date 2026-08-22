@@ -1,6 +1,11 @@
-import type { InspectionType } from '@pcr/domain';
+import type { InspectionType, PhysicalPropertyType, PropertyUse } from '@pcr/domain';
+import {
+  validateCanonicalInspectionTemplate,
+  type CanonicalInspectionTemplateAreaReference,
+} from './inspectionTemplateCatalogue.js';
 
 export * from './pcrPreset.js';
+export * from './inspectionTemplateCatalogue.js';
 
 export type TemplateStatus = 'draft' | 'published' | 'retired';
 export type VisibilityState = 'visible' | 'partially_visible' | 'not_visible' | 'not_applicable';
@@ -11,6 +16,11 @@ export interface CommentaryEntry {
   id: string;
   area: string;
   component: string;
+  /** Canonical identity takes precedence over display labels when present. */
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
   subComponent?: string;
   inspectionTypes: InspectionType[];
   condition: ConditionState | string;
@@ -28,6 +38,7 @@ export interface CommentaryEntry {
   updatedAt?: string;
 }
 
+/** @deprecated Canonical templates retain this only for legacy compatibility and commentary UI. */
 export interface TemplateComponent {
   id: string;
   name: string;
@@ -35,6 +46,7 @@ export interface TemplateComponent {
   photoRequired: boolean;
 }
 
+/** @deprecated Canonical templates use canonicalAreaReferences rather than cloned Area objects. */
 export interface TemplateArea {
   id: string;
   name: string;
@@ -47,7 +59,14 @@ export interface InspectionTypeTemplate {
   inspectionType: InspectionType;
   propertyType: string;
   status: TemplateStatus;
+  /** Legacy cloned structure. Canonical templates persist this as an empty array. */
   areas: TemplateArea[];
+  /** Canonical structure policy. When set, report structure resolves from Property Layout + Catalogue. */
+  structureMode?: 'property_layout_catalogue';
+  includeUnreferencedPropertyAreas?: boolean;
+  canonicalAreaReferences?: CanonicalInspectionTemplateAreaReference[];
+  propertyUses?: PropertyUse[];
+  physicalPropertyTypes?: PhysicalPropertyType[];
   commentaryBank: CommentaryEntry[];
   createdAt: string;
   publishedAt?: string;
@@ -57,6 +76,10 @@ export interface InspectionTypeTemplate {
 export interface StructuredInspectionFact {
   area: string;
   component: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
   subComponent?: string;
   material?: string;
   colour?: string;
@@ -148,19 +171,37 @@ export function validateCommentaryText(text: string): void {
 
 export function validateTemplate(template: InspectionTypeTemplate): void {
   if (!template.id.trim() || template.version < 1) throw new Error('Template identity and positive version are required.');
-  if (!template.areas.length) throw new Error('Template must contain at least one area.');
-  const areaIds = new Set<string>();
-  for (const area of template.areas) {
-    if (!area.id.trim() || !area.name.trim()) throw new Error('Area identity and name are required.');
-    if (areaIds.has(area.id)) throw new Error(`Duplicate area id: ${area.id}`);
-    areaIds.add(area.id);
-    const componentIds = new Set<string>();
-    for (const component of area.components) {
-      if (!component.id.trim() || !component.name.trim()) throw new Error('Component identity and name are required.');
-      if (componentIds.has(component.id)) throw new Error(`Duplicate component id in ${area.id}: ${component.id}`);
-      componentIds.add(component.id);
+
+  if (template.structureMode === 'property_layout_catalogue') {
+    const issues = validateCanonicalInspectionTemplate({
+      id: template.id,
+      version: template.version,
+      inspectionType: template.inspectionType,
+      status: template.status,
+      structureMode: 'property_layout_catalogue',
+      includeUnreferencedPropertyAreas: template.includeUnreferencedPropertyAreas !== false,
+      areaReferences: structuredClone(template.canonicalAreaReferences || []),
+      propertyUses: structuredClone(template.propertyUses || []),
+      physicalPropertyTypes: structuredClone(template.physicalPropertyTypes || []),
+      source: template.id.startsWith('system-') ? 'system' : 'agency',
+    });
+    if (issues.length) throw new Error(issues.join(' '));
+  } else {
+    if (!template.areas.length) throw new Error('Legacy templates must contain at least one area.');
+    const areaIds = new Set<string>();
+    for (const area of template.areas) {
+      if (!area.id.trim() || !area.name.trim()) throw new Error('Area identity and name are required.');
+      if (areaIds.has(area.id)) throw new Error(`Duplicate area id: ${area.id}`);
+      areaIds.add(area.id);
+      const componentIds = new Set<string>();
+      for (const component of area.components) {
+        if (!component.id.trim() || !component.name.trim()) throw new Error('Component identity and name are required.');
+        if (componentIds.has(component.id)) throw new Error(`Duplicate component id in ${area.id}: ${component.id}`);
+        componentIds.add(component.id);
+      }
     }
   }
+
   for (const entry of template.commentaryBank) {
     validateCommentaryText(entry.text);
   }
@@ -207,7 +248,7 @@ export function importCommentaryBank(rows: ImportRow[], existingBank: Commentary
     for (const match of placeholderMatches) {
       const ph = match[1]?.trim();
       if (ph && !ALLOWED_PLACEHOLDERS.has(ph)) {
-        issues.push({ row: rowNumber, code: 'INVALID_PLACEHOLDER', message: `Unknown placeholder: {{${ph}}}` });
+        issues.push({ row: rowNumber, code: 'INVALID_PLACEHOLDER', message: `Unknown placeholder: {{${ph}}` });
         invalidPlaceholder = true;
         break;
       }
@@ -246,15 +287,25 @@ export function importCommentaryBank(rows: ImportRow[], existingBank: Commentary
   };
 }
 
+function identityMatches(entry: CommentaryEntry, fact: StructuredInspectionFact): boolean {
+  const entryHasCanonical = Boolean(entry.canonicalAreaDefinitionId || entry.canonicalComponentDefinitionId);
+  const factHasCanonical = Boolean(fact.canonicalAreaDefinitionId || fact.canonicalComponentDefinitionId);
+  if (entryHasCanonical && factHasCanonical) {
+    if (entry.canonicalAreaDefinitionId && entry.canonicalAreaDefinitionId !== fact.canonicalAreaDefinitionId) return false;
+    if (entry.canonicalComponentDefinitionId && entry.canonicalComponentDefinitionId !== fact.canonicalComponentDefinitionId) return false;
+    return true;
+  }
+  if (entryHasCanonical) return false;
+  return normalizeName(entry.area) === normalizeName(fact.area)
+    && normalizeName(entry.component) === normalizeName(fact.component);
+}
+
 export function matchBankEntry(template: InspectionTypeTemplate, fact: StructuredInspectionFact): CommentaryEntry | undefined {
-  const area = normalizeName(fact.area);
-  const component = normalizeName(fact.component);
   const activeType = fact.inspectionType || template.inspectionType;
 
   const candidates = template.commentaryBank.filter((entry) => {
     if (entry.active === false) return false;
-    if (normalizeName(entry.area) !== area) return false;
-    if (normalizeName(entry.component) !== component) return false;
+    if (!identityMatches(entry, fact)) return false;
     if (entry.condition !== fact.condition && entry.condition !== 'any') return false;
     if (entry.inspectionTypes.length > 0 && !entry.inspectionTypes.includes(activeType)) return false;
     return true;
@@ -262,12 +313,21 @@ export function matchBankEntry(template: InspectionTypeTemplate, fact: Structure
 
   if (!candidates.length) return undefined;
 
-  // Score candidate specificity
   let bestCandidate = candidates[0];
   let maxScore = -1;
 
   for (const candidate of candidates) {
     let score = 0;
+    if (candidate.canonicalAreaDefinitionId && candidate.canonicalAreaDefinitionId === fact.canonicalAreaDefinitionId) score += 50;
+    if (candidate.canonicalComponentDefinitionId && candidate.canonicalComponentDefinitionId === fact.canonicalComponentDefinitionId) score += 100;
+    if (
+      candidate.canonicalComponentDefinitionVersion &&
+      candidate.canonicalComponentDefinitionVersion === fact.canonicalComponentDefinitionVersion
+    ) score += 5;
+    if (
+      candidate.canonicalAreaDefinitionVersion &&
+      candidate.canonicalAreaDefinitionVersion === fact.canonicalAreaDefinitionVersion
+    ) score += 5;
     if (candidate.subComponent && fact.subComponent && candidate.subComponent.toLowerCase() === fact.subComponent.toLowerCase()) score += 10;
     if (candidate.cleanliness && fact.cleanliness && candidate.cleanliness.toLowerCase() === fact.cleanliness.toLowerCase()) score += 5;
     if (candidate.workingStatus && fact.workingState && candidate.workingStatus.toLowerCase() === fact.workingState.toLowerCase()) score += 5;
@@ -298,14 +358,12 @@ export function generateCommentary(template: InspectionTypeTemplate, fact: Struc
 
   const bank = matchBankEntry(template, fact);
 
-  // Description construction
   const descriptionParts: string[] = [];
   if (fact.colour) descriptionParts.push(capitalizeFirst(fact.colour.trim()));
   if (fact.material) descriptionParts.push(fact.material.trim());
 
   let typeStr = fact.type ? fact.type.trim() : '';
   if (typeStr) {
-    // Avoid repeating component name if typeStr already includes it
     if (typeStr.toLowerCase().startsWith(component.toLowerCase())) {
       typeStr = typeStr.slice(component.length).trim();
     }
@@ -319,7 +377,6 @@ export function generateCommentary(template: InspectionTypeTemplate, fact: Struc
   const quantityPrefix = fact.quantity && fact.quantity > 1 ? `${fact.quantity}x ` : '';
   const fullDesc = `${quantityPrefix}${descString}`.trim();
 
-  // Observations
   const obsParts: string[] = [];
   if (fact.conditionIssue && fact.conditionIssue.trim()) {
     let condIssue = fact.conditionIssue.trim();
@@ -354,7 +411,6 @@ export function generateCommentary(template: InspectionTypeTemplate, fact: Struc
     commentary = `${component} - ${detail}${otherwiseIntact}.`.replace(/\s+/g, ' ').replace(/,\s*\./g, '.');
   }
 
-  // Ensure clean capitalization
   commentary = commentary.charAt(0).toUpperCase() + commentary.slice(1);
 
   validateGeneratedClaim(fact, commentary);
@@ -441,7 +497,6 @@ function adaptBank(bankText: string, fact: StructuredInspectionFact, detail: str
   text = text.replace(/\{\{cleanliness_issue\}\}/g, fact.cleanlinessIssue || '');
   text = text.replace(/\{\{working_status\}\}/g, workingText(fact.workingState) || '');
 
-  // If entry didn't have placeholders but was custom text, prepend component if not present
   if (!text.toLowerCase().startsWith(component.toLowerCase())) {
     text = `${component} - ${text}`;
   }

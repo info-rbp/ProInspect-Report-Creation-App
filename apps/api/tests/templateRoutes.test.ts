@@ -1,6 +1,16 @@
 import { createServer } from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { createInitialPcrTemplate, type InspectionTypeTemplate } from '@pcr/templates';
+import {
+  createInitialPcrTemplate,
+  systemInspectionTemplateContract,
+  type InspectionTypeTemplate,
+} from '@pcr/templates';
+import {
+  PROPERTY_LAYOUT_CATALOGUE_ID,
+  PROPERTY_LAYOUT_CATALOGUE_VERSION,
+  findSystemComponentDefinition,
+  systemAreaComponentRulesForArea,
+} from '@pcr/templates/propertyLayoutCatalogue';
 import type { ReportAggregate } from '@pcr/domain';
 import { createRequestHandler } from '../src/app.js';
 import { MemoryIdempotencyStore } from '../src/backend/idempotency.js';
@@ -92,18 +102,81 @@ async function request(
 
 function draft(id: string, version = 1): InspectionTypeTemplate {
   const base = createInitialPcrTemplate();
-  return { ...base, id, version, status: 'draft', createdAt: new Date().toISOString(), publishedAt: undefined, retiredAt: undefined };
+  const contract = systemInspectionTemplateContract('entry');
+  return {
+    ...base,
+    id,
+    version,
+    status: 'draft',
+    areas: [],
+    structureMode: 'property_layout_catalogue',
+    includeUnreferencedPropertyAreas: true,
+    canonicalAreaReferences: [],
+    propertyUses: ['residential'],
+    physicalPropertyTypes: [...contract.physicalPropertyTypes],
+    createdAt: new Date().toISOString(),
+    publishedAt: undefined,
+    retiredAt: undefined,
+  };
 }
 
-const reportAreas = [{
-  id: 'entry',
-  name: 'Entry',
-  sequence: 1,
-  photoReferences: [],
-  components: [{
-    id: 'front-door', component: 'Front Door', conditionCategory: 'unable_to_confirm', cleanlinessCategory: 'unable_to_confirm', workingStatus: 'not_applicable', testStatus: 'not_applicable', defects: [], maintenanceRequired: false, commentary: '', photoReferences: [], reviewStatus: 'draft', comparisonStatus: 'not_compared',
-  }],
-}];
+function canonicalEntryRoom() {
+  const rule = systemAreaComponentRulesForArea('entry', 1)
+    .find((candidate) => candidate.componentDefinitionId === 'front-door');
+  if (!rule) throw new Error('Canonical Entry Front Door rule is required by this test.');
+  const component = findSystemComponentDefinition(rule.componentDefinitionId, rule.componentDefinitionVersion);
+  if (!component) throw new Error('Canonical Front Door definition is required by this test.');
+  return {
+    id: 'area-entry-instance',
+    name: 'Renamed Entry',
+    roomType: 'hallway',
+    floorLevel: 'Ground Floor',
+    canonicalAreaDefinitionId: 'entry',
+    canonicalAreaDefinitionVersion: 1,
+    itemsPreset: [],
+    componentRefs: [{
+      id: 'area-entry-instance:component:front-door',
+      name: component.name,
+      canonicalComponentDefinitionId: component.id,
+      canonicalComponentDefinitionVersion: component.version,
+      canonicalAreaComponentRuleId: rule.id,
+      canonicalAreaComponentRuleVersion: rule.version,
+      order: rule.order,
+      inclusion: rule.inclusion,
+      photoRequired: rule.photoRequired,
+    }],
+  };
+}
+
+async function seedCanonicalPropertyAndJob(repository: MemoryRepository) {
+  const room = canonicalEntryRoom();
+  const now = new Date().toISOString();
+  await repository.create('properties', 'agency-a', 'property-1', {
+    address: '1 Template Street',
+    status: 'active',
+    propertyUse: 'residential',
+    physicalPropertyType: 'house',
+    roomsConfig: [room],
+    currentLayoutVersionId: 'layout-1',
+    layoutVersions: [{
+      id: 'layout-1',
+      version: 1,
+      label: 'Layout v1',
+      effectiveFrom: now,
+      nodes: [],
+      roomsConfig: [room],
+      canonicalCatalogueId: PROPERTY_LAYOUT_CATALOGUE_ID,
+      canonicalCatalogueVersion: PROPERTY_LAYOUT_CATALOGUE_VERSION,
+      createdAt: now,
+    }],
+  }, 'admin-1');
+  await repository.create('inspectionJobs', 'agency-a', 'job-1', {
+    propertyId: 'property-1',
+    reportType: 'Property Condition Report',
+    status: 'assigned',
+    assignedInspectorId: 'inspector-1',
+  }, 'admin-1');
+}
 
 async function createAndPublish(deps: ApiDependencies, template: InspectionTypeTemplate) {
   const createdResponse = await request(deps, '/api/v1/templates/drafts', { method: 'POST', body: { template } });
@@ -118,29 +191,42 @@ async function createAndPublish(deps: ApiDependencies, template: InspectionTypeT
 }
 
 describe('server authoritative templates', () => {
-  it('seeds full published system defaults on first list', async () => {
+  it('seeds published system defaults as canonical layout-reference policies on first list', async () => {
     const repository = new MemoryRepository();
     const response = await request(dependencies(repository), '/api/v1/templates');
     expect(response.status).toBe(200);
     const payload = await response.json() as { data: Array<InspectionTypeTemplate & { recordVersion: number }> };
     expect(payload.data).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'system-entry-v1', version: 1, status: 'published', inspectionType: 'entry' }),
-      expect.objectContaining({ id: 'system-routine-v1', version: 1, status: 'published', inspectionType: 'routine' }),
-      expect.objectContaining({ id: 'system-exit-v1', version: 1, status: 'published', inspectionType: 'exit' }),
+      expect.objectContaining({ id: 'system-entry-v1', version: 1, status: 'published', inspectionType: 'entry', structureMode: 'property_layout_catalogue', areas: [] }),
+      expect.objectContaining({ id: 'system-routine-v1', version: 1, status: 'published', inspectionType: 'routine', structureMode: 'property_layout_catalogue', areas: [] }),
+      expect.objectContaining({ id: 'system-exit-v1', version: 1, status: 'published', inspectionType: 'exit', structureMode: 'property_layout_catalogue', areas: [] }),
     ]));
-    expect((await repository.get('templates', 'agency-a', 'system-entry-v1'))?.templateVersion).toBe(1);
-    expect((await repository.get('templateVersions', 'agency-a', 'system-entry-v1--v1'))?.immutable).toBe(true);
+    expect((await repository.get('templates', 'agency-a', 'system-entry-v1'))).toMatchObject({
+      templateVersion: 1,
+      structureMode: 'property_layout_catalogue',
+    });
+    expect((await repository.get('templateVersions', 'agency-a', 'system-entry-v1--v1'))).toMatchObject({
+      immutable: true,
+      areas: [],
+      structureMode: 'property_layout_catalogue',
+    });
   });
 
-  it('creates, edits, publishes and then makes the published version immutable', async () => {
+  it('creates, edits, publishes and then makes the canonical version immutable', async () => {
     const repository = new MemoryRepository();
     const deps = dependencies(repository);
     const template = draft('custom-entry');
     const createdResponse = await request(deps, '/api/v1/templates/drafts', { method: 'POST', body: { template } });
     const created = (await createdResponse.json() as { data: InspectionTypeTemplate & { recordVersion: number } }).data;
     expect(created.status).toBe('draft');
+    expect(created.areas).toEqual([]);
 
-    const changed = { ...created, propertyType: 'apartment' };
+    const changed = { ...created, propertyType: 'apartment', canonicalAreaReferences: [{
+      id: 'entry-reference',
+      canonicalAreaDefinitionId: 'entry',
+      canonicalAreaDefinitionVersion: 1,
+      inclusion: 'default' as const,
+    }] };
     const updateResponse = await request(deps, '/api/v1/templates/custom-entry/versions/1', {
       method: 'PUT',
       body: { expectedRecordVersion: created.recordVersion, template: changed },
@@ -154,8 +240,13 @@ describe('server authoritative templates', () => {
     });
     expect(publishResponse.status).toBe(200);
     const published = (await publishResponse.json() as { data: InspectionTypeTemplate & { recordVersion: number } }).data;
-    expect(published.status).toBe('published');
-    expect(await repository.get('templates', 'agency-a', 'custom-entry')).toMatchObject({ templateId: 'custom-entry', templateVersion: 1, status: 'published' });
+    expect(published).toMatchObject({ status: 'published', structureMode: 'property_layout_catalogue', areas: [] });
+    expect(await repository.get('templates', 'agency-a', 'custom-entry')).toMatchObject({
+      templateId: 'custom-entry',
+      templateVersion: 1,
+      status: 'published',
+      structureMode: 'property_layout_catalogue',
+    });
 
     const forbiddenEdit = await request(deps, '/api/v1/templates/custom-entry/versions/1', {
       method: 'PUT',
@@ -165,7 +256,26 @@ describe('server authoritative templates', () => {
     expect(await forbiddenEdit.json()).toMatchObject({ error: { code: 'TEMPLATE_IMMUTABLE' } });
   });
 
-  it('duplicates to a new draft version, publishes v2 and makes it the report binding pointer', async () => {
+  it('blocks publication of a legacy cloned Area/Component draft', async () => {
+    const repository = new MemoryRepository();
+    const deps = dependencies(repository);
+    const legacy = createInitialPcrTemplate();
+    const createdResponse = await request(deps, '/api/v1/templates/drafts', {
+      method: 'POST',
+      body: { template: { ...legacy, id: 'legacy-cloned', version: 1, status: 'draft' } },
+    });
+    expect(createdResponse.status).toBe(201);
+    const created = (await createdResponse.json() as { data: InspectionTypeTemplate & { recordVersion: number } }).data;
+
+    const publishResponse = await request(deps, '/api/v1/templates/legacy-cloned/versions/1/actions/publish', {
+      method: 'POST',
+      body: { expectedRecordVersion: created.recordVersion },
+    });
+    expect(publishResponse.status).toBe(409);
+    expect(await publishResponse.json()).toMatchObject({ error: { code: 'TEMPLATE_CANONICAL_MIGRATION_REQUIRED' } });
+  });
+
+  it('duplicates to a new canonical draft version, publishes v2 and makes it the report binding pointer', async () => {
     const repository = new MemoryRepository();
     const reports = new MemoryReportStore();
     const deps = dependencies(repository, reports);
@@ -177,7 +287,7 @@ describe('server authoritative templates', () => {
     });
     expect(duplicateResponse.status).toBe(201);
     const draftV2 = (await duplicateResponse.json() as { data: InspectionTypeTemplate & { recordVersion: number } }).data;
-    expect(draftV2).toMatchObject({ id: 'custom-entry', version: 2, status: 'draft' });
+    expect(draftV2).toMatchObject({ id: 'custom-entry', version: 2, status: 'draft', structureMode: 'property_layout_catalogue', areas: [] });
 
     const publishV2 = await request(deps, '/api/v1/templates/custom-entry/versions/2/actions/publish', {
       method: 'POST',
@@ -186,14 +296,23 @@ describe('server authoritative templates', () => {
     expect(publishV2.status).toBe(200);
     expect(await repository.get('templates', 'agency-a', 'custom-entry')).toMatchObject({ templateId: 'custom-entry', templateVersion: 2, status: 'published' });
 
-    await repository.create('properties', 'agency-a', 'property-1', { address: '1 Template Street', status: 'active' }, 'admin-1');
-    await repository.create('inspectionJobs', 'agency-a', 'job-1', { propertyId: 'property-1', reportType: 'Property Condition Report', status: 'assigned', assignedInspectorId: 'inspector-1' }, 'admin-1');
+    await seedCanonicalPropertyAndJob(repository);
     const reportResponse = await request(deps, '/api/v1/inspection-jobs/job-1/create-report', {
       method: 'POST',
-      body: { expectedJobVersion: 1, areas: reportAreas },
+      body: { expectedJobVersion: 1 },
     });
     expect(reportResponse.status).toBe(201);
-    expect(await reportResponse.json()).toMatchObject({ data: { report: { templateId: 'custom-entry', templateVersion: 2 } } });
+    expect(await reportResponse.json()).toMatchObject({
+      data: {
+        report: {
+          templateId: 'custom-entry',
+          templateVersion: 2,
+          propertyLayoutVersionId: 'layout-1',
+          structureResolutionVersion: 1,
+        },
+        areas: [{ canonicalAreaDefinitionId: 'entry', components: [{ canonicalComponentDefinitionId: 'front-door' }] }],
+      },
+    });
   });
 
   it('retires the current version and falls back to the previous published pointer', async () => {

@@ -8,8 +8,14 @@ export interface PropertyHistoryObservation {
   lifecycleStatus: string;
   areaId: string;
   areaName: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
   componentId: string;
   componentName: string;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
+  canonicalAreaComponentRuleId?: string;
+  canonicalAreaComponentRuleVersion?: number;
   conditionCategory: string;
   cleanlinessCategory: string;
   workingStatus: string;
@@ -30,6 +36,10 @@ export interface PropertyHistoryMaintenance {
   sourceReportVersionId?: string;
   sourceAreaId?: string;
   sourceComponentId?: string;
+  sourceCanonicalAreaDefinitionId?: string;
+  sourceCanonicalAreaDefinitionVersion?: number;
+  sourceCanonicalComponentDefinitionId?: string;
+  sourceCanonicalComponentDefinitionVersion?: number;
   sourceEvidenceIds: string[];
   completionEvidenceIds: string[];
   createdAt?: string;
@@ -39,10 +49,13 @@ export interface PropertyHistoryMaintenance {
 
 export interface PropertyComponentHistory {
   stableKey: string;
+  identityMode: 'canonical_occurrence' | 'canonical_semantic' | 'legacy_instance';
   areaId: string;
   areaName: string;
+  canonicalAreaDefinitionId?: string;
   componentId: string;
   componentName: string;
+  canonicalComponentDefinitionId?: string;
   observations: PropertyHistoryObservation[];
   maintenance: PropertyHistoryMaintenance[];
 }
@@ -50,6 +63,7 @@ export interface PropertyComponentHistory {
 export interface PropertyHistory {
   propertyId: string;
   propertyAddress: string;
+  identityMode?: 'canonical_first';
   inspections: Array<{
     reportId: string;
     reportType: string;
@@ -58,6 +72,10 @@ export interface PropertyHistory {
     currentVersionId?: string;
     templateId?: string;
     templateVersion?: number;
+    propertyLayoutVersionId?: string;
+    structureResolutionVersion?: number;
+    canonicalCatalogueId?: string;
+    canonicalCatalogueVersion?: number;
     immutableVersionCount: number;
     sourceMaintenanceItemIds?: string[];
   }>;

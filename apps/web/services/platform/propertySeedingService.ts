@@ -1,49 +1,56 @@
-import type { PropertyRecord, RoomType, PropertyFeatures } from '../../types/platform';
+import type { PropertyLayoutComponentReference, PropertyRecord, RoomConfigItem, RoomType, PropertyFeatures } from '../../types/platform';
 import type { InspectionItem, ReportData, Room } from '../../types';
-import { pcrStandardAreas, type TemplateArea } from '@pcr/templates';
+import {
+  findSystemAreaDefinition,
+  findSystemComponentDefinition,
+  systemAreaComponentRulesForArea,
+} from '@pcr/templates/propertyLayoutCatalogue';
+import { migrateTemplateBackedLayoutToCanonical } from './propertyLayoutService';
 import { generateId } from '../../utils';
 
-export function isOperationalItem(name: string): boolean {
-  const lower = name.toLowerCase();
-  return (
-    lower.includes('switch') ||
-    lower.includes('outlet') ||
-    lower.includes('power') ||
-    lower.includes('fan') ||
-    lower.includes('oven') ||
-    lower.includes('cooktop') ||
-    lower.includes('grill') ||
-    lower.includes('rangehood') ||
-    lower.includes('dishwasher') ||
-    lower.includes('air cond') ||
-    lower.includes('heating') ||
-    lower.includes('alarm') ||
-    lower.includes('remote') ||
-    lower.includes('reticulation') ||
-    lower.includes('appliance') ||
-    lower.includes('light fitting') ||
-    lower.includes('heat lamp') ||
-    lower.includes('exhaust') ||
-    lower.includes('intercom') ||
-    lower.includes('door motor') ||
-    lower.includes('hot water') ||
-    lower.includes('tap')
-  );
+const OPERATIONAL_COMPONENT_CATEGORIES = new Set([
+  'electrical', 'plumbing', 'appliance', 'hvac', 'safety_security',
+]);
+
+/**
+ * Operational state is derived from an exact catalogue Component definition.
+ * Display wording is deliberately irrelevant.
+ */
+export function isOperationalItem(componentDefinitionId: string, version?: number): boolean {
+  const component = findSystemComponentDefinition(componentDefinitionId, version);
+  return Boolean(component && OPERATIONAL_COMPONENT_CATEGORIES.has(component.category));
 }
 
 function slug(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
 }
 
-export function createSeededItem(name: string, stableId?: string): InspectionItem {
-  const operational = isOperationalItem(name);
+export function createSeededItem(
+  name: string,
+  stableId?: string,
+  canonical?: {
+    componentDefinitionId: string;
+    componentDefinitionVersion: number;
+    areaComponentRuleId?: string;
+    areaComponentRuleVersion?: number;
+  },
+): InspectionItem {
+  const resolvedCanonicalId = canonical?.componentDefinitionId
+    || (stableId && findSystemComponentDefinition(stableId) ? stableId : undefined);
+  const resolvedComponent = resolvedCanonicalId
+    ? findSystemComponentDefinition(resolvedCanonicalId, canonical?.componentDefinitionVersion)
+    : undefined;
+  const resolvedCanonicalVersion = canonical?.componentDefinitionVersion ?? resolvedComponent?.version;
+  const operational = Boolean(resolvedComponent && OPERATIONAL_COMPONENT_CATEGORIES.has(resolvedComponent.category));
   return {
     id: stableId?.trim() || slug(name) || generateId(),
     name,
+    ...(resolvedCanonicalId && resolvedCanonicalVersion ? {
+      canonicalComponentDefinitionId: resolvedCanonicalId,
+      canonicalComponentDefinitionVersion: resolvedCanonicalVersion,
+    } : {}),
+    ...(canonical?.areaComponentRuleId ? { canonicalAreaComponentRuleId: canonical.areaComponentRuleId } : {}),
+    ...(canonical?.areaComponentRuleVersion ? { canonicalAreaComponentRuleVersion: canonical.areaComponentRuleVersion } : {}),
     conditionCategory: 'unable_to_confirm',
     cleanlinessCategory: 'unable_to_confirm',
     workingStatus: operational ? 'untested' : 'not_applicable',
@@ -57,46 +64,57 @@ export function createSeededItem(name: string, stableId?: string): InspectionIte
   };
 }
 
-function findAreaById(id: string): TemplateArea | undefined {
-  return pcrStandardAreas.find((area) => area.id === id);
+function itemFromReference(reference: PropertyLayoutComponentReference): InspectionItem {
+  const component = findSystemComponentDefinition(
+    reference.canonicalComponentDefinitionId,
+    reference.canonicalComponentDefinitionVersion,
+  );
+  return createSeededItem(reference.name || component?.name || reference.canonicalComponentDefinitionId, reference.id, {
+    componentDefinitionId: reference.canonicalComponentDefinitionId,
+    componentDefinitionVersion: reference.canonicalComponentDefinitionVersion,
+    areaComponentRuleId: reference.canonicalAreaComponentRuleId,
+    areaComponentRuleVersion: reference.canonicalAreaComponentRuleVersion,
+  });
 }
 
-function resolveCanonicalArea(roomType?: RoomType | string, roomName = ''): TemplateArea | undefined {
-  const lowerType = (roomType || '').toLowerCase();
-  const lowerName = roomName.toLowerCase();
+/**
+ * Controlled fallback for genuinely legacy/unmapped custom layouts. This uses
+ * the stored RoomType enum only. It never scans or infers from an Area name.
+ */
+const LEGACY_ROOM_TYPE_AREA: Partial<Record<RoomType, string>> = {
+  bedroom: 'bedroom',
+  bathroom: 'bathroom',
+  living: 'lounge-room',
+  kitchen: 'kitchen',
+  dining: 'dining-room',
+  laundry: 'laundry',
+  garage: 'garage-carport',
+  study: 'study',
+  hallway: 'passage-hallway',
+  storage: 'storeroom',
+  office: 'commercial-open-office',
+  retail: 'retail-sales-area',
+  warehouse: 'warehouse-floor',
+  amenities: 'commercial-amenities',
+  plant: 'hvac-mechanical-services',
+  safety: 'security-safety',
+};
 
-  if (lowerName.includes('exterior front')) return findAreaById('exterior-front');
-  if (lowerName.includes('exterior back') || lowerName.includes('rear exterior')) return findAreaById('exterior-back');
-  if (lowerName.includes('security') || lowerType === 'security') return findAreaById('security-safety');
-  if (lowerName.includes('general external')) return findAreaById('general-external-items');
-  if (lowerName.includes('lounge / dining') || lowerName.includes('living & dining')) return findAreaById('lounge-dining-room');
-  if (lowerType === 'kitchen' || lowerName.includes('kitchen')) return findAreaById('kitchen');
-  if (lowerName.includes('ensuite')) return findAreaById('ensuite');
-  if (lowerType === 'bathroom' || lowerName.includes('bathroom')) return findAreaById('bathroom');
-  if (lowerName.includes('toilet') || lowerName.includes('wc') || lowerName.includes('powder')) return findAreaById('toilet-wc');
-  if (lowerType === 'bedroom' || lowerName.includes('bedroom') || lowerName.includes('master bed') || lowerName.includes('main bedroom')) return findAreaById('bedroom');
-  if (lowerName.includes('study')) return findAreaById('study');
-  if (lowerName.includes('activity')) return findAreaById('activity-room');
-  if (lowerType === 'laundry' || lowerName.includes('laundry')) return findAreaById('laundry');
-  if (lowerType === 'garage' || lowerName.includes('garage') || lowerName.includes('carport')) return findAreaById('garage-carport');
-  if (lowerName.includes('entry')) return findAreaById('entry');
-  if (lowerName.includes('hallway') || lowerName.includes('passage')) return findAreaById('passage-hallway');
-  if (lowerName.includes('linen')) return findAreaById('linen-press');
-  if (lowerType === 'dining' || lowerName.includes('dining')) return findAreaById('dining-room');
-  if (lowerName.includes('family')) return findAreaById('family-room');
-  if (lowerType === 'living' || lowerName.includes('living') || lowerName.includes('lounge')) return findAreaById('lounge-room');
-  if (lowerName.includes('shed') || lowerName.includes('storage')) return findAreaById('garden-shed-external-storage');
-  if (lowerType === 'outdoor' || lowerName.includes('outdoor') || lowerName.includes('courtyard') || lowerName.includes('balcony') || lowerName.includes('patio')) {
-    return findAreaById('general-external-items');
-  }
-
-  return undefined;
-}
-
-export const getDefaultItemsForRoomType = (roomType?: RoomType | string, roomName = ''): InspectionItem[] => {
-  const canonicalArea = resolveCanonicalArea(roomType, roomName);
-  if (canonicalArea) {
-    return canonicalArea.components.map((component) => createSeededItem(component.name, component.id));
+export const getDefaultItemsForRoomType = (roomType?: RoomType | string, _roomName = ''): InspectionItem[] => {
+  const areaId = roomType ? LEGACY_ROOM_TYPE_AREA[roomType as RoomType] : undefined;
+  if (areaId) {
+    const area = findSystemAreaDefinition(areaId);
+    if (area) {
+      return systemAreaComponentRulesForArea(area.id, area.version).map((rule) => {
+        const component = findSystemComponentDefinition(rule.componentDefinitionId, rule.componentDefinitionVersion);
+        return createSeededItem(component?.name || rule.legacyComponentName, rule.componentDefinitionId, {
+          componentDefinitionId: rule.componentDefinitionId,
+          componentDefinitionVersion: rule.componentDefinitionVersion,
+          areaComponentRuleId: rule.id,
+          areaComponentRuleVersion: rule.version,
+        });
+      });
+    }
   }
 
   return [
@@ -109,70 +127,120 @@ export const getDefaultItemsForRoomType = (roomType?: RoomType | string, roomNam
   ];
 };
 
-function room(id: string, name: string, roomType?: RoomType | string, notes = ''): Room {
+function roomFromConfig(config: RoomConfigItem): Room {
+  const exactItems = config.componentRefs?.length
+    ? [...config.componentRefs].sort((left, right) => left.order - right.order).map(itemFromReference)
+    : getDefaultItemsForRoomType(config.roomType).map((item) => ({
+        ...item,
+        id: `${config.id}:component:${item.canonicalComponentDefinitionId || item.id}`,
+      }));
   return {
-    id,
-    name,
+    id: config.id,
+    name: config.name,
+    canonicalAreaDefinitionId: config.canonicalAreaDefinitionId,
+    canonicalAreaDefinitionVersion: config.canonicalAreaDefinitionVersion,
     status: 'draft',
-    items: getDefaultItemsForRoomType(roomType, name),
+    items: exactItems,
     photos: [],
-    overallComment: notes,
+    overallComment: config.notes || '',
     isExpanded: true,
   };
 }
 
+function canonicalRoom(
+  id: string,
+  name: string,
+  areaDefinitionId: string,
+  roomType: RoomType,
+  notes = '',
+): Room {
+  const area = findSystemAreaDefinition(areaDefinitionId);
+  if (!area) {
+    return {
+      id,
+      name,
+      status: 'draft',
+      items: getDefaultItemsForRoomType(roomType).map((item) => ({ ...item, id: `${id}:component:${item.id}` })),
+      photos: [],
+      overallComment: notes,
+      isExpanded: true,
+    };
+  }
+  const componentRefs: PropertyLayoutComponentReference[] = systemAreaComponentRulesForArea(area.id, area.version).map((rule) => {
+    const component = findSystemComponentDefinition(rule.componentDefinitionId, rule.componentDefinitionVersion);
+    return {
+      id: `${id}:component:${rule.componentDefinitionId}`,
+      name: component?.name || rule.legacyComponentName,
+      canonicalComponentDefinitionId: rule.componentDefinitionId,
+      canonicalComponentDefinitionVersion: rule.componentDefinitionVersion,
+      canonicalAreaComponentRuleId: rule.id,
+      canonicalAreaComponentRuleVersion: rule.version,
+      order: rule.order,
+      inclusion: rule.inclusion,
+      photoRequired: rule.photoRequired,
+    };
+  });
+  return roomFromConfig({
+    id,
+    name,
+    roomType,
+    notes,
+    canonicalAreaDefinitionId: area.id,
+    canonicalAreaDefinitionVersion: area.version,
+    componentRefs,
+  });
+}
+
 export const seedRoomsFromProperty = (property: PropertyRecord): Room[] => {
   if (property.roomsConfig && property.roomsConfig.length > 0) {
-    return property.roomsConfig.map((rm, index) => {
-      const configuredId = rm.id?.trim();
-      const stableAreaId = configuredId
-        ? (configuredId.startsWith('room-') ? configuredId : `room-${configuredId}`)
-        : `room-${slug(rm.name) || index + 1}`;
-      return room(stableAreaId, rm.name, rm.roomType, rm.notes || '');
-    });
+    const migration = migrateTemplateBackedLayoutToCanonical(property);
+    return migration.rooms.map(roomFromConfig);
+  }
+
+  if (property.layoutTemplateId) {
+    const migration = migrateTemplateBackedLayoutToCanonical(property);
+    if (migration.rooms.length > 0) return migration.rooms.map(roomFromConfig);
   }
 
   const rooms: Room[] = [];
-
-  rooms.push(room('area-entry', 'Entry', 'hallway'));
-  rooms.push(room('area-passage-hallway', 'Passage / Hallway', 'hallway'));
+  rooms.push(canonicalRoom('area-entry', 'Entry', 'entry', 'hallway'));
+  rooms.push(canonicalRoom('area-passage-hallway', 'Passage / Hallway', 'passage-hallway', 'hallway'));
 
   const livingCount = property.livingAreas || 1;
   for (let i = 1; i <= livingCount; i += 1) {
     const name = livingCount === 1 ? 'Lounge / Dining Room' : i === 1 ? 'Lounge Room' : `Family Room ${i - 1}`;
-    rooms.push(room(`area-living-${i}`, name, 'living'));
+    const definition = livingCount === 1 ? 'lounge-dining-room' : i === 1 ? 'lounge-room' : 'family-room';
+    rooms.push(canonicalRoom(`area-living-${i}`, name, definition, 'living'));
   }
 
-  rooms.push(room('area-kitchen', 'Kitchen', 'kitchen'));
+  rooms.push(canonicalRoom('area-kitchen', 'Kitchen', 'kitchen', 'kitchen'));
 
   const bedCount = property.bedrooms || 3;
   for (let i = 1; i <= bedCount; i += 1) {
-    const name = i === 1 ? 'Bedroom 1 / Main Bedroom' : `Bedroom ${i}`;
-    rooms.push(room(`area-bedroom-${i}`, name, 'bedroom'));
+    rooms.push(canonicalRoom(`area-bedroom-${i}`, i === 1 ? 'Bedroom 1 / Main Bedroom' : `Bedroom ${i}`, 'bedroom', 'bedroom'));
   }
 
   const bathCount = property.bathrooms || 1;
   for (let i = 1; i <= bathCount; i += 1) {
-    const name = bathCount > 1 && i === 1 ? 'Ensuite' : i === 1 ? 'Bathroom' : `Bathroom ${i}`;
-    rooms.push(room(`area-bathroom-${i}`, name, i === 1 && bathCount > 1 ? 'ensuite' : 'bathroom'));
+    const ensuite = bathCount > 1 && i === 1;
+    rooms.push(canonicalRoom(`area-bathroom-${i}`, ensuite ? 'Ensuite' : i === 1 ? 'Bathroom' : `Bathroom ${i}`, ensuite ? 'ensuite' : 'bathroom', 'bathroom'));
   }
 
-  rooms.push(room('area-laundry', 'Laundry', 'laundry'));
+  rooms.push(canonicalRoom('area-laundry', 'Laundry', 'laundry', 'laundry'));
 
-  if (property.propertyType === 'apartment' || property.propertyType === 'unit') {
-    rooms.push(room('area-external', 'Balcony / External', 'outdoor'));
+  if (property.propertyType === 'apartment' || property.propertyType === 'unit' || property.physicalPropertyType === 'studio') {
+    rooms.push(canonicalRoom('area-balcony-courtyard', 'Balcony / External', 'balcony-courtyard', 'outdoor'));
   } else {
-    rooms.push(room('area-exterior-front', 'Exterior Front', 'outdoor'));
-    rooms.push(room('area-exterior-back', 'Exterior Back', 'outdoor'));
-    rooms.push(room('area-general-external', 'General External Items', 'outdoor'));
+    rooms.push(canonicalRoom('area-exterior-front', 'Exterior Front', 'exterior-front', 'outdoor'));
+    rooms.push(canonicalRoom('area-exterior-back', 'Exterior Back', 'exterior-back', 'outdoor'));
+    rooms.push(canonicalRoom('area-general-external', 'General External Items', 'general-external-items', 'outdoor'));
   }
 
   if ((property.parking && property.parking > 0) || property.propertyType === 'house') {
-    rooms.push(room('area-garage-carport', 'Garage / Carport', 'garage'));
+    rooms.push(canonicalRoom('area-garage-carport', 'Garage / Carport', 'garage-carport', 'garage'));
   }
 
-  rooms.push(room('area-security-safety', 'Security / Safety', 'security'));
-
+  rooms.push(canonicalRoom('area-security-safety', 'Security / Safety', 'security-safety', 'safety'));
   return rooms;
 };
 
@@ -189,27 +257,21 @@ export const formatPropertyFeatures = (features?: PropertyFeatures): string => {
   if (features.courtyard) list.push('Courtyard');
   if (features.balcony) list.push('Balcony');
   if (features.securitySystem) list.push('Security System');
-
   return list.length > 0 ? `Property Features: ${list.join(', ')}.` : '';
 };
 
 export const seedReportFromProperty = (
   property: PropertyRecord,
-  existingReport?: Partial<ReportData>
+  existingReport?: Partial<ReportData>,
 ): ReportData => {
   const fullAddress = [
     property.address,
     property.suburb,
     property.state ? `${property.state} ${property.postcode || ''}`.trim() : property.postcode,
-  ]
-    .filter(Boolean)
-    .join(', ');
+  ].filter(Boolean).join(', ');
 
   const seededRooms = seedRoomsFromProperty(property);
-  const rooms = existingReport?.rooms && existingReport.rooms.length > 0
-    ? existingReport.rooms
-    : seededRooms;
-
+  const rooms = existingReport?.rooms && existingReport.rooms.length > 0 ? existingReport.rooms : seededRooms;
   const featuresText = formatPropertyFeatures(property.features);
   const notesCombined = [property.notes, featuresText].filter(Boolean).join('\n');
 
@@ -218,6 +280,7 @@ export const seedReportFromProperty = (
     agencyId: existingReport?.agencyId || property.agencyId,
     propertyId: property.id,
     inspectionJobId: existingReport?.inspectionJobId,
+    propertyLayoutVersionId: property.currentLayoutVersionId,
     propertyAddress: fullAddress || existingReport?.propertyAddress || 'Property Address',
     clientName: property.landlordDetails?.name || existingReport?.clientName || 'Property Owner',
     tenantName: property.tenantDetails?.primaryTenantName || existingReport?.tenantName || 'Tenant',

@@ -95,21 +95,31 @@ function candidates(findings: HistoricalExtractedFinding[]): HistoricalMappingCa
     sourceLabel: `${finding.sourceArea} / ${finding.sourceComponent}`,
     ...(finding.proposedAreaId ? { proposedAreaId: finding.proposedAreaId } : {}),
     ...(finding.proposedComponentId ? { proposedComponentId: finding.proposedComponentId } : {}),
+    ...(finding.proposedCanonicalAreaDefinitionId ? {
+      proposedCanonicalAreaDefinitionId: finding.proposedCanonicalAreaDefinitionId,
+      proposedCanonicalAreaDefinitionVersion: finding.proposedCanonicalAreaDefinitionVersion,
+    } : {}),
+    ...(finding.proposedCanonicalComponentDefinitionId ? {
+      proposedCanonicalComponentDefinitionId: finding.proposedCanonicalComponentDefinitionId,
+      proposedCanonicalComponentDefinitionVersion: finding.proposedCanonicalComponentDefinitionVersion,
+    } : {}),
     confidence: finding.confidence,
     status: finding.decision,
     ...(finding.uncertainty ? { reviewerNote: finding.uncertainty } : {}),
   }));
 }
 
-function floorPlanHotspots(value: unknown, validAreaIds: Set<string>): PropertyFloorPlanHotspot[] {
+function floorPlanHotspots(value: unknown, currentRooms: RoomConfigItem[]): PropertyFloorPlanHotspot[] {
   if (!Array.isArray(value)) throw new ApiError(400, 'FLOOR_PLAN_HOTSPOTS_INVALID', 'hotspots must be an array.');
+  const roomById = new Map(currentRooms.map((area) => [area.id, area]));
   return value.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       throw new ApiError(400, 'FLOOR_PLAN_HOTSPOT_INVALID', `Hotspot ${index + 1} is invalid.`);
     }
     const raw = item as Record<string, unknown>;
     const areaId = typeof raw.areaId === 'string' ? raw.areaId.trim() : '';
-    if (!areaId || !validAreaIds.has(areaId)) {
+    const area = roomById.get(areaId);
+    if (!area) {
       throw new ApiError(400, 'FLOOR_PLAN_AREA_INVALID', `Hotspot ${index + 1} must reference a current configured property area.`);
     }
     const number = (field: string, fallback: number): number => {
@@ -121,7 +131,11 @@ function floorPlanHotspots(value: unknown, validAreaIds: Set<string>): PropertyF
     return {
       id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `hotspot-${randomUUID()}`,
       areaId,
-      areaName: typeof raw.areaName === 'string' && raw.areaName.trim() ? raw.areaName.trim() : areaId,
+      areaName: typeof raw.areaName === 'string' && raw.areaName.trim() ? raw.areaName.trim() : area.name,
+      ...(area.canonicalAreaDefinitionId ? {
+        canonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+        canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
+      } : {}),
       x: number('x', 0),
       y: number('y', 0),
       width: Math.max(2, number('width', 12)),
@@ -129,6 +143,48 @@ function floorPlanHotspots(value: unknown, validAreaIds: Set<string>): PropertyF
       ...(typeof raw.label === 'string' && raw.label.trim() ? { label: raw.label.trim().slice(0, 120) } : {}),
     };
   });
+}
+
+function reviewedCanonicalMapping(
+  propertyAreas: RoomConfigItem[],
+  finding: HistoricalExtractedFinding,
+  review: Record<string, unknown>,
+): Pick<
+  HistoricalExtractedFinding,
+  | 'proposedAreaId'
+  | 'proposedComponentId'
+  | 'proposedCanonicalAreaDefinitionId'
+  | 'proposedCanonicalAreaDefinitionVersion'
+  | 'proposedCanonicalComponentDefinitionId'
+  | 'proposedCanonicalComponentDefinitionVersion'
+> {
+  const requestedAreaId = typeof review.proposedAreaId === 'string' && review.proposedAreaId.trim()
+    ? review.proposedAreaId.trim()
+    : finding.proposedAreaId;
+  const area = requestedAreaId ? propertyAreas.find((candidate) => candidate.id === requestedAreaId) : undefined;
+  if (!area) return {};
+
+  const requestedComponentId = typeof review.proposedCanonicalComponentDefinitionId === 'string' && review.proposedCanonicalComponentDefinitionId.trim()
+    ? review.proposedCanonicalComponentDefinitionId.trim()
+    : typeof review.proposedComponentId === 'string' && review.proposedComponentId.trim()
+      ? review.proposedComponentId.trim()
+      : finding.proposedCanonicalComponentDefinitionId || finding.proposedComponentId;
+  const component = requestedComponentId
+    ? area.componentRefs?.find((candidate) => candidate.canonicalComponentDefinitionId === requestedComponentId)
+    : undefined;
+
+  return {
+    proposedAreaId: area.id,
+    ...(area.canonicalAreaDefinitionId ? {
+      proposedCanonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+      proposedCanonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
+    } : {}),
+    ...(component ? {
+      proposedComponentId: component.canonicalComponentDefinitionId,
+      proposedCanonicalComponentDefinitionId: component.canonicalComponentDefinitionId,
+      proposedCanonicalComponentDefinitionVersion: component.canonicalComponentDefinitionVersion,
+    } : {}),
+  };
 }
 
 async function appendAudit(
@@ -182,14 +238,8 @@ export async function routePropertyIntelligenceRequest(
       const bucketName = process.env.UPLOAD_BUCKET?.trim();
       if (!bucketName) throw new ApiError(503, 'UPLOAD_BUCKET_REQUIRED', 'UPLOAD_BUCKET is required.');
       const expiresAt = Date.now() + 15 * 60 * 1000;
-      const [url] = await getStorage(adminApp()).bucket(bucketName).file(document.objectPath).getSignedUrl({
-        action: 'read',
-        expires: expiresAt,
-      });
-      return {
-        status: 200,
-        body: { data: { url, expiresAt: new Date(expiresAt).toISOString() }, meta: { correlationId } },
-      };
+      const [url] = await getStorage(adminApp()).bucket(bucketName).file(document.objectPath).getSignedUrl({ action: 'read', expires: expiresAt });
+      return { status: 200, body: { data: { url, expiresAt: new Date(expiresAt).toISOString() }, meta: { correlationId } } };
     }
 
     if (req.method === 'GET' && parts[6] === 'analysis' && parts.length === 7) {
@@ -270,6 +320,7 @@ export async function routePropertyIntelligenceRequest(
         promptVersion: extraction.promptVersion,
         model: extraction.model,
         findingCount: extraction.findings.length,
+        canonicalFindingCount: extraction.findings.filter((finding) => finding.proposedCanonicalComponentDefinitionId).length,
         sourceSha256: document.sha256,
       });
       return { status: 201, body: { data: stored, meta: { correlationId } } };
@@ -286,7 +337,7 @@ export async function routePropertyIntelligenceRequest(
         throw new ApiError(404, 'PROPERTY_DOCUMENT_ANALYSIS_NOT_FOUND', 'Historical document analysis was not found.');
       }
       if (!Array.isArray(body.decisions)) throw new ApiError(400, 'REVIEW_DECISIONS_REQUIRED', 'decisions must be an array.');
-      const validAreaIds = new Set(rooms(property).map((area) => area.id));
+      const propertyAreas = rooms(property);
       const decisions = new Map<string, Record<string, unknown>>();
       for (const value of body.decisions) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
@@ -301,17 +352,27 @@ export async function routePropertyIntelligenceRequest(
         if (decision !== 'confirmed' && decision !== 'edited' && decision !== 'rejected') {
           throw new ApiError(400, 'REVIEW_DECISION_INVALID', `Unsupported review decision for ${finding.id}.`);
         }
-        const proposedAreaId = typeof review.proposedAreaId === 'string' && validAreaIds.has(review.proposedAreaId)
-          ? review.proposedAreaId
-          : finding.proposedAreaId;
-        const proposedComponentId = typeof review.proposedComponentId === 'string' && review.proposedComponentId.trim()
-          ? review.proposedComponentId.trim()
-          : finding.proposedComponentId;
+        if (decision === 'rejected') {
+          return {
+            ...finding,
+            decision,
+            proposedAreaId: undefined,
+            proposedComponentId: undefined,
+            proposedCanonicalAreaDefinitionId: undefined,
+            proposedCanonicalAreaDefinitionVersion: undefined,
+            proposedCanonicalComponentDefinitionId: undefined,
+            proposedCanonicalComponentDefinitionVersion: undefined,
+            ...(typeof review.reviewerNote === 'string' && review.reviewerNote.trim() ? { reviewerNote: review.reviewerNote.trim().slice(0, 1_000) } : {}),
+          };
+        }
+        const mapping = reviewedCanonicalMapping(propertyAreas, finding, review);
+        if (!mapping.proposedAreaId || !mapping.proposedCanonicalAreaDefinitionId || !mapping.proposedCanonicalComponentDefinitionId) {
+          throw new ApiError(400, 'CANONICAL_REVIEW_MAPPING_REQUIRED', `Accepted historical finding ${finding.id} must reference a current Property Area and canonical Component identity.`);
+        }
         return {
           ...finding,
+          ...mapping,
           decision,
-          ...(proposedAreaId ? { proposedAreaId } : {}),
-          ...(proposedComponentId ? { proposedComponentId } : {}),
           ...(typeof review.reviewerNote === 'string' && review.reviewerNote.trim() ? { reviewerNote: review.reviewerNote.trim().slice(0, 1_000) } : {}),
         };
       });
@@ -335,6 +396,11 @@ export async function routePropertyIntelligenceRequest(
         status: analysisStatus,
         acceptedCount: reviewedFindings.filter((finding) => finding.decision === 'confirmed' || finding.decision === 'edited').length,
         rejectedCount: reviewedFindings.filter((finding) => finding.decision === 'rejected').length,
+        canonicalAcceptedCount: reviewedFindings.filter((finding) =>
+          (finding.decision === 'confirmed' || finding.decision === 'edited') &&
+          finding.proposedCanonicalAreaDefinitionId &&
+          finding.proposedCanonicalComponentDefinitionId,
+        ).length,
       });
       return { status: 200, body: { data: updatedAnalysis, meta: { correlationId } } };
     }
@@ -344,10 +410,7 @@ export async function routePropertyIntelligenceRequest(
     if (req.method === 'GET' && parts.length === 5) {
       await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId, propertyId }, correlationId);
       const page = await dependencies.repository.list('propertyFloorPlans', agencyId, 100);
-      return {
-        status: 200,
-        body: { data: page.items.filter((item) => item.propertyId === propertyId), meta: { correlationId } },
-      };
+      return { status: 200, body: { data: page.items.filter((item) => item.propertyId === propertyId), meta: { correlationId } } };
     }
 
     if (req.method === 'POST' && parts.length === 5) {
@@ -359,8 +422,7 @@ export async function routePropertyIntelligenceRequest(
       if (!['floor_plan', 'building_plan'].includes(document.type) || !document.contentType.startsWith('image/')) {
         throw new ApiError(422, 'INTERACTIVE_FLOOR_PLAN_IMAGE_REQUIRED', 'Interactive floor plans require an uploaded floor/building plan image. PDF plans remain available as documents but cannot receive graphical hotspots.');
       }
-      const validAreaIds = new Set(rooms(property).map((area) => area.id));
-      const hotspots = body.hotspots === undefined ? [] : floorPlanHotspots(body.hotspots, validAreaIds);
+      const hotspots = body.hotspots === undefined ? [] : floorPlanHotspots(body.hotspots, rooms(property));
       const mapId = randomUUID();
       const stored = await dependencies.repository.create('propertyFloorPlans', agencyId, mapId, {
         propertyId,
@@ -380,9 +442,8 @@ export async function routePropertyIntelligenceRequest(
       const principal = await authenticateAndAuthorise(req, dependencies, 'property.manage', { agencyId, propertyId }, correlationId);
       const map = await dependencies.repository.get('propertyFloorPlans', agencyId, mapId);
       if (!map || map.propertyId !== propertyId) throw new ApiError(404, 'FLOOR_PLAN_NOT_FOUND', 'Interactive floor plan was not found.');
-      const validAreaIds = new Set(rooms(property).map((area) => area.id));
       const update: Record<string, unknown> = {};
-      if (body.hotspots !== undefined) update.hotspots = floorPlanHotspots(body.hotspots, validAreaIds);
+      if (body.hotspots !== undefined) update.hotspots = floorPlanHotspots(body.hotspots, rooms(property));
       if (typeof body.title === 'string' && body.title.trim()) update.title = body.title.trim().slice(0, 180);
       if (body.status === 'active' || body.status === 'archived') update.status = body.status;
       const stored = await dependencies.repository.update(

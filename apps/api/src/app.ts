@@ -13,6 +13,7 @@ import { routeShopifyIntegrationRequest } from './backend/shopifyIntegrationRout
 import { routeGoogleCalendarIntegrationRequest } from './backend/googleCalendarIntegrationRoutes.js';
 import { routeXeroIntegrationRequest } from './backend/xeroIntegrationRoutes.js';
 import { routePriceBookUploadRequest } from './backend/priceBookUploadRoutes.js';
+import { routeCanonicalMaintenancePricingRequest } from './backend/canonicalMaintenancePricingRoutes.js';
 import { routeMaintenanceCommercialRequest } from './backend/maintenanceCommercialRoutes.js';
 import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanceCandidateCommercialRoutes.js';
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
@@ -29,6 +30,8 @@ import { routeTenantAutomationRequest } from './backend/tenantAutomationRoutes.j
 import { routeTenantOperationsRequest } from './backend/tenantOperationsRoutes.js';
 import { routePropertyIntelligenceRequest } from './backend/propertyIntelligenceRoutes.js';
 import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.js';
+import { routePropertyHistoryRequest } from './backend/propertyHistoryRoutes.js';
+import { routeCatalogueRequest } from './backend/catalogueRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
@@ -114,6 +117,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const inspectionOperationsResponse = await routeInspectionOperationsRequest(req, dependencies, correlationId); if (inspectionOperationsResponse) { send(res, inspectionOperationsResponse, correlationId); return; }
       const propertyIntelligenceResponse = await routePropertyIntelligenceRequest(req, dependencies, correlationId); if (propertyIntelligenceResponse) { send(res, propertyIntelligenceResponse, correlationId); return; }
       const propertyDocumentResponse = await routePropertyDocumentRequest(req, dependencies, correlationId); if (propertyDocumentResponse) { send(res, propertyDocumentResponse, correlationId); return; }
+      const propertyHistoryResponse = await routePropertyHistoryRequest(req, dependencies, correlationId); if (propertyHistoryResponse) { send(res, propertyHistoryResponse, correlationId); return; }
       const inspectionReportResponse = await routeInspectionReportRequest(req, dependencies, correlationId); if (inspectionReportResponse) { send(res, inspectionReportResponse, correlationId); return; }
 
       const specialReportRoute = reportRoute(req.url);
@@ -125,6 +129,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
 
       const analysisResponse = await routeAnalysisRequest(req, dependencies, correlationId); if (analysisResponse) { send(res, analysisResponse, correlationId); return; }
       const priceBookUploadResponse = await routePriceBookUploadRequest(req, dependencies, correlationId); if (priceBookUploadResponse) { send(res, priceBookUploadResponse, correlationId); return; }
+      const canonicalMaintenancePricingResponse = await routeCanonicalMaintenancePricingRequest(req, dependencies, correlationId); if (canonicalMaintenancePricingResponse) { send(res, canonicalMaintenancePricingResponse, correlationId); return; }
       const maintenanceCommercialResponse = await routeMaintenanceCommercialRequest(req, dependencies, correlationId); if (maintenanceCommercialResponse) { send(res, maintenanceCommercialResponse, correlationId); return; }
       const maintenanceCandidateResponse = await routeMaintenanceCandidateCommercialRequest(req, dependencies, correlationId); if (maintenanceCandidateResponse) { send(res, maintenanceCandidateResponse, correlationId); return; }
       const maintenanceCreateResponse = await routeMaintenanceCreateRequest(req, dependencies, correlationId); if (maintenanceCreateResponse) { send(res, maintenanceCreateResponse, correlationId); return; }
@@ -138,6 +143,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const tenantPortalResponse = await routeTenantPortalRequest(req, dependencies, correlationId); if (tenantPortalResponse) { send(res, tenantPortalResponse, correlationId); return; }
       const tenantGrantResponse = await routeTenantInstructionGrantRequest(req, dependencies, correlationId); if (tenantGrantResponse) { send(res, tenantGrantResponse, correlationId); return; }
       const maintenanceResponse = await routeMaintenanceRequest(req, dependencies, correlationId); if (maintenanceResponse) { send(res, maintenanceResponse, correlationId); return; }
+      const catalogueResponse = await routeCatalogueRequest(req, dependencies, correlationId); if (catalogueResponse) { send(res, catalogueResponse, correlationId); return; }
       const templateResponse = await routeTemplateRequest(req, dependencies, correlationId); if (templateResponse) { send(res, templateResponse, correlationId); return; }
       const routed = await routeApiRequest(req, res, dependencies, correlationId); if (routed) { send(res, routed, correlationId); return; }
 

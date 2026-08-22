@@ -1,11 +1,14 @@
 import './inspectionJobAugmentation.js';
 import './inspectionRequestAugmentation.js';
 import './maintenanceCommercial.js';
+import './maintenanceCanonicalAugmentation.js';
 import './reportOperations.js';
 import './reportMetadataAugmentation.js';
 import './clientAugmentation.js';
+import './propertyCatalogueAugmentation.js';
 
 export * from './platform.js';
+export * from './propertyCatalogueAugmentation.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
 export * from './clientManagement.js';
@@ -19,9 +22,12 @@ export * from './workflow.js';
 export * from './comparisonEngine.js';
 export * from './maintenance.js';
 export * from './maintenanceCommercial.js';
+export * from './maintenanceCanonicalAugmentation.js';
+export * from './canonicalMaintenancePricing.js';
 export * from './maintenanceWorkflow.js';
 export * from './inspectionPolicy.js';
 export * from './legacyBaseline.js';
+export * from './canonicalIdentity.js';
 
 export type InspectionType = 'entry' | 'routine' | 'exit' | 'comparison' | 'maintenance';
 

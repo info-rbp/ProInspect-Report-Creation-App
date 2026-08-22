@@ -99,7 +99,7 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
   };
 
   const handleRegenerateComponentComment = async (item: InspectionItem) => {
-    const comment = await generateComponentCommentary(area.name, item, area.photos, previousReportNotes);
+    const comment = await generateComponentCommentary(area, item, area.photos, previousReportNotes);
     if (comment) handleUpdateComponent(item.id, { comment });
   };
 
@@ -118,7 +118,6 @@ export const AreaWorkspace: React.FC<AreaWorkspaceProps> = ({
           ...item,
           conditionCategory: item.conditionCategory === 'unable_to_confirm' ? 'intact' : item.conditionCategory,
           cleanlinessCategory: item.cleanlinessCategory === 'unable_to_confirm' ? 'clean' : item.cleanlinessCategory,
-          // Deliberately preserve workingStatus and testStatus. An overview photograph is not an operational test.
         };
       }),
     });

@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AuthorisationTarget, ReportAggregate, ReportLifecycleStatus } from '@pcr/domain';
 import { reportAggregateSchema, workflowTransitionSchema } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
-import { extractMaintenanceForReport } from '../services/maintenanceCommercialService.js';
+import { extractCanonicalMaintenanceForReport } from '../services/canonicalMaintenanceExtractionService.js';
 import { createArchiveArtifact } from './archiveArtifactService.js';
 import type { ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult } from './types.js';
@@ -106,11 +106,12 @@ async function attemptMaintenanceExtraction(
   const existing = await dependencies.repository.get('maintenanceExtractionJobs', input.agencyId, jobId);
   const now = new Date().toISOString();
   try {
-    const result = await extractMaintenanceForReport(dependencies, input);
+    const result = await extractCanonicalMaintenanceForReport(dependencies, input);
     const data = {
       reportId: input.reportId,
       reportVersionId: result.sourceVersionId,
       status: 'complete',
+      identityMode: 'canonical_first',
       createdCount: result.created.length,
       existingCount: result.existing,
       completedAt: now,
@@ -140,6 +141,7 @@ async function attemptMaintenanceExtraction(
     const data = {
       reportId: input.reportId,
       status: 'failed',
+      identityMode: 'canonical_first',
       errorCode:
         error && typeof error === 'object' && 'code' in error
           ? String((error as { code?: unknown }).code || 'MAINTENANCE_EXTRACTION_FAILED')

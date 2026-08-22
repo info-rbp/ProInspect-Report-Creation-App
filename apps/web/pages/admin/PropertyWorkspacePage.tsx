@@ -50,6 +50,8 @@ import {
   hierarchyFromRooms,
 } from '../../services/platform/propertyLayoutService';
 import PropertyHistoryPanel from '../../components/properties/PropertyHistoryPanel';
+import PropertyLayoutEditor from '../../components/properties/PropertyLayoutEditor';
+import PropertyAssetsPanel from '../../components/properties/PropertyAssetsPanel';
 
 const TABS = [
   ['overview', 'Overview'],
@@ -211,8 +213,8 @@ const PropertyWorkspacePage: React.FC = () => {
     <nav className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">{TABS.map(([id, name]) => <button key={id} onClick={() => setTab(id)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${tab === id ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{name}</button>)}</nav>
 
     {tab === 'overview' && <OverviewTab property={property} jobs={jobs} reports={reports} maintenance={maintenance} isStrata={isStrata} onSave={savePatch} busy={busy} />}
-    {tab === 'layout' && <LayoutTab property={property} portfolio={portfolio} onSave={savePatch} busy={busy} />}
-    {tab === 'assets' && <AssetsTab property={property} onSave={savePatch} busy={busy} />}
+    {tab === 'layout' && <PropertyLayoutEditor property={property} portfolio={portfolio} onSave={savePatch} busy={busy} />}
+    {tab === 'assets' && <PropertyAssetsPanel property={property} onSave={savePatch} busy={busy} />}
     {tab === 'access' && <AccessTab property={property} onSave={savePatch} busy={busy} />}
     {tab === 'people' && <PeopleTab property={property} tenancies={tenancies} onSave={savePatch} onReload={load} busy={busy} />}
     {tab === 'documents' && <DocumentsTab property={property} onReload={load} onSave={savePatch} busy={busy} />}

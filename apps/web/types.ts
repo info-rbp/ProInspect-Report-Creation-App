@@ -14,6 +14,7 @@ import type {
   ReportPhotoReference,
   ReportTestRecord,
   ReportAiSuggestion,
+  ReportComponentRequirementSnapshot,
 } from '@pcr/domain';
 import type { ReportLifecycleStatus } from './types/platform';
 
@@ -36,8 +37,14 @@ export interface PreviousReportAttachment {
 }
 
 export interface InspectionItem {
+  /** Property-owned Component instance identity. */
   id: string;
   name: string;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
+  canonicalAreaComponentRuleId?: string;
+  canonicalAreaComponentRuleVersion?: number;
+  requirementSnapshot?: ReportComponentRequirementSnapshot;
   subComponent?: string;
   material?: string;
   colour?: string;
@@ -82,8 +89,12 @@ export interface InspectionItem {
 export type RoomStatus = 'draft' | 'photos_uploaded' | 'analyzed' | 'complete';
 
 export interface Room {
+  /** Property-owned Area instance identity. */
   id: string;
   name: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
+  templateAreaReferenceId?: string;
   status: RoomStatus;
   items: InspectionItem[];
   photos: Photo[];
@@ -99,6 +110,10 @@ export interface ReportData {
   inspectionJobId?: string;
   /** Exact property layout snapshot used to seed this inspection. */
   propertyLayoutVersionId?: string;
+  structureResolutionVersion?: number;
+  templateStructureMode?: 'property_layout_catalogue';
+  canonicalCatalogueId?: string;
+  canonicalCatalogueVersion?: number;
   lifecycleStatus?: ReportLifecycleStatus;
   currentVersionId?: string;
   templateId?: string;

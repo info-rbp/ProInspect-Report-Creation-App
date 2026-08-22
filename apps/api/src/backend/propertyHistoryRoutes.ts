@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { canonicalComponentOccurrenceIdentity, canonicalSemanticComponentIdentity } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -19,8 +20,12 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function numberValue(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  return optionalNumber(value) ?? 0;
 }
 
 function stringArray(value: unknown): string[] {
@@ -41,8 +46,14 @@ interface ComponentHistoryPoint {
   lifecycleStatus: string;
   areaId: string;
   areaName: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
   componentId: string;
   componentName: string;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
+  canonicalAreaComponentRuleId?: string;
+  canonicalAreaComponentRuleVersion?: number;
   conditionCategory: string;
   cleanlinessCategory: string;
   workingStatus: string;
@@ -55,11 +66,35 @@ interface ComponentHistoryPoint {
 
 interface ComponentHistoryGroup {
   stableKey: string;
+  identityMode: 'canonical_occurrence' | 'canonical_semantic' | 'legacy_instance';
   areaId: string;
   areaName: string;
+  canonicalAreaDefinitionId?: string;
   componentId: string;
   componentName: string;
+  canonicalComponentDefinitionId?: string;
   observations: ComponentHistoryPoint[];
+}
+
+function stableComponentKey(input: {
+  areaId: string;
+  canonicalAreaDefinitionId?: string;
+  componentId: string;
+  canonicalComponentDefinitionId?: string;
+}): { key: string; mode: ComponentHistoryGroup['identityMode'] } {
+  const occurrence = canonicalComponentOccurrenceIdentity({
+    id: input.areaId,
+    canonicalAreaDefinitionId: input.canonicalAreaDefinitionId,
+  }, {
+    id: input.componentId,
+    canonicalComponentDefinitionId: input.canonicalComponentDefinitionId,
+  });
+  if (occurrence && input.canonicalComponentDefinitionId) return { key: occurrence, mode: 'canonical_occurrence' };
+  const semantic = canonicalSemanticComponentIdentity({ canonicalAreaDefinitionId: input.canonicalAreaDefinitionId }, {
+    canonicalComponentDefinitionId: input.canonicalComponentDefinitionId,
+  });
+  if (semantic) return { key: semantic, mode: 'canonical_semantic' };
+  return { key: `legacy:${input.areaId}::${input.componentId}`, mode: 'legacy_instance' };
 }
 
 export async function routePropertyHistoryRequest(
@@ -102,6 +137,10 @@ export async function routePropertyHistoryRequest(
       currentVersionId: text(report.currentVersionId),
       templateId: text(report.templateId),
       templateVersion: numberValue(report.templateVersion),
+      propertyLayoutVersionId: text(report.propertyLayoutVersionId),
+      structureResolutionVersion: optionalNumber(report.structureResolutionVersion),
+      canonicalCatalogueId: text(report.canonicalCatalogueId),
+      canonicalCatalogueVersion: optionalNumber(report.canonicalCatalogueVersion),
       immutableVersionCount: immutableVersions.length,
       sourceMaintenanceItemIds: stringArray(report.sourceMaintenanceItemIds),
     });
@@ -110,15 +149,32 @@ export async function routePropertyHistoryRequest(
       const versionId = versionDocument.id;
       const areaSnapshot = await versionDocument.ref.collection('areas').get();
       for (const areaDocument of areaSnapshot.docs) {
-        const areaId = areaDocument.id;
-        const areaName = text(areaDocument.get('name')) || areaId;
+        const area = areaDocument.data() as Record<string, unknown>;
+        const areaId = text(area.id) || areaDocument.id;
+        const areaName = text(area.name) || areaId;
+        const canonicalAreaDefinitionId = text(area.canonicalAreaDefinitionId) || undefined;
+        const canonicalAreaDefinitionVersion = optionalNumber(area.canonicalAreaDefinitionVersion);
         const componentSnapshot = await areaDocument.ref.collection('components').get();
         for (const componentDocument of componentSnapshot.docs) {
           const component = componentDocument.data() as Record<string, unknown>;
-          const componentId = componentDocument.id;
+          const componentId = text(component.id) || componentDocument.id;
           const componentName = text(component.component) || componentId;
-          const stableKey = `${areaId}::${componentId}`;
-          const group = componentMap.get(stableKey) ?? { stableKey, areaId, areaName, componentId, componentName, observations: [] };
+          const canonicalComponentDefinitionId = text(component.canonicalComponentDefinitionId) || undefined;
+          const canonicalComponentDefinitionVersion = optionalNumber(component.canonicalComponentDefinitionVersion);
+          const canonicalAreaComponentRuleId = text(component.canonicalAreaComponentRuleId) || undefined;
+          const canonicalAreaComponentRuleVersion = optionalNumber(component.canonicalAreaComponentRuleVersion);
+          const identity = stableComponentKey({ areaId, canonicalAreaDefinitionId, componentId, canonicalComponentDefinitionId });
+          const group = componentMap.get(identity.key) ?? {
+            stableKey: identity.key,
+            identityMode: identity.mode,
+            areaId,
+            areaName,
+            ...(canonicalAreaDefinitionId ? { canonicalAreaDefinitionId } : {}),
+            componentId,
+            componentName,
+            ...(canonicalComponentDefinitionId ? { canonicalComponentDefinitionId } : {}),
+            observations: [],
+          };
           group.areaName = areaName;
           group.componentName = componentName;
           group.observations.push({
@@ -129,8 +185,14 @@ export async function routePropertyHistoryRequest(
             lifecycleStatus: text(versionDocument.get('lifecycleStatus') ?? report.lifecycleStatus),
             areaId,
             areaName,
+            ...(canonicalAreaDefinitionId ? { canonicalAreaDefinitionId } : {}),
+            ...(canonicalAreaDefinitionVersion ? { canonicalAreaDefinitionVersion } : {}),
             componentId,
             componentName,
+            ...(canonicalComponentDefinitionId ? { canonicalComponentDefinitionId } : {}),
+            ...(canonicalComponentDefinitionVersion ? { canonicalComponentDefinitionVersion } : {}),
+            ...(canonicalAreaComponentRuleId ? { canonicalAreaComponentRuleId } : {}),
+            ...(canonicalAreaComponentRuleVersion ? { canonicalAreaComponentRuleVersion } : {}),
             conditionCategory: text(component.conditionCategory),
             cleanlinessCategory: text(component.cleanlinessCategory),
             workingStatus: text(component.workingStatus),
@@ -140,7 +202,7 @@ export async function routePropertyHistoryRequest(
             evidencePhotoIds: photoIds(component.photoReferences),
             ...(text(versionDocument.get('createdAt')) ? { versionCreatedAt: text(versionDocument.get('createdAt')) } : {}),
           });
-          componentMap.set(stableKey, group);
+          componentMap.set(identity.key, group);
         }
       }
     }
@@ -159,6 +221,10 @@ export async function routePropertyHistoryRequest(
       sourceReportVersionId: text(item.sourceReportVersionId),
       sourceAreaId: text(item.sourceAreaId),
       sourceComponentId: text(item.sourceComponentId),
+      sourceCanonicalAreaDefinitionId: text(item.sourceCanonicalAreaDefinitionId),
+      sourceCanonicalAreaDefinitionVersion: optionalNumber(item.sourceCanonicalAreaDefinitionVersion),
+      sourceCanonicalComponentDefinitionId: text(item.sourceCanonicalComponentDefinitionId),
+      sourceCanonicalComponentDefinitionVersion: optionalNumber(item.sourceCanonicalComponentDefinitionVersion),
       sourceEvidenceIds: stringArray(item.sourceEvidenceIds),
       completionEvidenceIds: stringArray(item.completionEvidenceIds),
       createdAt: text(item.createdAt),
@@ -171,14 +237,28 @@ export async function routePropertyHistoryRequest(
     .map((group) => ({
       ...group,
       observations: group.observations.sort((left, right) => text(left.inspectionDate ?? left.versionCreatedAt).localeCompare(text(right.inspectionDate ?? right.versionCreatedAt))),
-      maintenance: maintenance.filter((item) => item.sourceAreaId === group.areaId && item.sourceComponentId === group.componentId),
+      maintenance: maintenance.filter((item) => {
+        if (group.canonicalAreaDefinitionId && group.canonicalComponentDefinitionId && item.sourceCanonicalAreaDefinitionId && item.sourceCanonicalComponentDefinitionId) {
+          if (item.sourceCanonicalAreaDefinitionId !== group.canonicalAreaDefinitionId || item.sourceCanonicalComponentDefinitionId !== group.canonicalComponentDefinitionId) return false;
+          return !item.sourceAreaId || item.sourceAreaId === group.areaId;
+        }
+        return item.sourceAreaId === group.areaId && item.sourceComponentId === group.componentId;
+      }),
     }))
     .sort((left, right) => left.areaName.localeCompare(right.areaName) || left.componentName.localeCompare(right.componentName));
 
   return {
     status: 200,
     body: {
-      data: { propertyId, propertyAddress: text(property.address), inspections, components, maintenance, generatedAt: new Date().toISOString() },
+      data: {
+        propertyId,
+        propertyAddress: text(property.address),
+        inspections,
+        components,
+        maintenance,
+        identityMode: 'canonical_first',
+        generatedAt: new Date().toISOString(),
+      },
       meta: { correlationId },
     },
   };

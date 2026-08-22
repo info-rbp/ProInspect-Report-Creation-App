@@ -3,64 +3,10 @@ import type {
   LegacyBaselineSource,
   ReportAggregate,
 } from '@pcr/domain';
-import type { ReportData, Room } from '../../types';
+import type { ReportData } from '../../types';
 import type { InspectionJob, PropertyRecord } from '../../types/platform';
 import { apiRequest } from '../apiClient';
 import { snapshotReportClientContext } from './clientManagementService';
-import { seedRoomsFromProperty } from './propertySeedingService';
-
-function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
-  return rooms.map((room, index) => ({
-    id: room.id,
-    name: room.name,
-    sequence: index + 1,
-    overallCommentary: room.overallComment || '',
-    photoReferences: (room.photos || []).flatMap((photo, photoIndex) => {
-      const objectPath = photo.objectPath || photo.downloadUrl;
-      if (!objectPath) return [];
-      return [{ photoId: photo.id, objectPath, ...(photo.thumbnailObjectPath ? { thumbnailObjectPath: photo.thumbnailObjectPath } : {}), sequence: photoIndex + 1 }];
-    }),
-    components: room.items.map((item) => ({
-      id: item.id,
-      component: item.name,
-      ...(item.subComponent ? { subComponent: item.subComponent } : {}),
-      ...(item.material ? { material: item.material } : {}),
-      ...(item.colour ? { colour: item.colour } : {}),
-      ...(item.type ? { type: item.type } : {}),
-      ...(typeof item.quantity === 'number' ? { quantity: item.quantity } : {}),
-      conditionCategory: item.conditionCategory,
-      cleanlinessCategory: item.cleanlinessCategory,
-      workingStatus: item.workingStatus,
-      testStatus: item.testStatus,
-      ...(item.testRecord ? { testRecord: item.testRecord } : {}),
-      defects: item.defects || [],
-      maintenanceRequired: item.maintenanceRequired,
-      commentary: item.comment || '',
-      photoReferences: item.photoReferences || [],
-      ...(typeof item.aiConfidence === 'number' ? { aiConfidence: item.aiConfidence } : {}),
-      ...(item.aiSuggestion ? { aiSuggestion: item.aiSuggestion } : {}),
-      ...(item.authoritativeSource ? { authoritativeSource: item.authoritativeSource } : {}),
-      ...(item.lastReviewedBy ? { lastReviewedBy: item.lastReviewedBy } : {}),
-      ...(item.lastReviewedAt ? { lastReviewedAt: item.lastReviewedAt } : {}),
-      reviewStatus: item.reviewStatus || 'draft',
-      comparisonStatus: item.comparisonStatus || 'not_compared',
-      ...(item.presenceComparison ? { presenceComparison: item.presenceComparison } : {}),
-      ...(item.conditionComparison ? { conditionComparison: item.conditionComparison } : {}),
-      ...(item.cleanlinessComparison ? { cleanlinessComparison: item.cleanlinessComparison } : {}),
-      ...(item.workingComparison ? { workingComparison: item.workingComparison } : {}),
-      ...(item.comparisonCommentary ? { comparisonCommentary: item.comparisonCommentary } : {}),
-      ...(item.baselineComponentId ? { baselineComponentId: item.baselineComponentId } : {}),
-      ...(item.baselineComponentData ? { baselineComponentData: item.baselineComponentData } : {}),
-      ...(item.baselineEvidencePhotoIds ? { baselineEvidencePhotoIds: item.baselineEvidencePhotoIds } : {}),
-      ...(item.currentEvidencePhotoIds ? { currentEvidencePhotoIds: item.currentEvidencePhotoIds } : {}),
-      ...(item.evidencePairs ? { evidencePairs: item.evidencePairs } : {}),
-      ...(typeof item.comparisonConfidence === 'number' ? { comparisonConfidence: item.comparisonConfidence } : {}),
-      ...(item.comparisonUncertainty ? { comparisonUncertainty: item.comparisonUncertainty } : {}),
-      ...(item.comparisonReviewStatus ? { comparisonReviewStatus: item.comparisonReviewStatus } : {}),
-      ...(item.comparisonMethod ? { comparisonMethod: item.comparisonMethod } : {}),
-    })),
-  }));
-}
 
 export async function createInspectionReportForJob(
   job: InspectionJob,
@@ -68,7 +14,6 @@ export async function createInspectionReportForJob(
   options: { clientName?: string; inspectionDate?: string; allowLegacyBaseline?: boolean } = {},
 ): Promise<ReportAggregate> {
   if (!job.version) throw new Error('Inspection job version is required. Reload the job before creating its report.');
-  const rooms = seedRoomsFromProperty(property);
   const aggregate = await apiRequest<ReportAggregate>(job.agencyId, `/api/v1/inspection-jobs/${encodeURIComponent(job.id)}/create-report`, {
     method: 'POST',
     body: {
@@ -77,7 +22,6 @@ export async function createInspectionReportForJob(
       clientName: options.clientName || job.clientSnapshot?.clientName || '',
       inspectionDate: options.inspectionDate || new Date().toISOString().slice(0, 10),
       ...(options.allowLegacyBaseline ? { allowLegacyBaseline: true } : {}),
-      areas: roomAreas(rooms),
     },
   });
   if (!job.clientSnapshot && !property.clientIds.length) return aggregate;
@@ -109,6 +53,10 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
     tenancyId: aggregate.report.tenancyId,
     inspectionJobId: aggregate.report.inspectionJobId,
     propertyLayoutVersionId: aggregate.report.propertyLayoutVersionId,
+    structureResolutionVersion: aggregate.report.structureResolutionVersion,
+    templateStructureMode: aggregate.report.templateStructureMode,
+    canonicalCatalogueId: aggregate.report.canonicalCatalogueId,
+    canonicalCatalogueVersion: aggregate.report.canonicalCatalogueVersion,
     lifecycleStatus: aggregate.report.lifecycleStatus,
     currentVersionId: aggregate.report.currentVersionId,
     templateId: aggregate.report.templateId,
@@ -129,6 +77,9 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
     rooms: aggregate.areas.map((area) => ({
       id: area.id,
       name: area.name,
+      canonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+      canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
+      templateAreaReferenceId: area.templateAreaReferenceId,
       status: area.components.every((component) => component.reviewStatus === 'reviewer_approved') ? 'complete' : 'draft',
       overallComment: area.overallCommentary || '',
       isExpanded: true,
@@ -136,6 +87,11 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
       items: area.components.map((component) => ({
         id: component.id,
         name: component.component,
+        canonicalComponentDefinitionId: component.canonicalComponentDefinitionId,
+        canonicalComponentDefinitionVersion: component.canonicalComponentDefinitionVersion,
+        canonicalAreaComponentRuleId: component.canonicalAreaComponentRuleId,
+        canonicalAreaComponentRuleVersion: component.canonicalAreaComponentRuleVersion,
+        requirementSnapshot: component.requirementSnapshot,
         subComponent: component.subComponent,
         material: component.material,
         colour: component.colour,

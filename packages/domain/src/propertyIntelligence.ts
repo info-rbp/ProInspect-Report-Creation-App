@@ -9,8 +9,14 @@ export interface HistoricalExtractedFinding {
   sourceCleanliness?: string;
   sourceWorkingStatus?: string;
   sourcePage?: number;
+  /** Property-owned Area instance when a current occurrence can be identified. */
   proposedAreaId?: string;
+  /** Legacy compatibility field. New extraction uses canonical Component definition identity. */
   proposedComponentId?: string;
+  proposedCanonicalAreaDefinitionId?: string;
+  proposedCanonicalAreaDefinitionVersion?: number;
+  proposedCanonicalComponentDefinitionId?: string;
+  proposedCanonicalComponentDefinitionVersion?: number;
   confidence: number;
   uncertainty?: string;
   decision: HistoricalMappingDecision;
@@ -41,6 +47,8 @@ export interface PropertyFloorPlanHotspot {
   id: string;
   areaId: string;
   areaName: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
   x: number;
   y: number;
   width: number;
