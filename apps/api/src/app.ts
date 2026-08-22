@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AuthorisationTarget, DomainErrorShape, SecurityCapability } from '@pcr/domain';
 import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js';
+import { routeClientManagementRequest } from './backend/clientManagementRoutes.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeReportOperationsRequest } from './backend/reportOperationsRoutes.js';
 import { routeReportLifecycleActionRequest } from './backend/reportLifecycleActionRoutes.js';
@@ -75,6 +76,15 @@ function reportRoute(urlValue: string | undefined): { reportId?: string; command
   return { ...(parts[3] ? { reportId: parts[3] } : {}), ...(parts[4] ? { command: parts[4] } : {}) };
 }
 
+function isClientManagementRoute(urlValue: string | undefined): boolean {
+  const path = new URL(urlValue ?? '/', 'http://localhost').pathname;
+  return (
+    path.startsWith('/api/v1/client-management/') ||
+    /^\/api\/v1\/clients\/[^/]+\/documents(?:\/|$)/u.test(path) ||
+    /^\/api\/v1\/maintenance-quotes\/[^/]+\/actions\/send$/u.test(path)
+  );
+}
+
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID();
@@ -89,6 +99,11 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         const body = await readJson(req); const capability = body.capability as SecurityCapability; const target = body.target as AuthorisationTarget;
         const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId);
         send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return;
+      }
+
+      if (isClientManagementRoute(req.url)) {
+        const clientManagementResponse = await routeClientManagementRequest(req, dependencies, correlationId);
+        if (clientManagementResponse) { send(res, clientManagementResponse, correlationId); return; }
       }
 
       const reportOperationsResponse = await routeReportOperationsRequest(req, dependencies, correlationId); if (reportOperationsResponse) { send(res, reportOperationsResponse, correlationId); return; }

@@ -5,6 +5,10 @@ function target(body: Record<string, unknown>, id?: string): AuthorisationTarget
   const agencyId = typeof body.agencyId === 'string' ? body.agencyId : '';
   return {
     agencyId,
+    ...(typeof body.clientAccountId === 'string' ? { clientAccountId: body.clientAccountId } : {}),
+    ...(typeof body.clientId === 'string' ? { clientAccountId: body.clientId } : {}),
+    ...(typeof body.clientContactId === 'string' ? { clientContactId: body.clientContactId } : {}),
+    ...(typeof body.contactId === 'string' ? { clientContactId: body.contactId } : {}),
     ...(typeof body.tenantId === 'string' ? { tenantId: body.tenantId } : {}),
     ...(typeof body.propertyId === 'string' ? { propertyId: body.propertyId } : {}),
     ...(typeof body.tenancyId === 'string' ? { tenancyId: body.tenancyId } : {}),
@@ -18,7 +22,7 @@ function target(body: Record<string, unknown>, id?: string): AuthorisationTarget
     ...(typeof body.assignedAnalystId === 'string' ? { assignedAnalystId: body.assignedAnalystId } : {}),
     ...(typeof body.assignedReviewerId === 'string' ? { assignedReviewerId: body.assignedReviewerId } : {}),
     ...(typeof body.lifecycleStatus === 'string' ? { lifecycleStatus: body.lifecycleStatus } : {}),
-    ...(!body.reportId && id ? { reportId: id } : {}),
+    ...(!body.reportId && id && !body.clientAccountId && !body.clientId ? { reportId: id } : {}),
   };
 }
 
@@ -26,7 +30,13 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   agencies: { collection: 'agencies', readCapability: 'agency.read', writeCapability: 'agency.manage', target },
   users: { collection: 'users', readCapability: 'agency.read', writeCapability: 'user.suspend', target },
   invitations: { collection: 'invitations', readCapability: 'agency.read', writeCapability: 'user.invite', target },
-  clients: { collection: 'clients', readCapability: 'property.read', writeCapability: 'property.manage', target },
+  clients: { collection: 'clients', readCapability: 'client.read', writeCapability: 'client.manage', target },
+  'client-contacts': { collection: 'clientContacts', readCapability: 'client.read', writeCapability: 'client.contact.manage', target },
+  'client-engagements': { collection: 'clientEngagements', readCapability: 'client.read', writeCapability: 'client.engagement.manage', target },
+  'property-client-relationships': { collection: 'propertyClientRelationships', readCapability: 'client.read', writeCapability: 'client.relationship.manage', target },
+  'client-documents': { collection: 'clientDocuments', readCapability: 'client.read', writeCapability: 'client.document.manage', target },
+  'client-portal-users': { collection: 'clientPortalUsers', readCapability: 'client.read', writeCapability: 'client.portal.manage', target },
+  'client-timeline-events': { collection: 'clientTimelineEvents', readCapability: 'client.read', target },
   properties: { collection: 'properties', readCapability: 'property.read', writeCapability: 'property.manage', target },
   tenants: { collection: 'tenants', readCapability: 'tenant.read', writeCapability: 'tenant.manage', target },
   tenancies: { collection: 'tenancies', readCapability: 'tenancy.read', writeCapability: 'tenancy.manage', target },
