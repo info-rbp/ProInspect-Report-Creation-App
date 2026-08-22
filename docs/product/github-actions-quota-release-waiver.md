@@ -22,6 +22,18 @@ The following controls replace the unavailable hosted Actions gate for this exce
 6. `infrastructure/cloud-build/release.yaml` and `bash scripts/google-cloud-release.sh PROJECT_ID RELEASE_ID` provide an image-only release path that preserves Terraform-owned Cloud Run IAM, secrets, networking and schedulers.
 7. Production rollout remains blocked until development and staging acceptance evidence is captured.
 
+## Static review findings corrected before merge
+
+The quota-period review found and corrected issues that would otherwise have escaped behind the unavailable hosted runners:
+
+- PDF branding identity was pinned but the physical logo was not loaded/rendered. Final PDF generation now fetches the exact governed PNG/JPEG generation, verifies SHA-256, records it in render provenance and renders it on the cover.
+- Live dashboard refreshes could repeatedly rescan operational collections. A short identity-scoped cache now bounds repeated scans while re-authorising every cache hit so suspension, App Check and membership changes remain authoritative.
+- New runtime services lacked a usable non-Actions image promotion path. Notification/dashboard Dockerfiles and an image-only Cloud Build release path were added.
+- Existing/new Dockerfiles incorrectly assumed `package-lock.json`/`npm ci`; this repository uses `bun.lock` and the established npm-install CI convention. All deployable Dockerfiles and the Cloud Build validation path were corrected.
+- Firebase App Check was initialized lazily after authentication. A shared singleton now initializes before auth listeners/sign-in and is reused for API tokens, allowing Identity Toolkit enforcement to function.
+- Identity Platform Terraform now disables public user signup/deletion, enables multi-tenancy and enables TOTP MFA capability while application policy continues to require MFA for privileged roles.
+- App Check provider and service enforcement are now Terraform-managed and guarded so ENFORCED mode cannot be selected without the environment-specific reCAPTCHA Enterprise site key.
+
 ## Merge rules under this exception
 
 The PR may be merged without a green GitHub Actions check only because the monthly Actions quota is exhausted and the owner has explicitly authorised this exception. Before merge:
