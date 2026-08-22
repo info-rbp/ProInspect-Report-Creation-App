@@ -1,19 +1,21 @@
 import type { IncomingMessage } from 'node:http';
-import type { DomainErrorShape, SecurityCapability } from '@pcr/domain';
+import type { DomainErrorShape, SecurityCapability, SettingsSection } from '@pcr/domain';
 import { agencyOperationalSettingsSchema, agencyOrganisationSettingsSchema, communicationPolicySchema, maintenancePolicySettingsSchema, type ValidationSchema } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { recordSettingsVersion } from '../services/settingsHistoryService.js';
 import { routeBrandingSettingsRequest } from './brandingSettingsRoutes.js';
 import { routeCommunicationSettingsRequest } from './communicationSettingsRoutes.js';
+import { routeSettingsHistoryRequest } from './settingsHistoryRoutes.js';
 import { routeSettingsOverviewRequest } from './settingsOverviewRoutes.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
 
-type SettingsSection = 'organisation' | 'operational' | 'communications' | 'maintenance';
-const SECTION_CONFIG: Record<SettingsSection, { id: string; readCapability: SecurityCapability; writeCapability: SecurityCapability; schema: ValidationSchema<Record<string, unknown>> }> = {
-  organisation: { id: 'organisation', readCapability: 'settings.read', writeCapability: 'settings.organisation.manage', schema: agencyOrganisationSettingsSchema as unknown as ValidationSchema<Record<string, unknown>> },
-  operational: { id: 'operational', readCapability: 'settings.read', writeCapability: 'settings.operations.manage', schema: agencyOperationalSettingsSchema as unknown as ValidationSchema<Record<string, unknown>> },
-  communications: { id: 'communications', readCapability: 'settings.read', writeCapability: 'settings.communications.manage', schema: communicationPolicySchema as unknown as ValidationSchema<Record<string, unknown>> },
-  maintenance: { id: 'maintenance', readCapability: 'settings.read', writeCapability: 'maintenance.policy.manage', schema: maintenancePolicySettingsSchema as unknown as ValidationSchema<Record<string, unknown>> },
+type FixedSettingsSection = 'organisation' | 'operational' | 'communications' | 'maintenance';
+const SECTION_CONFIG: Record<FixedSettingsSection, { id: string; historySection: SettingsSection; readCapability: SecurityCapability; writeCapability: SecurityCapability; schema: ValidationSchema<Record<string, unknown>> }> = {
+  organisation: { id: 'organisation', historySection: 'organisation', readCapability: 'settings.read', writeCapability: 'settings.organisation.manage', schema: agencyOrganisationSettingsSchema as unknown as ValidationSchema<Record<string, unknown>> },
+  operational: { id: 'operational', historySection: 'inspection', readCapability: 'settings.read', writeCapability: 'settings.operations.manage', schema: agencyOperationalSettingsSchema as unknown as ValidationSchema<Record<string, unknown>> },
+  communications: { id: 'communications', historySection: 'communications', readCapability: 'settings.read', writeCapability: 'settings.communications.manage', schema: communicationPolicySchema as unknown as ValidationSchema<Record<string, unknown>> },
+  maintenance: { id: 'maintenance', historySection: 'maintenance', readCapability: 'settings.read', writeCapability: 'maintenance.policy.manage', schema: maintenancePolicySettingsSchema as unknown as ValidationSchema<Record<string, unknown>> },
 };
 function agencyHeader(req: IncomingMessage): string { const agencyId = req.headers['x-agency-id']?.toString().trim(); if (!agencyId) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); return agencyId; }
 function parts(req: IncomingMessage): string[] { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
@@ -25,8 +27,9 @@ export async function routeSettingsRequest(req: IncomingMessage, dependencies: A
   const route = parts(req); if (route[0] !== 'api' || route[1] !== 'v1' || route[2] !== 'settings') return undefined;
   if (route[3] === 'branding') return routeBrandingSettingsRequest(req, dependencies, correlationId);
   if (route[3] === 'communications' && route[4]) return routeCommunicationSettingsRequest(req, dependencies, correlationId);
+  if (route[3] === 'history') return routeSettingsHistoryRequest(req, dependencies, correlationId);
   if (route[3] === 'overview' || route[3] === 'integrations') return routeSettingsOverviewRequest(req, dependencies, correlationId);
-  const section = route[3] as SettingsSection | undefined;
+  const section = route[3] as FixedSettingsSection | undefined;
   if (!section || !(section in SECTION_CONFIG)) {
     if (route.length === 3 && req.method === 'GET') { const agencyId = agencyHeader(req); const principal = await authenticateAndAuthorise(req, dependencies, 'settings.read', { agencyId }, correlationId); const records = await dependencies.repository.list('agencySettings', agencyId, 20); return { status: 200, body: { data: records.items, meta: { actor: principal.uid, correlationId } } }; }
     return undefined;
@@ -37,7 +40,14 @@ export async function routeSettingsRequest(req: IncomingMessage, dependencies: A
   const body = await readJson(req); const principal = await authenticateAndAuthorise(req, dependencies, config.writeCapability, { agencyId }, correlationId); const suppliedVersion = expectedVersion(body.expectedVersion); const cleanBody = { ...body };
   delete cleanBody.expectedVersion; delete cleanBody.id; delete cleanBody.agencyId; delete cleanBody.version; delete cleanBody.createdAt; delete cleanBody.updatedAt;
   const validated = validate(config.schema.parse(cleanBody)); const current = await dependencies.repository.get('agencySettings', agencyId, config.id);
-  if (current) { if (!suppliedVersion) throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion is required when updating settings.'); const updated = await dependencies.repository.update('agencySettings', agencyId, config.id, validated, suppliedVersion, principal.uid); return { status: 200, body: { data: updated, meta: { actor: principal.uid, correlationId } } }; }
+  if (current) {
+    if (!suppliedVersion) throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion is required when updating settings.');
+    const updated = await dependencies.repository.update('agencySettings', agencyId, config.id, validated, suppliedVersion, principal.uid);
+    await recordSettingsVersion(dependencies, { agencyId, section: config.historySection, collection: 'agencySettings', recordId: config.id, before: current, after: updated, actorId: principal.uid, correlationId, reason: typeof body.changeReason === 'string' ? body.changeReason : undefined });
+    return { status: 200, body: { data: updated, meta: { actor: principal.uid, correlationId } } };
+  }
   if (suppliedVersion) throw new ApiError(409, 'VERSION_CONFLICT', 'Settings do not exist yet; omit expectedVersion to create them.');
-  const created = await dependencies.repository.create('agencySettings', agencyId, config.id, validated, principal.uid); return { status: 201, body: { data: created, meta: { actor: principal.uid, correlationId } } };
+  const created = await dependencies.repository.create('agencySettings', agencyId, config.id, validated, principal.uid);
+  await recordSettingsVersion(dependencies, { agencyId, section: config.historySection, collection: 'agencySettings', recordId: config.id, after: created, actorId: principal.uid, correlationId, reason: typeof body.changeReason === 'string' ? body.changeReason : undefined });
+  return { status: 201, body: { data: created, meta: { actor: principal.uid, correlationId } } };
 }
