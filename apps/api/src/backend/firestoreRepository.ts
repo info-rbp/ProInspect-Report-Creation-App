@@ -28,21 +28,56 @@ function assertReportMetadata(collection: string, data: Record<string, unknown>)
   });
 }
 
+function sameValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function assertTenancyDocumentMutation(collection: string, existing: StoredRecord, data: Record<string, unknown>): void {
+  if (collection !== 'tenancyDocuments' || existing.immutable !== true) return;
+  const authorityFields = [
+    'tenantId',
+    'tenancyId',
+    'propertyId',
+    'type',
+    'title',
+    'content',
+    'contentType',
+    'templateKey',
+    'objectPath',
+    'sha256',
+    'generation',
+    'documentVersion',
+    'issuedAt',
+    'issuedTo',
+    'acknowledgementText',
+    'immutable',
+  ];
+  const changed = authorityFields.filter((field) => field in data && !sameValue(existing[field], data[field]));
+  if (changed.length) {
+    throw Object.assign(new Error('Issued tenancy document content and authority metadata are immutable.'), {
+      code: 'TENANCY_DOCUMENT_IMMUTABLE',
+      status: 409,
+      details: { fields: changed },
+    });
+  }
+}
+
 function isSystemCatalogueSeed(collection: string, data: Record<string, unknown>): boolean {
   return collection.startsWith('catalogue') && data.systemDefault === true;
 }
 
 export class FirestoreOperationalRepository implements OperationalRepository {
   async list(collection: string, agencyId: string, limit: number, cursor?: string): Promise<Page<StoredRecord>> {
+    const effectiveLimit = Math.min(Math.max(limit, 1), 100);
     let query = getFirestore(adminApp())
       .collection(collectionPath(collection, agencyId))
       .orderBy(FieldPath.documentId())
-      .limit(Math.min(Math.max(limit, 1), 100));
+      .limit(effectiveLimit);
     if (cursor) query = query.startAfter(cursor);
     const snapshot = await query.get();
     const items = snapshot.docs.map((document) => ({ id: document.id, ...document.data() }) as StoredRecord);
     const last = snapshot.docs.at(-1);
-    return { items, ...(snapshot.size === limit && last ? { nextCursor: last.id } : {}) };
+    return { items, ...(snapshot.size === effectiveLimit && last ? { nextCursor: last.id } : {}) };
   }
 
   async get(collection: string, agencyId: string, id: string): Promise<StoredRecord | undefined> {
@@ -87,6 +122,7 @@ export class FirestoreOperationalRepository implements OperationalRepository {
       if (collection === 'reports' && IMMUTABLE_REPORT_STATUSES.has(existing.lifecycleStatus as ReportLifecycleStatus)) {
         throw Object.assign(new Error('Finalised report metadata is immutable.'), { code: 'REPORT_IMMUTABLE', status: 409 });
       }
+      assertTenancyDocumentMutation(collection, existing, data);
       if (existing.version !== expectedVersion) {
         throw Object.assign(new Error('The record has changed. Reload and retry.'), {
           code: 'VERSION_CONFLICT',
