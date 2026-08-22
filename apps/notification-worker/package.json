@@ -3,13 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/runtime.js",
   "scripts": {
-    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "dev": "node --watch --experimental-strip-types src/runtime.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:run": "vitest run --passWithNoTests",
-    "start": "node dist/index.js"
+    "start": "node dist/runtime.js"
   },
   "dependencies": {
     "@pcr/domain": "*",
