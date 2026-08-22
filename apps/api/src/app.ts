@@ -4,6 +4,7 @@ import type { AuthorisationTarget, DomainErrorShape, SecurityCapability } from '
 import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js';
 import { routePeopleRequest } from './backend/peopleRoutes.js';
 import { routeClientManagementRequest } from './backend/clientManagementRoutes.js';
+import { routeClientPortalRequest } from './backend/clientPortalRoutes.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeReportOperationsRequest } from './backend/reportOperationsRoutes.js';
 import { routeReportLifecycleActionRequest } from './backend/reportLifecycleActionRoutes.js';
@@ -54,8 +55,7 @@ function isClientManagementRoute(urlValue: string | undefined): boolean { const 
 
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID();
-    const rateKey = `${req.socket.remoteAddress ?? 'unknown'}:${req.url ?? '/'}`;
+    const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID(); const rateKey = `${req.socket.remoteAddress ?? 'unknown'}:${req.url ?? '/'}`;
     if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
     try {
       if (req.method === 'GET' && req.url === '/health') { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', correlationId } }, correlationId); return; }
@@ -63,22 +63,15 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const notificationCallback = await routeNotificationCallbackRequest(req, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
       const esignWebhook = await routeESignExternalWebhook(req, dependencies, correlationId); if (esignWebhook) { send(res, esignWebhook, correlationId); return; }
       if (req.method === 'POST' && req.url === '/v1/security/authorise') { const requestBody = await readJson(req); const capability = requestBody.capability as SecurityCapability; const target = requestBody.target as AuthorisationTarget; const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId); send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return; }
-
       const peopleResponse = await routePeopleRequest(req, dependencies, correlationId); if (peopleResponse) { send(res, peopleResponse, correlationId); return; }
       if (isClientManagementRoute(req.url)) { const r = await routeClientManagementRequest(req, dependencies, correlationId); if (r) { send(res, r, correlationId); return; } }
-
-      const handlers = [routeCachedDashboardRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
+      const handlers = [routeCachedDashboardRequest, routeClientPortalRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
       for (const handler of handlers) { const response = await handler(req, dependencies, correlationId); if (response) { send(res, response, correlationId); return; } }
-
-      const specialReportRoute = reportRoute(req.url);
-      if (specialReportRoute) { const agency = req.headers['x-agency-id']?.toString().trim(); if (!agency) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); const response = await routeReportAggregateRequest(req, dependencies, correlationId, agency, specialReportRoute.reportId, specialReportRoute.command); if (response) { send(res, response, correlationId); return; } }
-
+      const specialReportRoute = reportRoute(req.url); if (specialReportRoute) { const agency = req.headers['x-agency-id']?.toString().trim(); if (!agency) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); const response = await routeReportAggregateRequest(req, dependencies, correlationId, agency, specialReportRoute.reportId, specialReportRoute.command); if (response) { send(res, response, correlationId); return; } }
       const tailHandlers = [routeAnalysisRequest, routePriceBookUploadRequest, routeCanonicalMaintenancePricingRequest, routeMaintenanceCommercialRequest, routeMaintenanceCandidateCommercialRequest, routeMaintenanceCreateRequest, routeMaintenanceActionRequest, routeTenantDocumentRequest, routeTenantMigrationRequest, routeTenantActionSourceRequest, routeTenantActionQueueRequest, routeTenantOperationsRequest, routeTenantAutomationRequest, routeTenantPortalRequest, routeTenantInstructionGrantRequest, routeMaintenanceRequest, routeCatalogueRequest, routeTemplateRequest, routeReportPresentationRequest, routeBrandingAssetUploadRequest, routeSettingsRequest] as const;
       for (const handler of tailHandlers) { const response = await handler(req, dependencies, correlationId); if (response) { send(res, response, correlationId); return; } }
-
       const routed = await routeApiRequest(req, res, dependencies, correlationId); if (routed) { send(res, routed, correlationId); return; }
-      const error: DomainErrorShape = { code: 'NOT_FOUND', message: 'Route not found.', status: 404, correlationId };
-      send(res, { status: 404, body: { error } }, correlationId);
+      const error: DomainErrorShape = { code: 'NOT_FOUND', message: 'Route not found.', status: 404, correlationId }; send(res, { status: 404, body: { error } }, correlationId);
     } catch (error) { send(res, errorResponse(error, correlationId), correlationId); }
   };
 }
