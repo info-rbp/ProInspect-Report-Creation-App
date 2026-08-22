@@ -7,3 +7,8 @@ identity_authorized_domains = [
 ]
 
 notification_emails = ["platform-alerts@example.com"]
+
+# Configure and observe App Check in staging before enforcement. Supply the same
+# public site key to the web build as VITE_FIREBASE_APP_CHECK_SITE_KEY.
+app_check_recaptcha_enterprise_site_key = null
+app_check_enforcement_mode              = "UNENFORCED"
