@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, type DocumentReference } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 interface ProviderConfig {
   sendgridApiKey?: string;
@@ -58,14 +58,48 @@ function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
 }
 
-function config(): ProviderConfig {
+async function metadataAccessToken(): Promise<string> {
+  const response = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
+    headers: { 'Metadata-Flavor': 'Google' },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) throw new Error(`Metadata token request failed with ${response.status}.`);
+  const body = await response.json() as { access_token?: string };
+  if (!body.access_token) throw new Error('Metadata token response did not contain access_token.');
+  return body.access_token;
+}
+
+async function secretProviderConfig(): Promise<ProviderConfig> {
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
+  if (!projectId) return {};
+  try {
+    const token = await metadataAccessToken();
+    const response = await fetch(`https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/secrets/email-provider-config/versions/latest:access`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(7_000),
+    });
+    if (!response.ok) return {};
+    const body = await response.json() as { payload?: { data?: string } };
+    const encoded = body.payload?.data;
+    if (!encoded) return {};
+    return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as ProviderConfig;
+  } catch {
+    return {};
+  }
+}
+
+let providerCache: { value: ProviderConfig; expiresAt: number } | undefined;
+async function providerConfig(): Promise<ProviderConfig> {
+  if (providerCache && providerCache.expiresAt > Date.now()) return providerCache.value;
   let parsed: ProviderConfig = {};
   const raw = process.env.NOTIFICATION_PROVIDER_CONFIG?.trim();
   if (raw) {
     try { parsed = JSON.parse(raw) as ProviderConfig; }
     catch { console.error(JSON.stringify({ level: 'error', message: 'notification.config.invalid_json' })); }
+  } else {
+    parsed = await secretProviderConfig();
   }
-  return {
+  const value: ProviderConfig = {
     ...parsed,
     sendgridApiKey: process.env.SENDGRID_API_KEY?.trim() || parsed.sendgridApiKey,
     sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL?.trim() || parsed.sendgridFromEmail,
@@ -76,6 +110,8 @@ function config(): ProviderConfig {
     callbackBaseUrl: process.env.NOTIFICATION_CALLBACK_BASE_URL?.trim() || parsed.callbackBaseUrl,
     callbackSecret: process.env.NOTIFICATION_CALLBACK_SECRET?.trim() || parsed.callbackSecret,
   };
+  providerCache = { value, expiresAt: Date.now() + 5 * 60_000 };
+  return value;
 }
 
 function webBaseUrl(): string {
@@ -83,6 +119,12 @@ function webBaseUrl(): string {
   if (configured) return configured;
   const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
   return projectId ? `https://${projectId}.web.app` : '';
+}
+
+function normalizedMessage(message: string): string {
+  const base = webBaseUrl();
+  if (!base) return message;
+  return message.replace(/(^|\s)(\/tenant-portal\/[A-Za-z0-9%._~-]+)/gu, (_match, prefix: string, path: string) => `${prefix}${base}${path}`);
 }
 
 async function readBody(req: IncomingMessage, maxBytes = 5 * 1024 * 1024): Promise<unknown> {
@@ -121,7 +163,7 @@ async function updateCommunication(agencyId: string, communicationId: string | u
 }
 
 async function sendEmail(agencyId: string, notificationId: string, job: NotificationJob, provider: ProviderConfig) {
-  if (!provider.sendgridApiKey || !provider.sendgridFromEmail) throw new Error('SendGrid email delivery is not configured.');
+  if (!provider.sendgridApiKey || !provider.sendgridFromEmail) throw new Error('SendGrid email delivery is not configured in email-provider-config.');
   const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: { authorization: `Bearer ${provider.sendgridApiKey}`, 'content-type': 'application/json' },
@@ -132,7 +174,7 @@ async function sendEmail(agencyId: string, notificationId: string, job: Notifica
         custom_args: { agencyId, notificationId, communicationId: job.communicationId || '' },
       }],
       from: { email: provider.sendgridFromEmail, ...(provider.sendgridFromName ? { name: provider.sendgridFromName } : {}) },
-      content: [{ type: 'text/plain', value: job.message }],
+      content: [{ type: 'text/plain', value: normalizedMessage(job.message) }],
     }),
     signal: AbortSignal.timeout(15_000),
   });
@@ -141,8 +183,8 @@ async function sendEmail(agencyId: string, notificationId: string, job: Notifica
 }
 
 async function sendSms(agencyId: string, notificationId: string, job: NotificationJob, provider: ProviderConfig) {
-  if (!provider.twilioAccountSid || !provider.twilioAuthToken || !provider.twilioFromNumber) throw new Error('Twilio SMS delivery is not configured.');
-  const form = new URLSearchParams({ To: job.recipient, From: provider.twilioFromNumber, Body: job.message });
+  if (!provider.twilioAccountSid || !provider.twilioAuthToken || !provider.twilioFromNumber) throw new Error('Twilio SMS delivery is not configured in email-provider-config.');
+  const form = new URLSearchParams({ To: job.recipient, From: provider.twilioFromNumber, Body: normalizedMessage(job.message) });
   if (provider.callbackBaseUrl && provider.callbackSecret) {
     const callback = new URL('/api/v1/external/notification-callbacks/twilio', provider.callbackBaseUrl);
     callback.searchParams.set('token', provider.callbackSecret);
@@ -169,7 +211,7 @@ export async function deliverNotification(agencyId: string, notificationId: stri
   const existing = snapshot.exists ? snapshot.data() as NotificationJob : supplied;
   if (!existing) throw new Error(`Notification job not found: ${notificationId}`);
   if (['sent', 'delivered'].includes(String(existing.status))) return existing;
-  const provider = config();
+  const provider = await providerConfig();
   const now = new Date().toISOString();
   try {
     let providerMessageId: string | undefined;
@@ -207,7 +249,7 @@ function automationId(eventKey: string): string {
   return createHash('sha256').update(eventKey).digest('hex');
 }
 
-async function tenancyRecipients(agencyId: string, tenancyId: string, participants: ParticipantRecord[], tenants: TenantRecord[]) {
+async function tenancyRecipients(tenancyId: string, participants: ParticipantRecord[], tenants: TenantRecord[]) {
   const ids = participants.filter((item) => item.tenancyId === tenancyId && item.status !== 'ended' && ['primary_tenant', 'co_tenant'].includes(String(item.role))).map((item) => item.tenantId);
   return tenants.filter((tenant) => ids.includes(tenant.id) && tenant.email?.trim()).map((tenant) => ({ tenantId: tenant.id, email: tenant.email!.trim().toLowerCase(), name: tenant.fullName || 'Tenant' }));
 }
@@ -291,7 +333,7 @@ async function runAgencyAutomation(agencyId: string, now: Date): Promise<number>
     const remaining = daysUntil(typeof action.dueDate === 'string' ? action.dueDate : undefined, now);
     if (remaining !== 1 && !(remaining !== undefined && remaining < 0)) continue;
     const rule = remaining === 1 ? 'action_due_tomorrow' : 'action_overdue';
-    for (const recipient of await tenancyRecipients(agencyId, tenancyId, participants, tenants)) {
+    for (const recipient of await tenancyRecipients(tenancyId, participants, tenants)) {
       const portal = await portalLink(agencyId, recipient.tenantId, tenancyId, recipient.email);
       if (await emitAutomationNotification({ agencyId, dateKey, rule, entityId: action.id, tenantId: recipient.tenantId, tenancyId, recipient: recipient.email, subject: `${remaining === 1 ? 'Action due tomorrow' : 'Action overdue'}: ${String(action.title || 'Tenant action')}`, message: `${remaining === 1 ? 'A tenant action is due tomorrow.' : 'A tenant action is overdue.'} Review and respond securely: ${portal}`, relatedEntityType: 'tenant_instruction' })) emitted += 1;
     }
@@ -314,7 +356,7 @@ async function runAgencyAutomation(agencyId: string, now: Date): Promise<number>
     if (['ended', 'cancelled'].includes(String(tenancy.lifecycleStatus || tenancy.status))) continue;
     const remaining = daysUntil(tenancy.leaseEndDate, now);
     if (![60, 30, 14].includes(remaining ?? -1)) continue;
-    for (const recipient of await tenancyRecipients(agencyId, tenancy.id, participants, tenants)) {
+    for (const recipient of await tenancyRecipients(tenancy.id, participants, tenants)) {
       if (await emitAutomationNotification({ agencyId, dateKey, rule: `tenancy_expiry_${remaining}`, entityId: tenancy.id, tenantId: recipient.tenantId, tenancyId: tenancy.id, recipient: recipient.email, subject: `Tenancy ends in ${remaining} days`, message: `Your recorded tenancy end date is ${tenancy.leaseEndDate}. Your property manager will contact you if action is required.`, relatedEntityType: 'general' })) emitted += 1;
     }
   }
