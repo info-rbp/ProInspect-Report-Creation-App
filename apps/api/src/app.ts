@@ -33,6 +33,7 @@ import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.j
 import { routePropertyHistoryRequest } from './backend/propertyHistoryRoutes.js';
 import { routeCatalogueRequest } from './backend/catalogueRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
+import { routeSettingsRequest } from './backend/settingsRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
@@ -145,6 +146,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceResponse = await routeMaintenanceRequest(req, dependencies, correlationId); if (maintenanceResponse) { send(res, maintenanceResponse, correlationId); return; }
       const catalogueResponse = await routeCatalogueRequest(req, dependencies, correlationId); if (catalogueResponse) { send(res, catalogueResponse, correlationId); return; }
       const templateResponse = await routeTemplateRequest(req, dependencies, correlationId); if (templateResponse) { send(res, templateResponse, correlationId); return; }
+      const settingsResponse = await routeSettingsRequest(req, dependencies, correlationId); if (settingsResponse) { send(res, settingsResponse, correlationId); return; }
       const routed = await routeApiRequest(req, res, dependencies, correlationId); if (routed) { send(res, routed, correlationId); return; }
 
       const error: DomainErrorShape = { code: 'NOT_FOUND', message: 'Route not found.', status: 404, correlationId };
