@@ -23,6 +23,7 @@ export * from './comparisonEngine.js';
 export * from './maintenance.js';
 export * from './maintenanceCommercial.js';
 export * from './maintenanceCanonicalAugmentation.js';
+export * from './canonicalMaintenancePricing.js';
 export * from './maintenanceWorkflow.js';
 export * from './inspectionPolicy.js';
 export * from './legacyBaseline.js';
