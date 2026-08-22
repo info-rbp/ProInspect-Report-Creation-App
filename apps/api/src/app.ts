@@ -5,6 +5,7 @@ import { ApiError, routeApiRequest, type ApiResponse } from './backend/router.js
 import { routePeopleRequest } from './backend/peopleRoutes.js';
 import { routeClientManagementRequest } from './backend/clientManagementRoutes.js';
 import { routeClientPortalRequest } from './backend/clientPortalRoutes.js';
+import { routeRemoteInspectionPortalRequest } from './backend/remoteInspectionPortalRoutes.js';
 import { routeReportAggregateRequest } from './backend/reportRoutes.js';
 import { routeReportOperationsRequest } from './backend/reportOperationsRoutes.js';
 import { routeReportLifecycleActionRequest } from './backend/reportLifecycleActionRoutes.js';
@@ -62,6 +63,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: { ...buildOpenApiDocument(), financialBoundary: 'No trust accounting, payments, receipts, disbursements or reconciliation.' } }, correlationId); return; }
       const notificationCallback = await routeNotificationCallbackRequest(req, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
       const esignWebhook = await routeESignExternalWebhook(req, dependencies, correlationId); if (esignWebhook) { send(res, esignWebhook, correlationId); return; }
+      const remotePortal = await routeRemoteInspectionPortalRequest(req, dependencies, correlationId); if (remotePortal) { send(res, remotePortal, correlationId); return; }
       if (req.method === 'POST' && req.url === '/v1/security/authorise') { const requestBody = await readJson(req); const capability = requestBody.capability as SecurityCapability; const target = requestBody.target as AuthorisationTarget; const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId); send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return; }
       const peopleResponse = await routePeopleRequest(req, dependencies, correlationId); if (peopleResponse) { send(res, peopleResponse, correlationId); return; }
       if (isClientManagementRoute(req.url)) { const r = await routeClientManagementRequest(req, dependencies, correlationId); if (r) { send(res, r, correlationId); return; } }
