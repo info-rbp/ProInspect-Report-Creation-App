@@ -1,4 +1,4 @@
-import type { AuthenticatedPrincipal, AuthorisationTarget, SecurityCapability, UserRole } from '@pcr/domain';
+import { SECURITY_CAPABILITIES, type AuthenticatedPrincipal, type AuthorisationTarget, type SecurityCapability, type UserRole } from '@pcr/domain';
 
 const clientAdministration: SecurityCapability[] = [
   'client.read',
@@ -11,36 +11,44 @@ const clientAdministration: SecurityCapability[] = [
   'client.billing.manage',
 ];
 
+const tenantWorkspace = [
+  'tenant.read', 'tenant.manage', 'tenancy.read', 'tenancy.manage',
+  'tenant.communication.read', 'tenant.communication.send',
+  'tenant.document.read', 'tenant.document.manage', 'tenant.portal.manage',
+  'tenant_instruction.manage',
+] satisfies SecurityCapability[];
+
 const capabilities: Record<UserRole, ReadonlySet<SecurityCapability>> = {
-  super_admin: new Set(['agency.read', 'audit.read', ...clientAdministration]),
+  super_admin: new Set(SECURITY_CAPABILITIES),
   proinspect_admin: new Set([
     'agency.read', 'agency.manage', 'user.invite', 'user.suspend', ...clientAdministration,
-    'property.read', 'property.manage', 'tenancy.read', 'tenancy.manage', 'job.read', 'job.manage', 'job.inspect',
+    'property.read', 'property.manage', ...tenantWorkspace, 'job.read', 'job.manage', 'job.inspect',
     'report.read', 'report.edit', 'report.review', 'report.issue', 'report.finalise', 'template.manage', 'audit.read',
     'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare',
     'maintenance.quote.approve', 'maintenance.quote.send', 'maintenance.work_order.issue', 'maintenance.verify',
     'maintenance.finance.sync', 'price_book.manage', 'xero.manage', 'upload.create', 'analysis.create', 'pdf.create',
-    'notification.send', 'tenant_instruction.manage', 'external_contact.manage', 'client_approval.manage',
+    'notification.send', 'external_contact.manage', 'client_approval.manage',
   ]),
   operations: new Set([
     'agency.read', ...clientAdministration,
-    'property.read', 'property.manage', 'tenancy.read', 'tenancy.manage', 'job.read', 'job.manage', 'report.read',
+    'property.read', 'property.manage', ...tenantWorkspace, 'job.read', 'job.manage', 'report.read',
     'report.issue', 'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare',
     'maintenance.quote.send', 'maintenance.work_order.issue', 'maintenance.verify', 'upload.create', 'analysis.create',
-    'pdf.create', 'notification.send', 'tenant_instruction.manage', 'external_contact.manage', 'client_approval.manage',
+    'pdf.create', 'notification.send', 'external_contact.manage', 'client_approval.manage',
   ]),
   inspector: new Set([
-    'property.read', 'tenancy.read', 'job.read', 'job.inspect', 'report.read', 'report.edit',
+    'property.read', 'tenant.read', 'tenancy.read', 'job.read', 'job.inspect', 'report.read', 'report.edit',
     'upload.create', 'maintenance.read', 'maintenance.triage',
   ]),
   analyst: new Set([
-    'property.read', 'tenancy.read', 'job.read', 'report.read', 'report.edit', 'maintenance.read',
+    'property.read', 'tenant.read', 'tenancy.read', 'job.read', 'report.read', 'report.edit', 'maintenance.read',
     'maintenance.triage', 'maintenance.quote.prepare', 'analysis.create', 'tenant_instruction.manage',
-    'external_contact.manage', 'client_approval.manage',
+    'tenant.communication.read', 'tenant.document.read', 'external_contact.manage', 'client_approval.manage',
   ]),
   reviewer: new Set([
-    'property.read', 'tenancy.read', 'job.read', 'report.read', 'report.review', 'audit.read', 'pdf.create',
-    'maintenance.read', 'maintenance.triage', 'maintenance.verify', 'tenant_instruction.manage', 'client_approval.manage',
+    'property.read', 'tenant.read', 'tenancy.read', 'job.read', 'report.read', 'report.review', 'audit.read', 'pdf.create',
+    'maintenance.read', 'maintenance.triage', 'maintenance.verify', 'tenant_instruction.manage',
+    'tenant.communication.read', 'tenant.document.read', 'client_approval.manage',
   ]),
   tenant: new Set(['report.read', 'tenant_response.submit', 'upload.create']),
   landlord: new Set(['property.read', 'report.read']),

@@ -11,6 +11,7 @@ const requiredArtifacts = [
   'apps/api/dist/app.js',
   'apps/ai-worker/dist/index.js',
   'apps/pdf-worker/dist/index.js',
+  'apps/notification-worker/dist/index.js',
 ];
 
 for (const artifact of requiredArtifacts) await access(artifact);

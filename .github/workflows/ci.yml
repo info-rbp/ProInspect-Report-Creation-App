@@ -55,6 +55,8 @@ jobs:
         run: npm run typecheck --workspace @pcr/ai-worker
       - name: Type check PDF worker
         run: npm run typecheck --workspace @pcr/pdf-worker
+      - name: Type check notification worker
+        run: npm run typecheck --workspace @pcr/notification-worker
       - name: Type check shared packages
         run: npm run typecheck --workspace @pcr/domain && npm run typecheck --workspace @pcr/config && npm run typecheck --workspace @pcr/validation && npm run typecheck --workspace @pcr/templates && npm run typecheck --workspace @pcr/testing && npm run typecheck --workspace @pcr/ui
       - name: Formatting

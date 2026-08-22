@@ -15,8 +15,15 @@ export const SECURITY_CAPABILITIES = [
   'client.billing.manage',
   'property.read',
   'property.manage',
+  'tenant.read',
+  'tenant.manage',
   'tenancy.read',
   'tenancy.manage',
+  'tenant.communication.read',
+  'tenant.communication.send',
+  'tenant.document.read',
+  'tenant.document.manage',
+  'tenant.portal.manage',
   'job.read',
   'job.manage',
   'job.inspect',
@@ -80,6 +87,7 @@ export interface AuthorisationTarget {
   agencyId: string;
   clientAccountId?: string;
   clientContactId?: string;
+  tenantId?: string;
   propertyId?: string;
   tenancyId?: string;
   inspectionJobId?: string;

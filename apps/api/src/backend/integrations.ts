@@ -27,13 +27,14 @@ async function metadataAccessToken(): Promise<string> {
   return body.access_token;
 }
 
-async function publishPdfTask(
+async function publishTask(
   projectId: string,
+  topic: string,
   payload: Record<string, unknown>,
 ): Promise<string> {
   const token = await metadataAccessToken();
   const response = await fetch(
-    `https://pubsub.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/topics/pdf-generation-requests:publish`,
+    `https://pubsub.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/topics/${encodeURIComponent(topic)}:publish`,
     {
       method: 'POST',
       headers: {
@@ -49,14 +50,20 @@ async function publishPdfTask(
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     throw new Error(
-      `Pub/Sub PDF dispatch failed with ${response.status}${detail ? `: ${detail}` : ''}.`,
+      `Pub/Sub ${topic} dispatch failed with ${response.status}${detail ? `: ${detail}` : ''}.`,
     );
   }
   const body = (await response.json()) as { messageIds?: string[] };
   const messageId = body.messageIds?.[0];
-  if (!messageId) throw new Error('Pub/Sub PDF dispatch did not return a message ID.');
+  if (!messageId) throw new Error(`Pub/Sub ${topic} dispatch did not return a message ID.`);
   return messageId;
 }
+
+const TOPIC_BY_KIND: Record<'analysis' | 'pdf' | 'notification', string> = {
+  analysis: 'analysis-requests',
+  pdf: 'pdf-generation-requests',
+  notification: 'notification-requests',
+};
 
 export class FirestoreTaskOutbox implements TaskDispatcher {
   async dispatch(
@@ -79,21 +86,22 @@ export class FirestoreTaskOutbox implements TaskDispatcher {
       updatedAt: now,
     });
 
-    if (kind !== 'pdf') return;
-
     const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
     if (!projectId || process.env.NODE_ENV === 'test') {
       await outboxRef.update({
         status: 'pending_runtime_dispatch',
+        topic: TOPIC_BY_KIND[kind],
         updatedAt: new Date().toISOString(),
       });
       return;
     }
 
+    const topic = TOPIC_BY_KIND[kind];
     try {
-      const messageId = await publishPdfTask(projectId, { taskId, agencyId, ...payload });
+      const messageId = await publishTask(projectId, topic, { taskId, agencyId, kind, ...payload });
       await outboxRef.update({
         status: 'dispatched',
+        topic,
         pubsubMessageId: messageId,
         dispatchedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -101,6 +109,7 @@ export class FirestoreTaskOutbox implements TaskDispatcher {
     } catch (error) {
       await outboxRef.update({
         status: 'dispatch_failed',
+        topic,
         dispatchError: error instanceof Error ? error.message : String(error),
         updatedAt: new Date().toISOString(),
       });

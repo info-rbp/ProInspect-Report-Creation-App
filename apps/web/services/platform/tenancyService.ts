@@ -1,4 +1,4 @@
-import type { Tenancy } from '../../types/platform';
+import type { Tenant, Tenancy } from '../../types/platform';
 import { generateId } from '../../utils';
 import { apiRequest } from '../apiClient';
 import { isFirebaseConfigured } from '../storageService';
@@ -11,6 +11,54 @@ function agencyId(): string | undefined {
 
 function cloudMode(): boolean {
   return isFirebaseConfigured() && Boolean(import.meta.env.VITE_API_BASE_URL?.trim());
+}
+
+function tenantId(): string {
+  return `tenant-${generateId()}`;
+}
+
+function participantId(): string {
+  return `participant-${generateId()}`;
+}
+
+async function synchroniseTenantDirectory(tenancy: Tenancy): Promise<void> {
+  if (!cloudMode()) return;
+  let existing: Tenant[] = [];
+  try {
+    existing = await apiRequest<Tenant[]>(tenancy.agencyId, '/api/v1/tenants?limit=100');
+  } catch {
+    return;
+  }
+
+  for (let index = 0; index < tenancy.tenantNames.length; index += 1) {
+    const fullName = tenancy.tenantNames[index]?.trim();
+    if (!fullName) continue;
+    const email = tenancy.tenantEmails[index]?.trim().toLowerCase();
+    let tenant = email ? existing.find((candidate) => candidate.email?.trim().toLowerCase() === email) : undefined;
+    if (!tenant) {
+      tenant = await apiRequest<Tenant>(tenancy.agencyId, '/api/v1/tenants', {
+        method: 'POST',
+        body: {
+          id: tenantId(),
+          fullName,
+          ...(email ? { email } : {}),
+          preferredCommunication: email ? 'email' : 'portal',
+          status: 'active',
+        },
+      });
+      existing.push(tenant);
+    }
+    await apiRequest(tenancy.agencyId, '/api/v1/tenancy-participants', {
+      method: 'POST',
+      body: {
+        id: participantId(),
+        tenancyId: tenancy.id,
+        tenantId: tenant.id,
+        role: index === 0 ? 'primary_tenant' : 'co_tenant',
+        status: 'active',
+      },
+    });
+  }
 }
 
 export async function listTenancies(): Promise<Tenancy[]> {
@@ -40,10 +88,12 @@ export async function createTenancy(
   const id = `tenancy-${generateId()}`;
   const status = input.status || 'active';
   if (cloudMode()) {
-    return apiRequest<Tenancy>(input.agencyId, '/api/v1/tenancies', {
+    const tenancy = await apiRequest<Tenancy>(input.agencyId, '/api/v1/tenancies', {
       method: 'POST',
-      body: { ...input, id, status },
+      body: { ...input, id, status, lifecycleStatus: status === 'active' ? 'active' : 'ended' },
     });
+    await synchroniseTenantDirectory(tenancy);
+    return tenancy;
   }
 
   const now = new Date().toISOString();
