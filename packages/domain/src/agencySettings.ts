@@ -53,6 +53,35 @@ export interface AgencyOrganisationSettings extends VersionedAgencySettingsRecor
   privacyEmail?: string;
 }
 
+export type BrandingAssetKind = 'logo' | 'dark_logo' | 'favicon' | 'portal_logo' | 'email_header' | 'other';
+
+export interface BrandingAsset extends VersionedAgencySettingsRecord {
+  kind: BrandingAssetKind;
+  name: string;
+  contentType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/svg+xml';
+  objectPath?: string;
+  publicUrl?: string;
+  sha256?: string;
+  fileSize?: number;
+  altText?: string;
+}
+
+export interface PublicAgencyBranding {
+  profileId: string;
+  profileVersion?: number;
+  name: string;
+  logoUrl?: string;
+  portalLogoUrl?: string;
+  primaryColour?: string;
+  secondaryColour?: string;
+  accentColour?: string;
+  reportHeaderText?: string;
+  reportFooterText?: string;
+  portalWelcomeText?: string;
+  legalFooter?: string;
+  privacyNoticeUrl?: string;
+}
+
 export interface AgencyBrandingProfile extends VersionedAgencySettingsRecord {
   id: string;
   name: string;
