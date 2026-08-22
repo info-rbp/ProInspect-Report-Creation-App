@@ -4,8 +4,10 @@ import './maintenanceCommercial.js';
 import './reportOperations.js';
 import './reportMetadataAugmentation.js';
 import './clientAugmentation.js';
+import './propertyCatalogueAugmentation.js';
 
 export * from './platform.js';
+export * from './propertyCatalogueAugmentation.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
 export * from './clientManagement.js';
