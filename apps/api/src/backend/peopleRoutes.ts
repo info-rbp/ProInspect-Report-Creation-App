@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import { getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { roleCapabilities, type PeopleDirectoryEntry, type PeopleInvitation, type UserRole, type WorkforceProfile } from '@pcr/domain';
+import { roleCapabilities, type PeopleDirectoryEntry, type PeopleInvitation, type WorkforceProfile } from '@pcr/domain';
 import { parseChangeRoleInput, parseInvitePersonInput, parseMembershipActionInput } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import type { ApiDependencies } from './types.js';
@@ -129,7 +129,7 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
     await membershipRef.update({ status: newStatus, updatedAt: new Date().toISOString(), version: (membership.version ?? 1) + 1 });
     if (action !== 'reactivate') await getAuth(adminApp()).revokeRefreshTokens(uid);
     await appendAudit(deps, principal, capability, `user_${action}`, uid, correlationId, { reason: input.reason, ...(assignmentImpact ? { assignmentImpact } : {}) });
-    return { status: 200, body: { data: { id: uid, status: newStatus, ...(assignmentImpact ? { assignmentImpact } : {}) } } };
+    return { status: 200, body: { data: { id: uid, status: newStatus, ...(assignmentImpact ? { assignmentImpact } : {}) } };
   }
   if (req.method === 'POST' && action === 'revoke-sessions') {
     const principal = await authenticateAndAuthorise(req, deps, 'user.session.revoke', { agencyId: agency }, correlationId);
