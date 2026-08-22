@@ -16,6 +16,8 @@
     "./catalogueAdmin.js": {"types": "./dist/catalogueAdmin.d.ts", "import": "./dist/catalogueAdmin.js", "default": "./dist/catalogueAdmin.js"},
     "./propertyLayoutCatalogue": {"types": "./dist/propertyLayoutCatalogue.d.ts", "import": "./dist/propertyLayoutCatalogue.js", "default": "./dist/propertyLayoutCatalogue.js"},
     "./propertyLayoutCatalogue.js": {"types": "./dist/propertyLayoutCatalogue.d.ts", "import": "./dist/propertyLayoutCatalogue.js", "default": "./dist/propertyLayoutCatalogue.js"},
+    "./inspectionTemplateCatalogue": {"types": "./dist/inspectionTemplateCatalogue.d.ts", "import": "./dist/inspectionTemplateCatalogue.js", "default": "./dist/inspectionTemplateCatalogue.js"},
+    "./inspectionTemplateCatalogue.js": {"types": "./dist/inspectionTemplateCatalogue.d.ts", "import": "./dist/inspectionTemplateCatalogue.js", "default": "./dist/inspectionTemplateCatalogue.js"},
     "./registry": {"types": "./dist/registry.d.ts", "import": "./dist/registry.js", "default": "./dist/registry.js"}
   },
   "scripts": {"typecheck": "tsc --noEmit -p tsconfig.json", "test:run": "vitest run --passWithNoTests", "build": "tsc -p tsconfig.build.json"},
