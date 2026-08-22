@@ -15,6 +15,7 @@ export * from './clientManagement.js';
 export * from './clientCompatibility.js';
 export * from './tenant.js';
 export * from './security.js';
+export * from './dashboard.js';
 export * from './reportModel.js';
 export * from './reportOperations.js';
 export * from './photoEvidence.js';
