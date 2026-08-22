@@ -294,16 +294,41 @@ resource "google_firebase_hosting_site" "web" {
 }
 
 resource "google_identity_platform_config" "this" {
-  provider           = google-beta
-  project            = var.project_id
-  authorized_domains = var.identity_authorized_domains
+  provider                    = google-beta
+  project                     = var.project_id
+  authorized_domains          = var.identity_authorized_domains
+  autodelete_anonymous_users  = true
+
   sign_in {
+    allow_duplicate_emails = false
     email {
       enabled           = true
       password_required = true
     }
     anonymous { enabled = false }
   }
+
+  client {
+    permissions {
+      disabled_user_signup   = true
+      disabled_user_deletion = true
+    }
+  }
+
+  mfa {
+    state = "ENABLED"
+    provider_configs {
+      state = "ENABLED"
+      totp_provider_config {
+        adjacent_intervals = 1
+      }
+    }
+  }
+
+  multi_tenant {
+    allow_tenants = true
+  }
+
   depends_on = [google_project_service.required]
 }
 

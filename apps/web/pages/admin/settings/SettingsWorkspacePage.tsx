@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Building2, Cable, MessageSquareText, Palette, Settings2, ShieldCheck, SlidersHorizontal, Wrench } from 'lucide-react';
+import { Building2, Cable, FileText, MessageSquareText, Palette, Settings2, ShieldCheck, SlidersHorizontal, Wrench } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { isAiConfigured } from '../../../services/configService';
 import { isFirebaseConfigured } from '../../../services/storageService';
@@ -9,12 +9,14 @@ import InspectionDefaultsPanel from './InspectionDefaultsPanel';
 import IntegrationSettingsPanel from './IntegrationSettingsPanel';
 import MaintenancePolicyPanel from './MaintenancePolicyPanel';
 import OrganisationSettingsPanel from './OrganisationSettingsPanel';
+import ReportLayoutSettingsPanel from './ReportLayoutSettingsPanel';
 import SecurityAuditPanel from './SecurityAuditPanel';
 
 const TABS = [
   ['overview', 'Overview', Settings2],
   ['organisation', 'Organisation', Building2],
   ['branding', 'Branding', Palette],
+  ['report-layouts', 'Report Layouts', FileText],
   ['inspection', 'Inspection Defaults', SlidersHorizontal],
   ['communications', 'Communications', MessageSquareText],
   ['integrations', 'Integrations', Cable],
@@ -41,6 +43,7 @@ const SettingsWorkspacePage: React.FC = () => {
     overview: <OverviewPanel />,
     organisation: <OrganisationSettingsPanel />,
     branding: <BrandingSettingsPanel />,
+    'report-layouts': <ReportLayoutSettingsPanel />,
     inspection: <InspectionDefaultsPanel />,
     communications: <CommunicationSettingsPanel />,
     integrations: <IntegrationSettingsPanel />,

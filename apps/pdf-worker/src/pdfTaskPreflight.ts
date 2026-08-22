@@ -1,6 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { PdfWorkerError, type PdfGenerationTask } from './pdfGenerationService.js';
+import { ensureReportPresentationIdentity } from './reportPresentationPreflight.js';
 
 function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
@@ -61,6 +62,11 @@ export async function assertPdfTaskReady(task: PdfGenerationTask): Promise<void>
         { requestedVersionId: task.reportVersionId, currentVersionId },
       );
     }
+
+    // The renderer must never invent current branding or layout at render time.
+    // Resolve and persist the exact published layout plus immutable branding
+    // snapshot before the approved report is handed to the PDF pipeline.
+    await ensureReportPresentationIdentity(task);
   } catch (error) {
     await persistPreflightFailure(task, error);
     throw error;

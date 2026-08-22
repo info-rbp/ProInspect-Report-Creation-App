@@ -1,7 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
-const stackedFeatureScaffolding = [
+const scopedUnusedVariableExceptions = [
   'apps/api/src/backend/googleCalendarIntegrationRoutes.ts',
   'apps/api/src/backend/inspectionOperationsRoutes.ts',
   'apps/api/src/backend/legacyBaselineRoutes.ts',
@@ -9,6 +9,7 @@ const stackedFeatureScaffolding = [
   'apps/api/src/backend/shopifyIntegrationRoutes.ts',
   'apps/api/src/services/maintenanceCommercialService.ts',
   'apps/api/src/services/xeroAccountingService.ts',
+  'apps/notification-worker/src/runtime.ts',
   'apps/web/components/jobs/InspectionJobOperationsPanel.tsx',
   'apps/web/components/jobs/InspectionSyncPanel.tsx',
   'apps/web/components/maintenance/MaintenanceContractorQuotesPanel.tsx',
@@ -43,11 +44,10 @@ export default tseslint.config(
     },
   },
   {
-    // These files belong to the stacked Properties / Inspection Operations / Maintenance
-    // feature sequence and currently retain harmless imports or compatibility destructuring
-    // while those parent branches are consolidated. Keep the exception path-scoped so new
-    // Reports and platform code remains subject to the normal unused-variable rule.
-    files: stackedFeatureScaffolding,
+    // Keep compatibility-oriented unused-variable exceptions path-scoped. The
+    // notification worker currently imports one Firestore type retained for the
+    // typed delivery boundary while the legacy worker entrypoint is retired.
+    files: scopedUnusedVariableExceptions,
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
     },

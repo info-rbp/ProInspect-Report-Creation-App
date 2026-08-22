@@ -1,0 +1,70 @@
+# Full repository validation outside GitHub Actions.
+# Intended for temporary use when GitHub-hosted Actions quota is exhausted.
+# Run with: scripts/google-cloud-validate.sh PROJECT_ID
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+steps:
+  - id: repository-validation
+    name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        npm install --ignore-scripts --no-audit --no-fund
+        npm run build:packages
+        npm run typecheck:workspaces
+        npm run format:check
+        npm run lint
+        npm run test:run
+        npm run build:apps
+        npm run verify:dist
+  - id: firebase-emulator-validation
+    name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jre-headless
+        rm -rf /var/lib/apt/lists/*
+        npm install --ignore-scripts --no-audit --no-fund
+        npm run test:emulator
+  - id: browser-e2e
+    name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        npm install --ignore-scripts --no-audit --no-fund
+        npx playwright install --with-deps chromium
+        npm run test:e2e
+  - id: terraform-format
+    name: hashicorp/terraform:1.15.8
+    entrypoint: sh
+    args: ['-ceu', 'terraform fmt -check -recursive infrastructure/terraform']
+  - id: terraform-bootstrap
+    name: hashicorp/terraform:1.15.8
+    dir: infrastructure/terraform/bootstrap
+    entrypoint: sh
+    args: ['-ceu', 'terraform init -backend=false && terraform validate']
+  - id: terraform-development
+    name: hashicorp/terraform:1.15.8
+    dir: infrastructure/terraform/environments/development
+    entrypoint: sh
+    args: ['-ceu', 'terraform init -backend=false && terraform validate']
+  - id: terraform-staging
+    name: hashicorp/terraform:1.15.8
+    dir: infrastructure/terraform/environments/staging
+    entrypoint: sh
+    args: ['-ceu', 'terraform init -backend=false && terraform validate']
+  - id: terraform-production
+    name: hashicorp/terraform:1.15.8
+    dir: infrastructure/terraform/environments/production
+    entrypoint: sh
+    args: ['-ceu', 'terraform init -backend=false && terraform validate']
+  - id: terraform-delivery
+    name: hashicorp/terraform:1.15.8
+    dir: infrastructure/terraform/delivery
+    entrypoint: sh
+    args: ['-ceu', 'terraform init -backend=false && terraform validate']

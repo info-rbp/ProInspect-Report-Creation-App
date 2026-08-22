@@ -13,3 +13,9 @@ notification_emails = [
 ]
 
 report_retention_days = 365
+
+# Do not change to ENFORCED until staging App Check metrics and authentication,
+# Firestore and Storage acceptance pass. The public site key must also be supplied
+# to the web build as VITE_FIREBASE_APP_CHECK_SITE_KEY.
+app_check_recaptcha_enterprise_site_key = null
+app_check_enforcement_mode              = "UNENFORCED"

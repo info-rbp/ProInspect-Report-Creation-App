@@ -1,6 +1,5 @@
-import { getApp } from 'firebase/app';
-import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
+import { getAppCheckToken } from './appCheckService';
 
 interface ApiEnvelope<T> {
   data: T;
@@ -15,24 +14,6 @@ interface ApiErrorEnvelope {
     correlationId?: string;
     details?: Record<string, unknown>;
   };
-}
-
-let appCheck: AppCheck | undefined;
-
-async function appCheckToken(): Promise<string | undefined> {
-  const siteKey = import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY?.trim();
-  if (!siteKey) return undefined;
-  if (!appCheck) {
-    try {
-      appCheck = initializeAppCheck(getApp(), {
-        provider: new ReCaptchaEnterpriseProvider(siteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-    } catch {
-      return undefined;
-    }
-  }
-  return (await getToken(appCheck)).token;
 }
 
 function newIdempotencyKey(): string {
@@ -79,7 +60,7 @@ export async function apiRequest<T>(
     typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId : undefined;
   const resolvedAgencyId = agencyId || user.tenantId || claimAgency;
   if (!resolvedAgencyId) throw new Error('The signed-in identity is not linked to an agency.');
-  const appCheckValue = await appCheckToken();
+  const appCheckValue = await getAppCheckToken();
   const method = init.method ?? 'GET';
   const headers: Record<string, string> = {
     authorization: `Bearer ${tokenResult.token}`,

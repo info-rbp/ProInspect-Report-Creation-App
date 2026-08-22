@@ -9,7 +9,7 @@ const config = loadRuntimeConfig();
 
 export const DEFAULT_PRESENTATION_TEMPLATE_ID = 'system-standard-report';
 export const DEFAULT_PRESENTATION_TEMPLATE_VERSION = 1;
-export const REPORT_RENDERER_VERSION = 'shared-document-layout-v2';
+export const REPORT_RENDERER_VERSION = 'shared-document-layout-v3';
 export const REPORT_FONT_BUNDLE_VERSION = 'standard14-v1';
 
 export interface RenderPresentationIdentity {
@@ -101,17 +101,35 @@ export function sha256(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function presentationIdentity(input: VersionedRenderInput): RenderPresentationIdentity {
-  const presentationTemplateId = input.presentationTemplateId?.trim() || DEFAULT_PRESENTATION_TEMPLATE_ID;
-  const presentationTemplateVersion = input.presentationTemplateVersion && input.presentationTemplateVersion > 0
-    ? input.presentationTemplateVersion
-    : DEFAULT_PRESENTATION_TEMPLATE_VERSION;
-  const brandingSnapshotHash = input.brandingSnapshotHash?.trim().toLowerCase() || sha256(canonicalJson({
-    agencyName: input.report.agentCompany ?? 'ProInspect',
-    address: input.report.agentAddress ?? '',
-    phone: input.report.agentPhone ?? '',
-    email: input.report.agentEmail ?? '',
-  }));
+  const report = input.report as Record<string, unknown>;
+  const presentationTemplateId =
+    input.presentationTemplateId?.trim() ||
+    text(report.presentationTemplateId) ||
+    DEFAULT_PRESENTATION_TEMPLATE_ID;
+  const presentationTemplateVersion =
+    (input.presentationTemplateVersion && input.presentationTemplateVersion > 0
+      ? input.presentationTemplateVersion
+      : undefined) ||
+    positiveInteger(report.presentationTemplateVersion) ||
+    DEFAULT_PRESENTATION_TEMPLATE_VERSION;
+  const brandingSnapshotHash =
+    input.brandingSnapshotHash?.trim().toLowerCase() ||
+    text(report.brandingSnapshotHash).toLowerCase() ||
+    sha256(canonicalJson({
+      agencyName: input.report.agentCompany ?? 'ProInspect',
+      address: input.report.agentAddress ?? '',
+      phone: input.report.agentPhone ?? '',
+      email: input.report.agentEmail ?? '',
+    }));
   return {
     presentationTemplateId,
     presentationTemplateVersion,

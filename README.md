@@ -1,118 +1,53 @@
-# Remote Business Partner Property Condition Reporter
+# ProInspect Report Creation App
 
-A property inspection platform for Entry Property Condition Reports, Routine Inspections, Exit Inspections, Comparison Reports, and Maintenance and Follow-Up reports.
+ProInspect is a multi-agency property inspection, reporting, maintenance and tenancy workflow platform. The repository contains the web application, API and background workers, shared domain/configuration packages, Firebase security/storage rules, and Google Cloud/Terraform delivery infrastructure.
 
-## Current status
+## Workspace layout
 
-Phase 1 product definition is complete. Phase 2 establishes a stable engineering baseline and monorepo structure. The current report-building interface remains operational while the production Google Cloud workflow is implemented through issues #3 through #10.
+- `apps/web` – React/Vite administration, inspection and portal UI.
+- `apps/api` – server-authoritative HTTP API, lifecycle commands, integrations and security enforcement.
+- `apps/ai-worker` – bounded AI analysis worker.
+- `apps/pdf-worker` – immutable final-report PDF generation worker.
+- `apps/notification-worker` – governed outbound email/SMS notification worker.
+- `apps/dashboard-worker` – scheduled dashboard aggregate snapshot worker.
+- `packages/*` – domain, validation, templates, report presentation, UI and test foundations.
+- `infrastructure/firebase` – Firebase emulator configuration and security rules.
+- `infrastructure/terraform` – Google Cloud development/staging/production landing zones and delivery pipeline.
+- `infrastructure/cloud-build` – non-GitHub validation and image release fallback used when hosted Actions capacity is unavailable.
 
-## Authoritative product documentation
+## Development
 
-- [Inspection type requirements](docs/product/inspection-types.md)
-- [End-to-end inspection business workflow](docs/product/business-workflow.md)
-- [Release scope and product priorities](docs/product/release-scope.md)
-- [Role and capability matrix](docs/product/role-capability-matrix.md)
-- [Phase 1 completion record](docs/product/phase-1-completion.md)
-
-## Repository structure
-
-```text
-/apps
-  /web
-  /api
-  /ai-worker
-  /pdf-worker
-/packages
-  /domain
-  /validation
-  /ui
-  /templates
-  /testing
-  /config
-/infrastructure
-  /terraform
-  /firebase
-  /cloud-deploy
-```
-
-The web application contains the existing React and Vite report builder. The API and workers provide typed foundations for later Cloud Run deployment. Shared packages prevent each application from inventing its own interpretation of reports, errors, validation, configuration, and templates.
-
-## Local development
-
-Prerequisites:
-
-- Node.js 22
-- npm 10 or later
-- Java 21 for Firebase emulators
-
-Install dependencies and start the complete local environment:
+Use Node 22.
 
 ```bash
 npm install --ignore-scripts --no-audit --no-fund
-npm run dev:local
+npm run dev
 ```
 
-This starts:
-
-- Firebase Auth, Firestore, Storage, Hosting, and Emulator UI
-- API on port 8080
-- Web application on port 3000
-
-Detailed instructions are in [Local Development](docs/development/local-development.md).
+The repository currently retains `bun.lock`, while the established CI and container build path installs the npm workspaces using the dependency ranges in `package.json`. Dependency upgrades should reconcile the lock strategy before changing major tooling versions rather than assuming an npm lockfile exists.
 
 ## Validation
 
+Normal local validation:
+
 ```bash
-npm run format:check
-npm run lint
-npm run typecheck
-npm run test:run
-npm run build
+npm run check
 npm run test:emulator
 npm run test:e2e
 ```
 
-The standard pull-request gate is:
+When GitHub-hosted Actions quota is unavailable, the Google Cloud validation equivalent is documented in `docs/product/github-actions-quota-release-waiver.md` and can be submitted with:
 
 ```bash
-npm run check
+bash scripts/google-cloud-validate.sh PROJECT_ID
 ```
 
-## Engineering standards
+## Releases
 
-The repository now includes:
+See `docs/product/production-readiness-closeout.md` for the current release and environment acceptance gates. The guarded non-Actions image release fallback is:
 
-- npm workspaces
-- strict TypeScript configuration
-- shared domain and validation packages
-- consistent API error contracts and correlation IDs
-- structured JSON logging foundations
-- automated formatting checks
-- Dependabot configuration
-- CODEOWNERS and a pull-request template
-- unit, API, rules, emulator, and Playwright test foundations
-- CI validation for the workspace and browser smoke tests
+```bash
+bash scripts/google-cloud-release.sh PROJECT_ID RELEASE_ID
+```
 
-## Firebase and Google Cloud
-
-Firebase configuration now lives under `infrastructure/firebase`.
-
-The approved target architecture uses:
-
-- Firebase Hosting
-- Identity Platform
-- Cloud Run
-- Firestore
-- Cloud Storage
-- Cloud Tasks
-- Pub/Sub
-- Vertex AI
-- Secret Manager
-- Cloud Logging and Cloud Monitoring
-- Artifact Registry, Cloud Build, and Cloud Deploy
-
-Terraform and Cloud Deploy directories are established as controlled infrastructure boundaries. Their environment implementation is tracked in issue #3.
-
-## Current runtime limitations
-
-The existing web interface still uses browser-configured Gemini access, optional Firebase synchronisation, browser-generated PDFs, and prototype workflow controls. These are deliberately identified as transitional and are replaced by the subsequent implementation workstreams. A directory existing does not magically make a production service appear, despite generations of optimistic architecture diagrams suggesting otherwise.
+Terraform remains authoritative for IAM, service accounts, secrets, networking, storage, scheduler configuration and environment controls; the fallback release path only replaces Cloud Run images.

@@ -1,9 +1,9 @@
 # Tenant communication delivery and scheduled lifecycle automation.
 #
 # Notification jobs are published by the API to notification-requests. Pub/Sub
-# pushes them to a private notification-worker. The same worker is invoked daily
-# by Cloud Scheduler to generate due/overdue action reminders, document signature
-# reminders and tenancy-expiry notifications across every agency.
+# pushes them to a private notification-worker. The same worker is invoked hourly
+# by Cloud Scheduler to generate lifecycle notifications and drain delayed/retry
+# queues using the agency's governed communication policy.
 
 resource "google_project_service" "cloud_scheduler" {
   project            = var.project_id
@@ -86,6 +86,15 @@ resource "google_cloud_run_v2_service" "notification_worker" {
       env {
         name  = "NOTIFICATION_CALLBACK_BASE_URL"
         value = google_cloud_run_v2_service.service["api"].uri
+      }
+      env {
+        name = "INTEGRATION_TOKEN_ENCRYPTION_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.inspection_operations["integration-token-encryption-key"].secret_id
+            version = "latest"
+          }
+        }
       }
 
       resources {
@@ -170,8 +179,8 @@ resource "google_cloud_scheduler_job" "tenant_automation" {
   project          = var.project_id
   region           = var.region
   name             = "tenant-lifecycle-automation"
-  description      = "Daily ProInspect tenant action, signature and tenancy-expiry reminders"
-  schedule         = "0 7 * * *"
+  description      = "Hourly ProInspect communication policy, lifecycle reminder and retry queue automation"
+  schedule         = "0 * * * *"
   time_zone        = "Australia/Perth"
   attempt_deadline = "180s"
 

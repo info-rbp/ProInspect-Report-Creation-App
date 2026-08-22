@@ -1,5 +1,5 @@
 import { PDFDocument, PageSizes, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
-import { type ReportBrandingSnapshot } from '@pcr/report-presentation';
+import { type ReportBrandingSnapshot, type ReportPresentationTemplate } from '@pcr/report-presentation';
 import { buildReportPresentationViewModel } from '@pcr/report-presentation/view-model';
 import { buildReportDocumentModel, type ReportDocumentBlock } from '@pcr/report-presentation/document-model';
 import { presentationTemplateForReportType } from '@pcr/report-presentation/presets';
@@ -9,15 +9,37 @@ export type { RenderInput, RenderAsset } from './renderer.js';
 
 const PAGE_WIDTH = PageSizes.A4[0];
 const PAGE_HEIGHT = PageSizes.A4[1];
-const MARGIN = 42;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
 function safe(value: unknown, fallback = ''): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function hexColour(value: string | undefined, fallback: string): ReturnType<typeof rgb> {
+  const source = /^#[0-9a-f]{6}$/iu.test(value || '') ? value! : fallback;
+  return rgb(
+    Number.parseInt(source.slice(1, 3), 16) / 255,
+    Number.parseInt(source.slice(3, 5), 16) / 255,
+    Number.parseInt(source.slice(5, 7), 16) / 255,
+  );
+}
+
 export function pdfSafeText(value: string): string {
-  return value.replace(/[\u2018\u2019]/gu, "'").replace(/[\u201C\u201D]/gu, '"').replace(/[\u2013\u2014]/gu, '-').replace(/\u2026/gu, '...').replace(/\u00a0/gu, ' ');
+  return value
+    .replace(/[\u2018\u2019]/gu, "'")
+    .replace(/[\u201C\u201D]/gu, '"')
+    .replace(/[\u2013\u2014]/gu, '-')
+    .replace(/\u2026/gu, '...')
+    .replace(/\u2022/gu, '*')
+    .replace(/\u00a0/gu, ' ')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .replace(/[^\x20-\x7E\n\r\t]/gu, '?');
 }
 
 export function wrapText(font: PDFFont, source: string, size: number, maxWidth: number): string[] {
@@ -44,6 +66,7 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
   const assets = new Map(input.assets.map((asset) => [asset.photoId, asset] as const));
+  const reportMetadata = asRecord(input.report);
 
   const areas = input.areas.map((area) => ({
     id: safe(area.id, 'area'),
@@ -81,43 +104,82 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     agencyName: safe(input.report.agentCompany, 'ProInspect'),
     areas,
   });
-  const branding: ReportBrandingSnapshot = {
-    profileId: safe((input as RenderInput & { brandingProfileId?: string }).brandingProfileId, 'system-branding'),
-    profileVersion: 1,
-    agencyName: safe(input.report.agentCompany, 'ProInspect'),
-    address: safe(input.report.agentAddress),
-    phone: safe(input.report.agentPhone),
-    email: safe(input.report.agentEmail),
-    primaryColour: '#1D4ED8', secondaryColour: '#0F172A', accentColour: '#0284C7', headingFont: 'Inter', bodyFont: 'Inter', capturedAt: input.approvedAt,
-  };
-  const model = buildReportDocumentModel({ view, template: presentationTemplateForReportType(view.identity.reportType, input.approvedAt), branding });
+
+  const pinnedTemplate = asRecord(reportMetadata.presentationTemplateSnapshot);
+  const template: ReportPresentationTemplate = pinnedTemplate.id && pinnedTemplate.status === 'published'
+    ? pinnedTemplate as unknown as ReportPresentationTemplate
+    : presentationTemplateForReportType(view.identity.reportType, input.approvedAt);
+  const pinnedBranding = asRecord(reportMetadata.brandingSnapshot);
+  const branding: ReportBrandingSnapshot = pinnedBranding.profileId
+    ? pinnedBranding as unknown as ReportBrandingSnapshot
+    : {
+        profileId: safe(reportMetadata.brandingProfileId, 'system-branding'),
+        profileVersion: typeof reportMetadata.brandingProfileVersion === 'number' ? reportMetadata.brandingProfileVersion : 1,
+        agencyName: safe(input.report.agentCompany, 'ProInspect'),
+        address: safe(input.report.agentAddress),
+        phone: safe(input.report.agentPhone),
+        email: safe(input.report.agentEmail),
+        primaryColour: '#1D4ED8',
+        secondaryColour: '#0F172A',
+        accentColour: '#0284C7',
+        headingFont: template.typography.headingFont,
+        bodyFont: template.typography.bodyFont,
+        capturedAt: input.approvedAt,
+      };
+  const brandingLogoId = safe(branding.logoDocumentId);
+  const model = buildReportDocumentModel({ view, template, branding });
+
+  const margin = Math.max(14, Math.min(115, template.page.marginMm * 72 / 25.4));
+  const contentWidth = PAGE_WIDTH - margin * 2;
+  const primary = hexColour(branding.primaryColour, '#1D4ED8');
+  const secondary = hexColour(branding.secondaryColour, '#0F172A');
+  const accent = hexColour(branding.accentColour, '#0284C7');
+  const bodySize = Math.max(7, Math.min(14, template.typography.baseFontSizePt || 9));
 
   doc.setTitle(model.title);
   doc.setAuthor(branding.agencyName);
   doc.setSubject(`Property inspection report ${input.reportId}`);
   doc.setCreator('ProInspect Property Reporting App');
   doc.setProducer('ProInspect PDF Worker shared document renderer');
+  const deterministicDate = new Date(input.approvedAt);
+  if (!Number.isNaN(deterministicDate.getTime())) {
+    doc.setCreationDate(deterministicDate);
+    doc.setModificationDate(deterministicDate);
+  }
 
   let pageNumber = 0;
   const newPage = (): State => {
     const page = doc.addPage(PageSizes.A4);
     pageNumber += 1;
-    page.drawLine({ start: { x: MARGIN, y: 28 }, end: { x: PAGE_WIDTH - MARGIN, y: 28 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
-    page.drawText(`Report ${input.reportId} | Page ${pageNumber}`, { x: MARGIN, y: 15, size: 7, font: regular, color: rgb(0.4, 0.4, 0.4) });
-    return { page, y: PAGE_HEIGHT - MARGIN, pageNumber };
+    if (template.page.showRunningHeader && pageNumber > 1) {
+      page.drawText(pdfSafeText(branding.agencyName), { x: margin, y: PAGE_HEIGHT - 22, size: 7, font: bold, color: secondary });
+    }
+    if (template.page.showPageNumbers) {
+      page.drawLine({ start: { x: margin, y: 28 }, end: { x: PAGE_WIDTH - margin, y: 28 }, thickness: 0.5, color: accent });
+      page.drawText(`Report ${input.reportId} | Page ${pageNumber}`, { x: margin, y: 15, size: 7, font: regular, color: secondary });
+      if (branding.footerText) {
+        const footer = pdfSafeText(branding.footerText).slice(0, 120);
+        page.drawText(footer, { x: PAGE_WIDTH - margin - Math.min(contentWidth / 2, regular.widthOfTextAtSize(footer, 6)), y: 15, size: 6, font: regular, color: secondary });
+      }
+    }
+    return { page, y: PAGE_HEIGHT - margin, pageNumber };
   };
   let state = newPage();
   const ensure = (height: number) => { if (state.y - height < 42) state = newPage(); };
   const text = (value: string, options: { size?: number; leading?: number; font?: PDFFont; indent?: number; colour?: ReturnType<typeof rgb> } = {}) => {
-    const size = options.size ?? 9; const leading = options.leading ?? size + 3; const font = options.font ?? regular; const indent = options.indent ?? 0;
-    for (const line of wrapText(font, value, size, CONTENT_WIDTH - indent)) {
+    const size = options.size ?? bodySize; const leading = options.leading ?? size + 3; const font = options.font ?? regular; const indent = options.indent ?? 0;
+    for (const line of wrapText(font, value, size, contentWidth - indent)) {
       ensure(leading + 2);
-      state.page.drawText(line, { x: MARGIN + indent, y: state.y, size, font, color: options.colour ?? rgb(0.08, 0.08, 0.08) });
+      state.page.drawText(line, { x: margin + indent, y: state.y, size, font, color: options.colour ?? secondary });
       state.y -= leading;
     }
   };
-  const heading = (value: string, major = false) => { ensure(36); text(value, { font: bold, size: major ? 20 : 14, leading: major ? 27 : 20 }); state.y -= 6; };
-  const rule = () => { state.page.drawLine({ start: { x: MARGIN, y: state.y }, end: { x: PAGE_WIDTH - MARGIN, y: state.y }, thickness: 0.7, color: rgb(0.75, 0.75, 0.75) }); state.y -= 10; };
+  const heading = (value: string, major = false) => {
+    ensure(36);
+    text(value, { font: bold, size: major ? Math.max(18, bodySize + 10) : Math.max(13, bodySize + 5), leading: major ? 27 : 20, colour: primary });
+    state.y -= 6;
+  };
+  const rule = () => { state.page.drawLine({ start: { x: margin, y: state.y }, end: { x: PAGE_WIDTH - margin, y: state.y }, thickness: 0.7, color: accent }); state.y -= 10; };
 
   const drawImage = async (photoId: string, height = 150) => {
     const asset: RenderAsset | undefined = assets.get(photoId);
@@ -128,9 +190,9 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     if (asset.contentType === 'image/png') image = await doc.embedPng(bytes).catch(() => undefined);
     if (!image) return;
     ensure(height + 10);
-    const scale = Math.min(CONTENT_WIDTH / image.width, height / image.height);
+    const scale = Math.min(contentWidth / image.width, height / image.height);
     const width = image.width * scale; const imageHeight = image.height * scale;
-    state.page.drawImage(image, { x: MARGIN + (CONTENT_WIDTH - width) / 2, y: state.y - imageHeight, width, height: imageHeight });
+    state.page.drawImage(image, { x: margin + (contentWidth - width) / 2, y: state.y - imageHeight, width, height: imageHeight });
     state.y -= imageHeight + 10;
   };
 
@@ -138,12 +200,20 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     const block: ReportDocumentBlock = model.blocks[index]!;
     if (index > 0 && (block.type === 'summary' || block.type === 'area' || block.type === 'photo-index')) state = newPage();
     if (block.type === 'cover') {
-      text(block.agencyName.toUpperCase(), { font: bold, size: 15, leading: 20, colour: rgb(0.11, 0.3, 0.7) });
-      state.y -= 44; heading(block.title, true); text(block.propertyAddress, { font: bold, size: 14, leading: 19 }); state.y -= 28;
+      if (brandingLogoId) {
+        await drawImage(brandingLogoId, template.cover.style === 'minimal' ? 42 : 64);
+        state.y -= template.cover.style === 'minimal' ? 6 : 10;
+      }
+      text(block.agencyName.toUpperCase(), { font: bold, size: 15, leading: 20, colour: primary });
+      state.y -= template.cover.style === 'minimal' ? 24 : 44;
+      heading(block.title, true);
+      text(block.propertyAddress, { font: bold, size: 14, leading: 19 });
+      state.y -= 28;
       if (block.inspectionDate) text(`Inspection date: ${block.inspectionDate}`);
-      if (block.inspectorName) text(`Prepared by: ${block.inspectorName}`);
-      if (block.clientName) text(`Client: ${block.clientName}`);
-      state.y -= 12; text(`Immutable report version: ${input.reportVersionId}`, { font: italic, size: 8, colour: rgb(0.35, 0.35, 0.35) });
+      if (template.cover.showInspectorName && block.inspectorName) text(`Prepared by: ${block.inspectorName}`);
+      if (template.cover.showClientName && block.clientName) text(`Client: ${block.clientName}`);
+      state.y -= 12;
+      text(`Immutable report version: ${input.reportVersionId}`, { font: italic, size: 8, colour: secondary });
       continue;
     }
     if (block.type === 'summary') {
@@ -153,15 +223,15 @@ export async function renderReportPdf(input: RenderInput, imageBytes: ReadonlyMa
     }
     if (block.type === 'finding-list') {
       heading(block.heading); rule();
-      if (!block.items.length) text('No exceptions recorded.', { font: italic, colour: rgb(0.4, 0.4, 0.4) });
+      if (!block.items.length) text('No exceptions recorded.', { font: italic, colour: secondary });
       for (const item of block.items) { ensure(50); text(`${item.areaName} / ${item.component.label}`, { font: bold, size: 10 }); text(item.component.commentary, { indent: 8 }); state.y -= 6; }
       continue;
     }
     if (block.type === 'area') {
-      heading(block.heading, true); text(block.commentary, { font: italic, colour: rgb(0.35, 0.35, 0.35) }); rule();
+      heading(block.heading, true); text(block.commentary, { font: italic, colour: secondary }); rule();
       for (const component of block.components) {
         ensure(56); text(component.label, { font: bold, size: 10 });
-        text(`Condition: ${component.condition.replaceAll('_', ' ')} | Cleanliness: ${component.cleanliness.replaceAll('_', ' ')} | Working: ${component.working.replaceAll('_', ' ')} | Test: ${component.test.replaceAll('_', ' ')}`, { font: italic, size: 7, colour: rgb(0.35, 0.35, 0.35), indent: 8 });
+        text(`Condition: ${component.condition.replaceAll('_', ' ')} | Cleanliness: ${component.cleanliness.replaceAll('_', ' ')} | Working: ${component.working.replaceAll('_', ' ')} | Test: ${component.test.replaceAll('_', ' ')}`, { font: italic, size: 7, colour: secondary, indent: 8 });
         text(component.commentary, { indent: 8 });
         for (const photo of component.photos.slice(0, 1)) await drawImage(photo.photoId, 115);
         state.y -= 5;
