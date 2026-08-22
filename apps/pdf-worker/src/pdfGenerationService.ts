@@ -566,7 +566,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
           renderManifestObjectPath: manifestObjectPath,
           renderManifestSha256: manifestSha256,
           tenantResponseCount: approved.renderInput.tenantResponses?.length ?? 0,
-          brandingLogoDocumentId: text(asRecord(approved.renderInput.report.brandingSnapshot).logoDocumentId) || undefined,
+          brandingLogoDocumentId: text(asRecord(approved.renderInput.report.brandingSnapshot).logoDocumentId),
         },
       });
       return 'completed' as const;
