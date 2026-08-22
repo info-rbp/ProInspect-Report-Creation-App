@@ -66,17 +66,91 @@ function isSystemCatalogueSeed(collection: string, data: Record<string, unknown>
   return collection.startsWith('catalogue') && data.systemDefault === true;
 }
 
-function isSatisfiedConcurrentSystemPointerUpdate(
+function canonicalSourcePatch(area: Record<string, unknown>, component: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...(typeof area.canonicalAreaDefinitionId === 'string'
+      ? { sourceCanonicalAreaDefinitionId: area.canonicalAreaDefinitionId }
+      : {}),
+    ...(typeof area.canonicalAreaDefinitionVersion === 'number'
+      ? { sourceCanonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion }
+      : {}),
+    ...(typeof component.canonicalComponentDefinitionId === 'string'
+      ? { sourceCanonicalComponentDefinitionId: component.canonicalComponentDefinitionId }
+      : {}),
+    ...(typeof component.canonicalComponentDefinitionVersion === 'number'
+      ? { sourceCanonicalComponentDefinitionVersion: component.canonicalComponentDefinitionVersion }
+      : {}),
+    ...(typeof component.canonicalAreaComponentRuleId === 'string'
+      ? { sourceCanonicalAreaComponentRuleId: component.canonicalAreaComponentRuleId }
+      : {}),
+    ...(typeof component.canonicalAreaComponentRuleVersion === 'number'
+      ? { sourceCanonicalAreaComponentRuleVersion: component.canonicalAreaComponentRuleVersion }
+      : {}),
+  };
+}
+
+async function enrichMaintenanceCanonicalSource(
   collection: string,
-  existing: StoredRecord,
+  agencyId: string,
   data: Record<string, unknown>,
-): boolean {
-  if (!isSystemCatalogueSeed(collection, data) || existing.systemDefault !== true) return false;
-  const currentDefinitionVersion = existing.definitionVersion;
-  const targetDefinitionVersion = data.definitionVersion;
-  return typeof currentDefinitionVersion === 'number'
-    && typeof targetDefinitionVersion === 'number'
-    && currentDefinitionVersion >= targetDefinitionVersion;
+): Promise<Record<string, unknown>> {
+  if (collection !== 'maintenanceCandidates' && collection !== 'maintenanceItems') return data;
+  const database = getFirestore(adminApp());
+
+  if (collection === 'maintenanceItems' && typeof data.candidateId === 'string') {
+    const candidate = await database.doc(`agencies/${agencyId}/maintenanceCandidates/${data.candidateId}`).get();
+    if (candidate.exists) {
+      const candidateData = candidate.data() as Record<string, unknown>;
+      const inherited = [
+        'sourceCanonicalAreaDefinitionId',
+        'sourceCanonicalAreaDefinitionVersion',
+        'sourceCanonicalComponentDefinitionId',
+        'sourceCanonicalComponentDefinitionVersion',
+        'sourceCanonicalAreaComponentRuleId',
+        'sourceCanonicalAreaComponentRuleVersion',
+      ].reduce<Record<string, unknown>>((patch, field) => {
+        if (candidateData[field] !== undefined && data[field] === undefined) patch[field] = candidateData[field];
+        return patch;
+      }, {});
+      data = { ...data, ...inherited };
+    }
+  }
+
+  const reportId = typeof data.sourceReportId === 'string'
+    ? data.sourceReportId
+    : typeof data.reportId === 'string' ? data.reportId : undefined;
+  const reportVersionId = typeof data.sourceReportVersionId === 'string'
+    ? data.sourceReportVersionId
+    : typeof data.reportVersionId === 'string' ? data.reportVersionId : undefined;
+  const areaId = typeof data.sourceAreaId === 'string'
+    ? data.sourceAreaId
+    : typeof data.areaId === 'string' ? data.areaId : undefined;
+  const componentId = typeof data.sourceComponentId === 'string'
+    ? data.sourceComponentId
+    : typeof data.componentId === 'string' ? data.componentId : undefined;
+  if (!reportId || !areaId || !componentId) return data;
+
+  const roots = reportVersionId
+    ? [`agencies/${agencyId}/reports/${reportId}/versions/${reportVersionId}/areas/${areaId}`]
+    : [
+        `agencies/${agencyId}/reports/${reportId}/areas/${areaId}`,
+      ];
+  for (const root of roots) {
+    const areaRef = database.doc(root);
+    const [areaSnapshot, componentSnapshot] = await Promise.all([
+      areaRef.get(),
+      areaRef.collection('components').doc(componentId).get(),
+    ]);
+    if (!areaSnapshot.exists || !componentSnapshot.exists) continue;
+    return {
+      ...data,
+      ...canonicalSourcePatch(
+        areaSnapshot.data() as Record<string, unknown>,
+        componentSnapshot.data() as Record<string, unknown>,
+      ),
+    };
+  }
+  return data;
 }
 
 export class FirestoreOperationalRepository implements OperationalRepository {
@@ -100,9 +174,10 @@ export class FirestoreOperationalRepository implements OperationalRepository {
 
   async create(collection: string, agencyId: string, id: string, data: Record<string, unknown>, actorId: string): Promise<StoredRecord> {
     assertReportMetadata(collection, data);
+    const enrichedData = await enrichMaintenanceCanonicalSource(collection, agencyId, data);
     const now = timestamp();
     const record: StoredRecord = {
-      ...data,
+      ...enrichedData,
       id,
       agencyId,
       version: 1,
@@ -116,7 +191,7 @@ export class FirestoreOperationalRepository implements OperationalRepository {
       await reference.create(record);
       return record;
     } catch (error) {
-      if (isSystemCatalogueSeed(collection, data)) {
+      if (isSystemCatalogueSeed(collection, enrichedData)) {
         const existing = await reference.get();
         if (existing.exists) return { id: existing.id, ...existing.data() } as StoredRecord;
       }
@@ -137,7 +212,6 @@ export class FirestoreOperationalRepository implements OperationalRepository {
       }
       assertTenancyDocumentMutation(collection, existing, data);
       if (existing.version !== expectedVersion) {
-        if (isSatisfiedConcurrentSystemPointerUpdate(collection, existing, data)) return existing;
         throw Object.assign(new Error('The record has changed. Reload and retry.'), {
           code: 'VERSION_CONFLICT',
           status: 409,
