@@ -6,6 +6,7 @@ import {
   enrichPublishedPriceBookCanonicalBindings,
   generateCanonicalMaintenanceEstimate,
 } from '../services/canonicalMaintenancePricingService.js';
+import { extractCanonicalMaintenanceForReport } from '../services/canonicalMaintenanceExtractionService.js';
 import { publishPriceBookImport } from '../services/maintenanceCommercialService.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult } from './types.js';
@@ -94,6 +95,32 @@ export async function routeCanonicalMaintenancePricingRequest(
   const route = parts(req);
   if (route[0] !== 'api' || route[1] !== 'v1') return undefined;
   const agencyId = agencyHeader(req);
+
+  if (
+    route[2] === 'maintenance-candidates' &&
+    route[3] === 'extract-automatic' &&
+    route.length === 4 &&
+    req.method === 'POST'
+  ) {
+    const body = await readJson(req);
+    const reportId = typeof body.reportId === 'string' ? body.reportId.trim() : '';
+    if (!reportId) throw new ApiError(400, 'REPORT_ID_REQUIRED', 'reportId is required for maintenance extraction.');
+    const actor = await principal(req, dependencies, 'maintenance.triage', agencyId, correlationId, { reportId });
+    return idempotent(dependencies, req, agencyId, `maintenance-extraction:${reportId}:canonical`, body, async () => ({
+      status: 200,
+      body: {
+        data: await extractCanonicalMaintenanceForReport(dependencies, {
+          agencyId,
+          reportId,
+          actorId: actor.uid,
+          actorRole: actor.role,
+          correlationId,
+          preliminary: body.preliminary === true,
+        }),
+        meta: { correlationId, identityMode: 'canonical_first' },
+      },
+    }));
+  }
 
   if (
     route[2] === 'maintenance-items' &&
