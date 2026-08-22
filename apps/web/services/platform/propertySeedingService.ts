@@ -40,13 +40,14 @@ export function createSeededItem(
   const resolvedComponent = resolvedCanonicalId
     ? findSystemComponentDefinition(resolvedCanonicalId, canonical?.componentDefinitionVersion)
     : undefined;
+  const resolvedCanonicalVersion = canonical?.componentDefinitionVersion ?? resolvedComponent?.version;
   const operational = Boolean(resolvedComponent && OPERATIONAL_COMPONENT_CATEGORIES.has(resolvedComponent.category));
   return {
     id: stableId?.trim() || slug(name) || generateId(),
     name,
-    ...(resolvedComponent ? {
-      canonicalComponentDefinitionId: resolvedComponent.id,
-      canonicalComponentDefinitionVersion: resolvedComponent.version,
+    ...(resolvedCanonicalId && resolvedCanonicalVersion ? {
+      canonicalComponentDefinitionId: resolvedCanonicalId,
+      canonicalComponentDefinitionVersion: resolvedCanonicalVersion,
     } : {}),
     ...(canonical?.areaComponentRuleId ? { canonicalAreaComponentRuleId: canonical.areaComponentRuleId } : {}),
     ...(canonical?.areaComponentRuleVersion ? { canonicalAreaComponentRuleVersion: canonical.areaComponentRuleVersion } : {}),
