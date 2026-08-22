@@ -19,6 +19,7 @@ import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
 import { routeTenantPortalRequest } from './backend/tenantPortalRoutes.js';
 import { routeTenantAutomationRequest } from './backend/tenantAutomationRoutes.js';
+import { routeTenantOperationsRequest } from './backend/tenantOperationsRoutes.js';
 import { routePropertyIntelligenceRequest } from './backend/propertyIntelligenceRoutes.js';
 import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
@@ -106,6 +107,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceCandidateResponse = await routeMaintenanceCandidateCommercialRequest(req, dependencies, correlationId); if (maintenanceCandidateResponse) { send(res, maintenanceCandidateResponse, correlationId); return; }
       const maintenanceCreateResponse = await routeMaintenanceCreateRequest(req, dependencies, correlationId); if (maintenanceCreateResponse) { send(res, maintenanceCreateResponse, correlationId); return; }
       const maintenanceActionResponse = await routeMaintenanceActionRequest(req, dependencies, correlationId); if (maintenanceActionResponse) { send(res, maintenanceActionResponse, correlationId); return; }
+      const tenantOperationsResponse = await routeTenantOperationsRequest(req, dependencies, correlationId); if (tenantOperationsResponse) { send(res, tenantOperationsResponse, correlationId); return; }
       const tenantAutomationResponse = await routeTenantAutomationRequest(req, dependencies, correlationId); if (tenantAutomationResponse) { send(res, tenantAutomationResponse, correlationId); return; }
       const tenantPortalResponse = await routeTenantPortalRequest(req, dependencies, correlationId); if (tenantPortalResponse) { send(res, tenantPortalResponse, correlationId); return; }
       const maintenanceResponse = await routeMaintenanceRequest(req, dependencies, correlationId); if (maintenanceResponse) { send(res, maintenanceResponse, correlationId); return; }
