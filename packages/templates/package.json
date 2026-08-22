@@ -10,6 +10,8 @@
     "./pcrPreset": {"types": "./dist/pcrPreset.d.ts", "import": "./dist/pcrPreset.js", "default": "./dist/pcrPreset.js"},
     "./pcrPreset.js": {"types": "./dist/pcrPreset.d.ts", "import": "./dist/pcrPreset.js", "default": "./dist/pcrPreset.js"},
     "./pcr-preset": {"types": "./dist/pcrPreset.d.ts", "import": "./dist/pcrPreset.js", "default": "./dist/pcrPreset.js"},
+    "./canonicalCatalogue": {"types": "./dist/canonicalCatalogue.d.ts", "import": "./dist/canonicalCatalogue.js", "default": "./dist/canonicalCatalogue.js"},
+    "./canonicalCatalogue.js": {"types": "./dist/canonicalCatalogue.d.ts", "import": "./dist/canonicalCatalogue.js", "default": "./dist/canonicalCatalogue.js"},
     "./registry": {"types": "./dist/registry.d.ts", "import": "./dist/registry.js", "default": "./dist/registry.js"}
   },
   "scripts": {"typecheck": "tsc --noEmit -p tsconfig.json", "test:run": "vitest run --passWithNoTests", "build": "tsc -p tsconfig.build.json"},
