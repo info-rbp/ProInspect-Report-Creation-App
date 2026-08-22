@@ -51,6 +51,7 @@ import {
 } from '../../services/platform/propertyLayoutService';
 import PropertyHistoryPanel from '../../components/properties/PropertyHistoryPanel';
 import PropertyLayoutEditor from '../../components/properties/PropertyLayoutEditor';
+import PropertyAssetsPanel from '../../components/properties/PropertyAssetsPanel';
 
 const TABS = [
   ['overview', 'Overview'],
@@ -213,7 +214,7 @@ const PropertyWorkspacePage: React.FC = () => {
 
     {tab === 'overview' && <OverviewTab property={property} jobs={jobs} reports={reports} maintenance={maintenance} isStrata={isStrata} onSave={savePatch} busy={busy} />}
     {tab === 'layout' && <PropertyLayoutEditor property={property} portfolio={portfolio} onSave={savePatch} busy={busy} />}
-    {tab === 'assets' && <AssetsTab property={property} onSave={savePatch} busy={busy} />}
+    {tab === 'assets' && <PropertyAssetsPanel property={property} onSave={savePatch} busy={busy} />}
     {tab === 'access' && <AccessTab property={property} onSave={savePatch} busy={busy} />}
     {tab === 'people' && <PeopleTab property={property} tenancies={tenancies} onSave={savePatch} onReload={load} busy={busy} />}
     {tab === 'documents' && <DocumentsTab property={property} onReload={load} onSave={savePatch} busy={busy} />}
