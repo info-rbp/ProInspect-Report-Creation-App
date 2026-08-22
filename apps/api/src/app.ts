@@ -17,6 +17,7 @@ import { routeMaintenanceCandidateCommercialRequest } from './backend/maintenanc
 import { routeMaintenanceCreateRequest } from './backend/maintenanceCreateRoutes.js';
 import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes.js';
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
+import { routeTenantDocumentRequest } from './backend/tenantDocumentRoutes.js';
 import { routeTenantInstructionGrantRequest } from './backend/tenantInstructionGrantRoutes.js';
 import { routeTenantPortalRequest } from './backend/tenantPortalRoutes.js';
 import { routeTenantAutomationRequest } from './backend/tenantAutomationRoutes.js';
@@ -108,6 +109,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       const maintenanceCandidateResponse = await routeMaintenanceCandidateCommercialRequest(req, dependencies, correlationId); if (maintenanceCandidateResponse) { send(res, maintenanceCandidateResponse, correlationId); return; }
       const maintenanceCreateResponse = await routeMaintenanceCreateRequest(req, dependencies, correlationId); if (maintenanceCreateResponse) { send(res, maintenanceCreateResponse, correlationId); return; }
       const maintenanceActionResponse = await routeMaintenanceActionRequest(req, dependencies, correlationId); if (maintenanceActionResponse) { send(res, maintenanceActionResponse, correlationId); return; }
+      const tenantDocumentResponse = await routeTenantDocumentRequest(req, dependencies, correlationId); if (tenantDocumentResponse) { send(res, tenantDocumentResponse, correlationId); return; }
       const tenantOperationsResponse = await routeTenantOperationsRequest(req, dependencies, correlationId); if (tenantOperationsResponse) { send(res, tenantOperationsResponse, correlationId); return; }
       const tenantAutomationResponse = await routeTenantAutomationRequest(req, dependencies, correlationId); if (tenantAutomationResponse) { send(res, tenantAutomationResponse, correlationId); return; }
       const tenantPortalResponse = await routeTenantPortalRequest(req, dependencies, correlationId); if (tenantPortalResponse) { send(res, tenantPortalResponse, correlationId); return; }
