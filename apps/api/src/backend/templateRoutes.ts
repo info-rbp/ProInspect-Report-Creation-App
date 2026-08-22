@@ -8,6 +8,7 @@ import {
   createRoutineInspectionTemplate,
   publishTemplate,
   retireTemplate,
+  systemInspectionTemplateContract,
   validateTemplate,
   type InspectionTypeTemplate,
 } from '@pcr/templates';
@@ -25,6 +26,11 @@ type StoredTemplate = StoredRecord & {
   propertyType: string;
   status: InspectionTypeTemplate['status'];
   areas: InspectionTypeTemplate['areas'];
+  structureMode?: InspectionTypeTemplate['structureMode'];
+  includeUnreferencedPropertyAreas?: boolean;
+  canonicalAreaReferences?: InspectionTypeTemplate['canonicalAreaReferences'];
+  propertyUses?: InspectionTypeTemplate['propertyUses'];
+  physicalPropertyTypes?: InspectionTypeTemplate['physicalPropertyTypes'];
   commentaryBank: InspectionTypeTemplate['commentaryBank'];
   templateCreatedAt: string;
   publishedAt?: string;
@@ -73,8 +79,15 @@ function view(record: StoredTemplate): TemplateView {
     inspectionType: record.inspectionType,
     propertyType: record.propertyType,
     status: record.status,
-    areas: structuredClone(record.areas),
-    commentaryBank: structuredClone(record.commentaryBank),
+    areas: structuredClone(record.areas || []),
+    ...(record.structureMode ? { structureMode: record.structureMode } : {}),
+    ...(typeof record.includeUnreferencedPropertyAreas === 'boolean'
+      ? { includeUnreferencedPropertyAreas: record.includeUnreferencedPropertyAreas }
+      : {}),
+    ...(record.canonicalAreaReferences ? { canonicalAreaReferences: structuredClone(record.canonicalAreaReferences) } : {}),
+    ...(record.propertyUses ? { propertyUses: structuredClone(record.propertyUses) } : {}),
+    ...(record.physicalPropertyTypes ? { physicalPropertyTypes: structuredClone(record.physicalPropertyTypes) } : {}),
+    commentaryBank: structuredClone(record.commentaryBank || []),
     createdAt: record.templateCreatedAt,
     ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
     ...(record.retiredAt ? { retiredAt: record.retiredAt } : {}),
@@ -90,7 +103,15 @@ function recordData(template: InspectionTypeTemplate, extras: { immutable?: bool
     inspectionType: template.inspectionType,
     propertyType: template.propertyType,
     status: template.status,
-    areas: structuredClone(template.areas),
+    /** Canonical templates intentionally persist no cloned Area/Component structures. */
+    areas: template.structureMode === 'property_layout_catalogue' ? [] : structuredClone(template.areas),
+    ...(template.structureMode ? { structureMode: template.structureMode } : {}),
+    ...(typeof template.includeUnreferencedPropertyAreas === 'boolean'
+      ? { includeUnreferencedPropertyAreas: template.includeUnreferencedPropertyAreas }
+      : {}),
+    ...(template.canonicalAreaReferences ? { canonicalAreaReferences: structuredClone(template.canonicalAreaReferences) } : {}),
+    ...(template.propertyUses ? { propertyUses: structuredClone(template.propertyUses) } : {}),
+    ...(template.physicalPropertyTypes ? { physicalPropertyTypes: structuredClone(template.physicalPropertyTypes) } : {}),
     commentaryBank: structuredClone(template.commentaryBank),
     templateCreatedAt: template.createdAt,
     ...(template.publishedAt ? { publishedAt: template.publishedAt } : {}),
@@ -110,6 +131,13 @@ function pointerData(template: InspectionTypeTemplate, versionRecordId: string, 
     status: template.status,
     versionRecordId,
     immutable: true,
+    ...(template.structureMode ? { structureMode: template.structureMode } : {}),
+    ...(typeof template.includeUnreferencedPropertyAreas === 'boolean'
+      ? { includeUnreferencedPropertyAreas: template.includeUnreferencedPropertyAreas }
+      : {}),
+    ...(template.canonicalAreaReferences ? { canonicalAreaReferences: structuredClone(template.canonicalAreaReferences) } : {}),
+    ...(template.propertyUses ? { propertyUses: structuredClone(template.propertyUses) } : {}),
+    ...(template.physicalPropertyTypes ? { physicalPropertyTypes: structuredClone(template.physicalPropertyTypes) } : {}),
     ...(template.publishedAt ? { publishedAt: template.publishedAt } : {}),
     ...(template.retiredAt ? { retiredAt: template.retiredAt } : {}),
     ...(systemDefault ? { systemDefault: true } : {}),
@@ -119,6 +147,8 @@ function pointerData(template: InspectionTypeTemplate, versionRecordId: string, 
 function templateFromBody(value: unknown): InspectionTypeTemplate {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(400, 'TEMPLATE_REQUIRED', 'A template object is required.');
   const candidate = structuredClone(value) as InspectionTypeTemplate;
+  candidate.areas = Array.isArray(candidate.areas) ? candidate.areas : [];
+  candidate.commentaryBank = Array.isArray(candidate.commentaryBank) ? candidate.commentaryBank : [];
   try { validateTemplate(candidate); } catch (error) {
     throw new ApiError(400, 'TEMPLATE_INVALID', error instanceof Error ? error.message : 'Template is invalid.');
   }
@@ -204,12 +234,28 @@ async function upsertPublishedPointer(
   }
 }
 
+function canonicalDefault(base: InspectionTypeTemplate): InspectionTypeTemplate {
+  const contract = systemInspectionTemplateContract(base.inspectionType);
+  return {
+    ...base,
+    id: contract.id,
+    version: contract.version,
+    status: 'draft',
+    areas: [],
+    structureMode: contract.structureMode,
+    includeUnreferencedPropertyAreas: contract.includeUnreferencedPropertyAreas,
+    canonicalAreaReferences: structuredClone(contract.areaReferences),
+    propertyUses: structuredClone(contract.propertyUses),
+    physicalPropertyTypes: structuredClone(contract.physicalPropertyTypes),
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function defaults(): InspectionTypeTemplate[] {
-  const createdAt = new Date().toISOString();
   return [
-    { ...createInitialPcrTemplate(), id: 'system-entry-v1', version: 1, status: 'draft', createdAt },
-    { ...createRoutineInspectionTemplate(), id: 'system-routine-v1', version: 1, status: 'draft', createdAt },
-    { ...createExitInspectionTemplate(), id: 'system-exit-v1', version: 1, status: 'draft', createdAt },
+    canonicalDefault(createInitialPcrTemplate()),
+    canonicalDefault(createRoutineInspectionTemplate()),
+    canonicalDefault(createExitInspectionTemplate()),
   ];
 }
 
@@ -222,7 +268,8 @@ async function ensureSystemDefaults(dependencies: ApiDependencies, agencyId: str
       await dependencies.repository.create(VERSION_COLLECTION, agencyId, id, recordData(published, { immutable: true, systemDefault: true }), actorId);
     }
     const pointer = await dependencies.repository.get(POINTER_COLLECTION, agencyId, published.id);
-    if (!pointer || pointer.status !== 'published' || pointer.templateVersion !== published.version) {
+    const needsCanonicalPromotion = pointer?.structureMode !== 'property_layout_catalogue';
+    if (!pointer || pointer.status !== 'published' || pointer.templateVersion !== published.version || needsCanonicalPromotion) {
       await upsertPublishedPointer(dependencies, agencyId, published, actorId, id, true);
     }
   }
@@ -247,7 +294,10 @@ async function createDraft(req: IncomingMessage, dependencies: ApiDependencies, 
   return idempotent(dependencies, req, agencyId, `template:${id}:create`, body, async () => {
     if (await dependencies.repository.get(VERSION_COLLECTION, agencyId, id)) throw new ApiError(409, 'TEMPLATE_VERSION_EXISTS', 'This template version already exists.');
     const created = await dependencies.repository.create(VERSION_COLLECTION, agencyId, id, recordData(template), principal.uid) as StoredTemplate;
-    await appendAudit(dependencies, principal, 'template.created', template.id, correlationId, { version: template.version });
+    await appendAudit(dependencies, principal, 'template.created', template.id, correlationId, {
+      version: template.version,
+      structureMode: template.structureMode || 'legacy_cloned_structure',
+    });
     return { status: 201, body: { data: view(created), meta: { correlationId } } };
   });
 }
@@ -262,7 +312,10 @@ async function updateDraft(req: IncomingMessage, dependencies: ApiDependencies, 
     const template = templateFromBody(body.template);
     if (template.id !== templateId || template.version !== version || template.status !== 'draft') throw new ApiError(400, 'TEMPLATE_IDENTITY_MISMATCH', 'Template identity, version and draft status cannot be changed by an edit.');
     const updated = await dependencies.repository.update(VERSION_COLLECTION, agencyId, existing.id, recordData(template), existing.version, principal.uid) as StoredTemplate;
-    await appendAudit(dependencies, principal, 'template.updated', templateId, correlationId, { version });
+    await appendAudit(dependencies, principal, 'template.updated', templateId, correlationId, {
+      version,
+      structureMode: template.structureMode || 'legacy_cloned_structure',
+    });
     return { status: 200, body: { data: view(updated), meta: { correlationId } } };
   });
 }
@@ -275,11 +328,18 @@ async function publish(req: IncomingMessage, dependencies: ApiDependencies, corr
     if (recordVersion !== existing.version) throw new ApiError(409, 'VERSION_CONFLICT', 'Template changed. Reload and retry.');
     const current = view(existing);
     assertTemplateEditable(current);
+    if (current.structureMode !== 'property_layout_catalogue') {
+      throw new ApiError(409, 'TEMPLATE_CANONICAL_MIGRATION_REQUIRED', 'Legacy cloned Area/Component templates must be migrated to canonical catalogue references before publication.');
+    }
     let published: InspectionTypeTemplate;
     try { published = publishTemplate(current); } catch (error) { throw new ApiError(400, 'TEMPLATE_INVALID', error instanceof Error ? error.message : 'Template cannot be published.'); }
     const updated = await dependencies.repository.update(VERSION_COLLECTION, agencyId, existing.id, recordData(published, { immutable: true, systemDefault: existing.systemDefault }), existing.version, principal.uid) as StoredTemplate;
     await upsertPublishedPointer(dependencies, agencyId, published, principal.uid, existing.id, Boolean(existing.systemDefault));
-    await appendAudit(dependencies, principal, 'template.published', templateId, correlationId, { version });
+    await appendAudit(dependencies, principal, 'template.published', templateId, correlationId, {
+      version,
+      structureMode: published.structureMode,
+      canonicalAreaReferenceCount: published.canonicalAreaReferences?.length || 0,
+    });
     return { status: 200, body: { data: view(updated), meta: { correlationId } } };
   });
 }
@@ -322,14 +382,25 @@ async function duplicate(req: IncomingMessage, dependencies: ApiDependencies, co
       inspectionType: sourceView.inspectionType,
       propertyType: sourceView.propertyType,
       status: 'draft',
-      areas: structuredClone(sourceView.areas),
+      areas: sourceView.structureMode === 'property_layout_catalogue' ? [] : structuredClone(sourceView.areas),
+      ...(sourceView.structureMode ? { structureMode: sourceView.structureMode } : {}),
+      ...(typeof sourceView.includeUnreferencedPropertyAreas === 'boolean'
+        ? { includeUnreferencedPropertyAreas: sourceView.includeUnreferencedPropertyAreas }
+        : {}),
+      ...(sourceView.canonicalAreaReferences ? { canonicalAreaReferences: structuredClone(sourceView.canonicalAreaReferences) } : {}),
+      ...(sourceView.propertyUses ? { propertyUses: structuredClone(sourceView.propertyUses) } : {}),
+      ...(sourceView.physicalPropertyTypes ? { physicalPropertyTypes: structuredClone(sourceView.physicalPropertyTypes) } : {}),
       commentaryBank: structuredClone(sourceView.commentaryBank),
       createdAt: new Date().toISOString(),
     };
     validateTemplate(draft);
     const id = storageId(draft.id, draft.version);
     const created = await dependencies.repository.create(VERSION_COLLECTION, agencyId, id, recordData(draft), principal.uid) as StoredTemplate;
-    await appendAudit(dependencies, principal, 'template.duplicated', templateId, correlationId, { sourceVersion: version, version: draft.version });
+    await appendAudit(dependencies, principal, 'template.duplicated', templateId, correlationId, {
+      sourceVersion: version,
+      version: draft.version,
+      structureMode: draft.structureMode || 'legacy_cloned_structure',
+    });
     return { status: 201, body: { data: view(created), meta: { correlationId } } };
   });
 }
@@ -350,7 +421,7 @@ export async function routeTemplateRequest(req: IncomingMessage, dependencies: A
   if (parts.length === 6 && req.method === 'GET') {
     const principal = await authenticateAndAuthorise(req, dependencies, 'report.read', { agencyId }, correlationId);
     const record = await loadTemplate(dependencies, agencyId, templateId, version);
-    return { status: 200, body: { data: view(record), meta: { correlationId, actor: principal.uid } } };
+    return { status: 200, body: { data: view(record), meta: { correlationId, actor: principal.uid } };
   }
   if (parts.length === 6 && req.method === 'PUT') return updateDraft(req, dependencies, correlationId, agencyId, templateId, version, await readJson(req));
   if (parts[6] === 'actions' && parts[7] && parts.length === 8 && req.method === 'POST') {
