@@ -19,6 +19,7 @@ import { routeMaintenanceActionRequest } from './backend/maintenanceActionRoutes
 import { routeMaintenanceRequest } from './backend/maintenanceRoutes.js';
 import { routePropertyIntelligenceRequest } from './backend/propertyIntelligenceRoutes.js';
 import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.js';
+import { routeClientManagementRequest } from './backend/clientManagementRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
@@ -94,6 +95,15 @@ function reportRoute(urlValue: string | undefined): { reportId?: string; command
   };
 }
 
+function isClientManagementRoute(urlValue: string | undefined): boolean {
+  const path = new URL(urlValue ?? '/', 'http://localhost').pathname;
+  return (
+    path.startsWith('/api/v1/client-management/') ||
+    /^\/api\/v1\/clients\/[^/]+\/documents(?:\/|$)/u.test(path) ||
+    /^\/api\/v1\/maintenance-quotes\/[^/]+\/actions\/send$/u.test(path)
+  );
+}
+
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID();
@@ -119,6 +129,14 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId);
         send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId);
         return;
+      }
+
+      if (isClientManagementRoute(req.url)) {
+        const clientManagementResponse = await routeClientManagementRequest(req, dependencies, correlationId);
+        if (clientManagementResponse) {
+          send(res, clientManagementResponse, correlationId);
+          return;
+        }
       }
 
       const reportOperationsResponse = await routeReportOperationsRequest(req, dependencies, correlationId);

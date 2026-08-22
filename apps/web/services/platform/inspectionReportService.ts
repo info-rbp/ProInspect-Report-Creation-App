@@ -6,6 +6,7 @@ import type {
 import type { ReportData, Room } from '../../types';
 import type { InspectionJob, PropertyRecord } from '../../types/platform';
 import { apiRequest } from '../apiClient';
+import { snapshotReportClientContext } from './clientManagementService';
 import { seedRoomsFromProperty } from './propertySeedingService';
 
 function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
@@ -68,17 +69,25 @@ export async function createInspectionReportForJob(
 ): Promise<ReportAggregate> {
   if (!job.version) throw new Error('Inspection job version is required. Reload the job before creating its report.');
   const rooms = seedRoomsFromProperty(property);
-  return apiRequest<ReportAggregate>(job.agencyId, `/api/v1/inspection-jobs/${encodeURIComponent(job.id)}/create-report`, {
+  const aggregate = await apiRequest<ReportAggregate>(job.agencyId, `/api/v1/inspection-jobs/${encodeURIComponent(job.id)}/create-report`, {
     method: 'POST',
     body: {
       expectedJobVersion: job.version,
       reportType: job.reportType,
-      clientName: options.clientName || '',
+      clientName: options.clientName || job.clientSnapshot?.clientName || '',
       inspectionDate: options.inspectionDate || new Date().toISOString().slice(0, 10),
       ...(options.allowLegacyBaseline ? { allowLegacyBaseline: true } : {}),
       areas: roomAreas(rooms),
     },
   });
+  if (!job.clientSnapshot && !property.clientIds.length) return aggregate;
+  try {
+    const metadata = await snapshotReportClientContext(aggregate.report.id);
+    return { ...aggregate, report: { ...aggregate.report, ...(metadata as ReportAggregate['report']) } };
+  } catch (failure) {
+    console.warn('Report created but Client context snapshot requires attention:', failure);
+    return aggregate;
+  }
 }
 
 export async function saveLegacyBaselineMapping(

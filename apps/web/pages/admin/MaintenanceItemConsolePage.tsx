@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
+import MaintenanceClientContextPanel from '../../components/maintenance/MaintenanceClientContextPanel';
 import MaintenanceItemCommercialPanel from '../../components/maintenance/MaintenanceItemCommercialPanel';
 import MaintenanceDetailPage from './MaintenanceDetailPage';
 
@@ -9,7 +10,8 @@ const MaintenanceItemConsolePage: React.FC = () => {
     <div>
       <MaintenanceDetailPage />
       {maintenanceId && (
-        <div className="px-6 pb-16">
+        <div className="space-y-6 px-6 pb-16">
+          <MaintenanceClientContextPanel maintenanceId={maintenanceId} />
           <MaintenanceItemCommercialPanel maintenanceId={maintenanceId} />
         </div>
       )}

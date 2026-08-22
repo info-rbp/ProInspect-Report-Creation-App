@@ -5,6 +5,14 @@ export const SECURITY_CAPABILITIES = [
   'agency.manage',
   'user.invite',
   'user.suspend',
+  'client.read',
+  'client.manage',
+  'client.contact.manage',
+  'client.relationship.manage',
+  'client.engagement.manage',
+  'client.document.manage',
+  'client.portal.manage',
+  'client.billing.manage',
   'property.read',
   'property.manage',
   'tenancy.read',
@@ -64,11 +72,14 @@ export interface AgencyMembership {
   tenancyIds?: string[];
   inspectionJobIds?: string[];
   reportIds?: string[];
+  clientAccountIds?: string[];
   updatedAt: string;
 }
 
 export interface AuthorisationTarget {
   agencyId: string;
+  clientAccountId?: string;
+  clientContactId?: string;
   propertyId?: string;
   tenancyId?: string;
   inspectionJobId?: string;

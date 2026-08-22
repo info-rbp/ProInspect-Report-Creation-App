@@ -14,6 +14,7 @@ import {
   type ShopifyOrderReference,
 } from '@pcr/domain';
 import type { ApiDependencies, StoredRecord } from '../backend/types.js';
+import { attachClientContextToRequest } from './clientManagementService.js';
 
 const MAX_PAGES = 20;
 const PAGE_SIZE = 100;
@@ -230,6 +231,11 @@ export async function upsertShopifyInspectionRequest(
     input.mapping,
   );
   request = applyPropertyMatches(request, await properties(dependencies, input.agencyId));
+  request = await attachClientContextToRequest(
+    dependencies,
+    input.agencyId,
+    request as unknown as Record<string, unknown>,
+  ) as unknown as InspectionRequest;
   request = {
     ...request,
     intakeStatus: deriveInspectionIntakeStatus(
@@ -299,6 +305,11 @@ export async function upsertCalendarInspectionRequest(
   };
   let request = mergeCalendarEventIntoRequest(base, input.calendar, input.mapping);
   request = applyPropertyMatches(request, await properties(dependencies, input.agencyId));
+  request = await attachClientContextToRequest(
+    dependencies,
+    input.agencyId,
+    request as unknown as Record<string, unknown>,
+  ) as unknown as InspectionRequest;
   request = {
     ...request,
     source: mergeCandidate?.source === 'shopify' ? 'shopify' : 'google_calendar',
@@ -352,7 +363,7 @@ export async function linkInspectionRequestToProperty(
   );
   if (!property) throw new Error('Property was not found.');
   const request = record<InspectionRequest>(requestRecord);
-  const next: InspectionRequest = {
+  let next: InspectionRequest = {
     ...request,
     propertyId: input.propertyId,
     propertyMatchStatus: 'matched',
@@ -364,6 +375,11 @@ export async function linkInspectionRequestToProperty(
     }),
     updatedAt: new Date().toISOString(),
   };
+  next = await attachClientContextToRequest(
+    dependencies,
+    input.agencyId,
+    next as unknown as Record<string, unknown>,
+  ) as unknown as InspectionRequest;
   return record<InspectionRequest>(
     await dependencies.repository.update(
       'inspectionRequests',
@@ -412,11 +428,16 @@ export async function convertInspectionRequestToJob(
   const tenancyId =
     request.tenancyId ||
     (await activeTenancyId(dependencies, input.agencyId, property.id));
-  const readyRequest: InspectionRequest = {
+  let readyRequest: InspectionRequest = {
     ...request,
     ...(tenancyId ? { tenancyId } : {}),
     intakeStatus: deriveInspectionIntakeStatus(request, input.mapping?.paymentRequired ?? request.source === 'shopify'),
   };
+  readyRequest = await attachClientContextToRequest(
+    dependencies,
+    input.agencyId,
+    readyRequest as unknown as Record<string, unknown>,
+  ) as unknown as InspectionRequest;
   if (readyRequest.intakeStatus !== 'ready_for_job') {
     throw new Error(`Inspection request is ${readyRequest.intakeStatus}, not ready for conversion.`);
   }
@@ -435,6 +456,9 @@ export async function convertInspectionRequestToJob(
           inspectionJobId: jobId,
           intakeStatus: 'converted',
           convertedAt: new Date().toISOString(),
+          ...(readyRequest.clientAccountId ? { clientAccountId: readyRequest.clientAccountId } : {}),
+          ...(readyRequest.clientEngagementId ? { clientEngagementId: readyRequest.clientEngagementId } : {}),
+          ...(readyRequest.clientSnapshot ? { clientSnapshot: readyRequest.clientSnapshot } : {}),
         },
         input.expectedVersion,
         input.actorId,
@@ -451,6 +475,9 @@ export async function convertInspectionRequestToJob(
   const jobData: Record<string, unknown> = {
     ...jobInput,
     status: 'booked',
+    ...(readyRequest.clientAccountId ? { clientAccountId: readyRequest.clientAccountId } : {}),
+    ...(readyRequest.clientEngagementId ? { clientEngagementId: readyRequest.clientEngagementId } : {}),
+    ...(readyRequest.clientSnapshot ? { clientSnapshot: readyRequest.clientSnapshot } : {}),
     ...(input.mapping?.defaultInspectorId
       ? { assignedInspectorId: input.mapping.defaultInspectorId }
       : {}),
@@ -485,6 +512,9 @@ export async function convertInspectionRequestToJob(
         tenancyId,
         intakeStatus: 'converted',
         convertedAt: now,
+        ...(readyRequest.clientAccountId ? { clientAccountId: readyRequest.clientAccountId } : {}),
+        ...(readyRequest.clientEngagementId ? { clientEngagementId: readyRequest.clientEngagementId } : {}),
+        ...(readyRequest.clientSnapshot ? { clientSnapshot: readyRequest.clientSnapshot } : {}),
       },
       input.expectedVersion,
       input.actorId,

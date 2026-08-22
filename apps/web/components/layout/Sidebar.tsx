@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { ClipboardList, FileText, Gauge, Hammer, Home, MessageSquare, Settings, Users, Wrench } from 'lucide-react';
+import { Building2, ClipboardList, FileText, Gauge, Hammer, Home, MessageSquare, Settings, Users, Wrench } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { InternalSection } from '../../services/platform/roleAccess';
 
@@ -13,6 +13,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', to: '/app/dashboard', section: 'dashboard', icon: Gauge },
+  { label: 'Clients', to: '/app/admin/clients', section: 'clients', icon: Building2 },
   { label: 'Properties', to: '/app/admin/properties', section: 'properties', icon: Home },
   { label: 'Inspection Jobs', to: '/app/admin/jobs', section: 'jobs', icon: ClipboardList },
   { label: 'Reports', to: '/app/admin/reports', section: 'reports', icon: FileText },
