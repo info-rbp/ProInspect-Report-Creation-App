@@ -23,7 +23,7 @@ export const SECURITY_CAPABILITIES = [
 export type SecurityCapability = (typeof SECURITY_CAPABILITIES)[number];
 export const INTERNAL_USER_ROLES = ['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer'] as const satisfies readonly UserRole[];
 export type InternalUserRole = (typeof INTERNAL_USER_ROLES)[number];
-export const INTERNAL_SECTIONS = ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenants', 'communications', 'compliance', 'users', 'templates', 'settings'] as const;
+export const INTERNAL_SECTIONS = ['dashboard', 'analytics', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenants', 'communications', 'compliance', 'users', 'templates', 'settings'] as const;
 export type InternalSection = (typeof INTERNAL_SECTIONS)[number];
 
 const settingsAdministration = ['settings.read', 'settings.organisation.manage', 'settings.branding.manage', 'settings.operations.manage', 'settings.communications.manage', 'settings.security.manage', 'integration.read', 'integration.manage', 'integration.credentials.manage', 'integration.sync', 'maintenance.policy.manage'] satisfies SecurityCapability[];
@@ -44,7 +44,7 @@ export const ROLE_CAPABILITIES: Readonly<Record<UserRole, readonly SecurityCapab
   shopify_customer: [],
 };
 
-export const INTERNAL_SECTION_CAPABILITIES: Readonly<Record<InternalSection, readonly SecurityCapability[]>> = { dashboard: [], clients: ['client.read'], properties: ['property.read'], jobs: ['job.read'], reports: ['report.read'], maintenance: ['maintenance.read'], tenants: ['tenant.read'], communications: ['communication.read'], compliance: ['compliance.read'], users: ['user.profile.manage'], templates: ['template.manage'], settings: ['settings.read'] };
+export const INTERNAL_SECTION_CAPABILITIES: Readonly<Record<InternalSection, readonly SecurityCapability[]>> = { dashboard: [], analytics: ['analytics.read'], clients: ['client.read'], properties: ['property.read'], jobs: ['job.read'], reports: ['report.read'], maintenance: ['maintenance.read'], tenants: ['tenant.read'], communications: ['communication.read'], compliance: ['compliance.read'], users: ['user.profile.manage'], templates: ['template.manage'], settings: ['settings.read'] };
 export function roleCapabilities(role: UserRole | undefined): readonly SecurityCapability[] { return role ? ROLE_CAPABILITIES[role] : []; }
 export function roleHasCapability(role: UserRole | undefined, capability: SecurityCapability): boolean { return roleCapabilities(role).includes(capability); }
 export function isInternalRole(role?: UserRole): role is InternalUserRole { return Boolean(role && (INTERNAL_USER_ROLES as readonly UserRole[]).includes(role)); }
