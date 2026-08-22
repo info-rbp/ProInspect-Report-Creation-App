@@ -3,6 +3,16 @@ import type { UserRole } from './platform.js';
 export const SECURITY_CAPABILITIES = [
   'agency.read',
   'agency.manage',
+  'settings.read',
+  'settings.organisation.manage',
+  'settings.branding.manage',
+  'settings.operations.manage',
+  'settings.communications.manage',
+  'settings.security.manage',
+  'integration.read',
+  'integration.manage',
+  'integration.credentials.manage',
+  'maintenance.policy.manage',
   'user.read',
   'user.invite',
   'user.profile.manage',
@@ -94,6 +104,19 @@ export const INTERNAL_SECTIONS = [
 
 export type InternalSection = (typeof INTERNAL_SECTIONS)[number];
 
+const settingsAdministration = [
+  'settings.read',
+  'settings.organisation.manage',
+  'settings.branding.manage',
+  'settings.operations.manage',
+  'settings.communications.manage',
+  'settings.security.manage',
+  'integration.read',
+  'integration.manage',
+  'integration.credentials.manage',
+  'maintenance.policy.manage',
+] satisfies SecurityCapability[];
+
 const clientAdministration = [
   'client.read',
   'client.manage',
@@ -121,7 +144,7 @@ const tenantWorkspace = [
 export const ROLE_CAPABILITIES: Readonly<Record<UserRole, readonly SecurityCapability[]>> = {
   super_admin: SECURITY_CAPABILITIES,
   proinspect_admin: [
-    'agency.read', 'agency.manage',
+    'agency.read', 'agency.manage', ...settingsAdministration,
     'user.read', 'user.invite', 'user.profile.manage', 'user.role.manage', 'user.scope.manage',
     'user.suspend', 'user.reactivate', 'user.revoke', 'user.session.revoke', 'user.security.manage', 'user.audit.read',
     'workforce.read', 'workforce.manage',
@@ -137,7 +160,7 @@ export const ROLE_CAPABILITIES: Readonly<Record<UserRole, readonly SecurityCapab
     'external_contact.manage', 'client_approval.manage',
   ],
   operations: [
-    'agency.read', 'user.read', 'workforce.read', ...clientAdministration,
+    'agency.read', 'settings.read', 'integration.read', 'user.read', 'workforce.read', ...clientAdministration,
     'property.read', 'property.manage', ...tenantWorkspace,
     'job.read', 'job.manage', 'report.read', 'report.issue',
     'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare',
@@ -175,7 +198,7 @@ export const INTERNAL_SECTION_CAPABILITIES: Readonly<Record<InternalSection, rea
   tenants: ['tenant.read'],
   users: ['user.profile.manage'],
   templates: ['template.manage'],
-  settings: ['agency.manage'],
+  settings: ['settings.read'],
 };
 
 export function roleCapabilities(role: UserRole | undefined): readonly SecurityCapability[] {
