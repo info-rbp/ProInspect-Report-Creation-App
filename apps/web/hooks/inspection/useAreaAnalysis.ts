@@ -33,31 +33,22 @@ function canonicalInspectionType(value?: string): InspectionType {
 
 function conditionState(value: StructuredComponentAnalysis['conditionCategory']): ConditionState {
   switch (value) {
-    case 'intact':
-      return 'clean_intact';
-    case 'minor_wear':
-      return 'minor_wear';
-    case 'repair_required':
-      return 'repair_required';
-    case 'replacement_recommended':
-      return 'damaged';
+    case 'intact': return 'clean_intact';
+    case 'minor_wear': return 'minor_wear';
+    case 'repair_required': return 'repair_required';
+    case 'replacement_recommended': return 'damaged';
     case 'unable_to_confirm':
-    default:
-      return 'unable_to_confirm';
+    default: return 'unable_to_confirm';
   }
 }
 
 function workingState(value: StructuredComponentAnalysis['testStatus']): WorkingState {
   switch (value) {
-    case 'tested_passed':
-      return 'tested_working';
-    case 'tested_failed':
-      return 'tested_not_working';
-    case 'not_applicable':
-      return 'not_relevant';
+    case 'tested_passed': return 'tested_working';
+    case 'tested_failed': return 'tested_not_working';
+    case 'not_applicable': return 'not_relevant';
     case 'untested':
-    default:
-      return 'not_tested';
+    default: return 'not_tested';
   }
 }
 
@@ -78,19 +69,27 @@ function photoReferencesFor(evidencePhotoIds: string[] | undefined, photos: Phot
 }
 
 async function commentaryFromStructuredAnalysis(input: {
-  areaName: string;
+  area: Pick<Room, 'name' | 'canonicalAreaDefinitionId' | 'canonicalAreaDefinitionVersion'>;
   item: InspectionItem;
   analysis: StructuredComponentAnalysis;
   photos: Photo[];
   inspectionType: InspectionType;
 }): Promise<{ commentary: string; photoReferences: NonNullable<InspectionItem['photoReferences']> }> {
-  const { areaName, item, analysis, photos, inspectionType } = input;
+  const { area, item, analysis, photos, inspectionType } = input;
   const photoReferences = photoReferencesFor(analysis.evidencePhotoIds, photos);
   const template = await getActiveTemplateForType(inspectionType);
 
   const fact: StructuredInspectionFact = {
-    area: areaName,
+    area: area.name,
     component: item.name,
+    ...(area.canonicalAreaDefinitionId ? {
+      canonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+      canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
+    } : {}),
+    ...(item.canonicalComponentDefinitionId ? {
+      canonicalComponentDefinitionId: item.canonicalComponentDefinitionId,
+      canonicalComponentDefinitionVersion: item.canonicalComponentDefinitionVersion,
+    } : {}),
     ...(item.subComponent ? { subComponent: item.subComponent } : {}),
     ...(item.material ? { material: item.material } : {}),
     ...(item.colour ? { colour: item.colour } : {}),
@@ -149,7 +148,7 @@ export function useAreaAnalysis({ agencyId, inspectionType }: UseAreaAnalysisOpt
           if (!match) return item;
 
           const generated = await commentaryFromStructuredAnalysis({
-            areaName: area.name,
+            area,
             item,
             analysis: match,
             photos: area.photos,
@@ -183,7 +182,12 @@ export function useAreaAnalysis({ agencyId, inspectionType }: UseAreaAnalysisOpt
   );
 
   const generateComponentCommentary = useCallback(
-    async (areaName: string, item: InspectionItem, photos: Photo[], previousReportNotes?: string): Promise<string | null> => {
+    async (
+      area: Pick<Room, 'name' | 'canonicalAreaDefinitionId' | 'canonicalAreaDefinitionVersion'>,
+      item: InspectionItem,
+      photos: Photo[],
+      previousReportNotes?: string,
+    ): Promise<string | null> => {
       if (!aiConfigured) {
         setAnalysisError('AI is not configured. Existing commentary has been preserved.');
         return null;
@@ -192,9 +196,9 @@ export function useAreaAnalysis({ agencyId, inspectionType }: UseAreaAnalysisOpt
       setLoadingItems((prev) => ({ ...prev, [item.id]: 'AI is analysing component evidence...' }));
       setAnalysisError(null);
       try {
-        const result = await generateItemComment(item.name, areaName, photos, item.comment || '', undefined, previousReportNotes);
+        const result = await generateItemComment(item.name, area.name, photos, item.comment || '', undefined, previousReportNotes);
         const generated = await commentaryFromStructuredAnalysis({
-          areaName,
+          area,
           item,
           analysis: result,
           photos,
