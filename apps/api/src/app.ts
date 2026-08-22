@@ -97,7 +97,11 @@ function reportRoute(urlValue: string | undefined): { reportId?: string; command
 
 function isClientManagementRoute(urlValue: string | undefined): boolean {
   const path = new URL(urlValue ?? '/', 'http://localhost').pathname;
-  return path.startsWith('/api/v1/client-management/') || /^\/api\/v1\/clients\/[^/]+\/documents(?:\/|$)/u.test(path);
+  return (
+    path.startsWith('/api/v1/client-management/') ||
+    /^\/api\/v1\/clients\/[^/]+\/documents(?:\/|$)/u.test(path) ||
+    /^\/api\/v1\/maintenance-quotes\/[^/]+\/actions\/send$/u.test(path)
+  );
 }
 
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
