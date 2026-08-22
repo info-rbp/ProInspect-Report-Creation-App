@@ -66,6 +66,19 @@ function isSystemCatalogueSeed(collection: string, data: Record<string, unknown>
   return collection.startsWith('catalogue') && data.systemDefault === true;
 }
 
+function isSatisfiedConcurrentSystemPointerUpdate(
+  collection: string,
+  existing: StoredRecord,
+  data: Record<string, unknown>,
+): boolean {
+  if (!isSystemCatalogueSeed(collection, data) || existing.systemDefault !== true) return false;
+  const currentDefinitionVersion = existing.definitionVersion;
+  const targetDefinitionVersion = data.definitionVersion;
+  return typeof currentDefinitionVersion === 'number'
+    && typeof targetDefinitionVersion === 'number'
+    && currentDefinitionVersion >= targetDefinitionVersion;
+}
+
 export class FirestoreOperationalRepository implements OperationalRepository {
   async list(collection: string, agencyId: string, limit: number, cursor?: string): Promise<Page<StoredRecord>> {
     const effectiveLimit = Math.min(Math.max(limit, 1), 100);
@@ -124,6 +137,7 @@ export class FirestoreOperationalRepository implements OperationalRepository {
       }
       assertTenancyDocumentMutation(collection, existing, data);
       if (existing.version !== expectedVersion) {
+        if (isSatisfiedConcurrentSystemPointerUpdate(collection, existing, data)) return existing;
         throw Object.assign(new Error('The record has changed. Reload and retry.'), {
           code: 'VERSION_CONFLICT',
           status: 409,
