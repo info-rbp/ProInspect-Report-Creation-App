@@ -17,6 +17,7 @@ export * from './tenant.js';
 export * from './security.js';
 export * from './people.js';
 export * from './agencySettings.js';
+export * from './dashboard.js';
 export * from './reportModel.js';
 export * from './reportOperations.js';
 export * from './photoEvidence.js';
