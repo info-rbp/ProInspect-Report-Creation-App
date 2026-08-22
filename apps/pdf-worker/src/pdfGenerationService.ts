@@ -251,6 +251,72 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     }
   }
 
+  const brandingSnapshot = asRecord(report.brandingSnapshot);
+  const logoDocumentId = text(brandingSnapshot.logoDocumentId);
+  if (logoDocumentId) {
+    const logoSnapshot = await database.doc(`agencies/${task.agencyId}/brandingAssets/${logoDocumentId}`).get();
+    if (!logoSnapshot.exists) {
+      throw new PdfWorkerError(
+        'BRANDING_LOGO_METADATA_MISSING',
+        'The pinned branding profile references a logo asset that no longer exists.',
+        false,
+        { logoDocumentId },
+      );
+    }
+    const logo = logoSnapshot.data() as Record<string, unknown>;
+    const objectPath = text(logo.objectPath);
+    const generation = text(logo.generation);
+    const logoHash = text(logo.sha256).toLowerCase();
+    const contentType = text(logo.contentType).toLowerCase();
+    if (!objectPath || !generation || !/^[a-f0-9]{64}$/u.test(logoHash)) {
+      throw new PdfWorkerError(
+        'BRANDING_LOGO_METADATA_INCOMPLETE',
+        'The pinned branding logo does not contain complete immutable storage provenance.',
+        false,
+        { logoDocumentId },
+      );
+    }
+    if (contentType !== 'image/jpeg' && contentType !== 'image/png') {
+      throw new PdfWorkerError(
+        'BRANDING_LOGO_FORMAT_UNSUPPORTED',
+        'Final PDF logos must be a governed PNG or JPEG asset. SVG and WebP remain valid for web branding but require a PDF-compatible raster variant.',
+        false,
+        { logoDocumentId, contentType },
+      );
+    }
+    const brandingBucketName = process.env.BRANDING_BUCKET?.trim() || uploadBucketName;
+    const brandingBucket = getStorage(adminApp()).bucket(brandingBucketName);
+    try {
+      const logoFile = brandingBucket.file(objectPath, { generation });
+      const [bytes] = await logoFile.download({ validation: false });
+      const actualHash = sha256(new Uint8Array(bytes));
+      if (actualHash !== logoHash) {
+        throw new PdfWorkerError(
+          'BRANDING_LOGO_HASH_MISMATCH',
+          'The pinned branding logo does not match its recorded SHA-256.',
+          false,
+          { logoDocumentId, generation, expectedSha256: logoHash, actualSha256: actualHash },
+        );
+      }
+      assets.push({
+        photoId: logoDocumentId,
+        objectPath,
+        generation,
+        sha256: logoHash,
+        contentType,
+      });
+      imageBytes.set(logoDocumentId, new Uint8Array(bytes));
+    } catch (error) {
+      if (error instanceof PdfWorkerError) throw error;
+      throw new PdfWorkerError(
+        'BRANDING_LOGO_DOWNLOAD_FAILED',
+        'The pinned branding logo could not be loaded for PDF rendering.',
+        true,
+        { logoDocumentId, generation, cause: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
   const reportType = text(report.reportType) || 'Property Condition Report';
   const renderInput: RenderInput = {
     reportId: task.reportId,
@@ -500,6 +566,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
           renderManifestObjectPath: manifestObjectPath,
           renderManifestSha256: manifestSha256,
           tenantResponseCount: approved.renderInput.tenantResponses?.length ?? 0,
+          brandingLogoDocumentId: text(asRecord(approved.renderInput.report.brandingSnapshot).logoDocumentId) || undefined,
         },
       });
       return 'completed' as const;
