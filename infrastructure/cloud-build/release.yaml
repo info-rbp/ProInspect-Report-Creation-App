@@ -22,6 +22,12 @@ steps:
   - id: build-dashboard-worker
     name: gcr.io/cloud-builders/docker
     args: ['build', '-f', 'apps/dashboard-worker/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}', '.']
+  - id: build-document-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/document-worker/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/document-worker:${_RELEASE_ID}', '.']
+  - id: build-integration-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'apps/integration-worker/Dockerfile', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/integration-worker:${_RELEASE_ID}', '.']
   - id: push-api
     name: gcr.io/cloud-builders/docker
     args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}']
@@ -38,6 +44,14 @@ steps:
     name: gcr.io/cloud-builders/docker
     args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}']
     waitFor: ['build-dashboard-worker']
+  - id: push-document-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/document-worker:${_RELEASE_ID}']
+    waitFor: ['build-document-worker']
+  - id: push-integration-worker
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/integration-worker:${_RELEASE_ID}']
+    waitFor: ['build-integration-worker']
   - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
@@ -58,8 +72,20 @@ steps:
     entrypoint: gcloud
     args: ['run', 'services', 'update', 'dashboard-worker', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}', '--quiet']
     waitFor: ['push-dashboard-worker']
+  - id: deploy-document-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ['run', 'services', 'update', 'document-worker', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/document-worker:${_RELEASE_ID}', '--quiet']
+    waitFor: ['push-document-worker']
+  - id: deploy-integration-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: ['run', 'services', 'update', 'integration-worker', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/integration-worker:${_RELEASE_ID}', '--quiet']
+    waitFor: ['push-integration-worker']
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/pdf-worker:${_RELEASE_ID}'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/notification-worker:${_RELEASE_ID}'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/dashboard-worker:${_RELEASE_ID}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/document-worker:${_RELEASE_ID}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/integration-worker:${_RELEASE_ID}'
