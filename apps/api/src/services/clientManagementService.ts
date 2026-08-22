@@ -240,7 +240,6 @@ function snapshotForAccount(
     ...(contact ? { primaryContact: { contactId: contact.id, name: contact.displayName, ...(contact.email ? { email: contact.email } : {}), ...(contact.phone || contact.mobile ? { phone: contact.phone || contact.mobile } : {}) } } : {}),
     reportRecipients: contact?.receivesReports ? [{ contactId: contact.id, name: contact.displayName, ...(contact.email ? { email: contact.email } : {}) }] : [],
     ...(contact?.canApproveMaintenance ? { maintenanceApprover: { contactId: contact.id, name: contact.displayName, ...(contact.email ? { email: contact.email } : {}) } } : {}),
-    ...((account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId) ? { xeroContactId: account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId } : {}),
     capturedAt: new Date().toISOString(),
   };
 }
