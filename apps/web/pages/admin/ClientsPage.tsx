@@ -43,6 +43,13 @@ const ClientsPage: React.FC = () => {
     onboarding: clients.filter((client) => client.status === 'onboarding' || client.status === 'prospect').length,
     action: clients.filter((client) => (client.onboardingBlockers?.length || 0) > 0).length,
   };
+  const metrics: Array<{ title: string; value: number; Icon: React.ComponentType<{ size?: number; className?: string }> }> = [
+    { title: 'Total clients', value: counts.total, Icon: Building2 },
+    { title: 'PM firms', value: counts.firms, Icon: Building2 },
+    { title: 'Private landlords', value: counts.landlords, Icon: UserRound },
+    { title: 'Onboarding', value: counts.onboarding, Icon: CircleAlert },
+    { title: 'Action required', value: counts.action, Icon: CircleAlert },
+  ];
 
   return (
     <div className="space-y-6">
@@ -59,16 +66,10 @@ const ClientsPage: React.FC = () => {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          ['Total clients', counts.total, Building2],
-          ['PM firms', counts.firms, Building2],
-          ['Private landlords', counts.landlords, UserRound],
-          ['Onboarding', counts.onboarding, CircleAlert],
-          ['Action required', counts.action, CircleAlert],
-        ].map(([title, value, Icon]) => (
-          <div key={String(title)} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between"><span className="text-xs font-semibold text-slate-500">{String(title)}</span><Icon size={16} className="text-slate-400" /></div>
-            <div className="mt-3 text-2xl font-black text-slate-950">{String(value)}</div>
+        {metrics.map(({ title, value, Icon }) => (
+          <div key={title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between"><span className="text-xs font-semibold text-slate-500">{title}</span><Icon size={16} className="text-slate-400" /></div>
+            <div className="mt-3 text-2xl font-black text-slate-950">{value}</div>
           </div>
         ))}
       </div>
