@@ -103,7 +103,6 @@ function recordData(template: InspectionTypeTemplate, extras: { immutable?: bool
     inspectionType: template.inspectionType,
     propertyType: template.propertyType,
     status: template.status,
-    /** Canonical templates intentionally persist no cloned Area/Component structures. */
     areas: template.structureMode === 'property_layout_catalogue' ? [] : structuredClone(template.areas),
     ...(template.structureMode ? { structureMode: template.structureMode } : {}),
     ...(typeof template.includeUnreferencedPropertyAreas === 'boolean'
@@ -421,7 +420,7 @@ export async function routeTemplateRequest(req: IncomingMessage, dependencies: A
   if (parts.length === 6 && req.method === 'GET') {
     const principal = await authenticateAndAuthorise(req, dependencies, 'report.read', { agencyId }, correlationId);
     const record = await loadTemplate(dependencies, agencyId, templateId, version);
-    return { status: 200, body: { data: view(record), meta: { correlationId, actor: principal.uid } };
+    return { status: 200, body: { data: view(record), meta: { correlationId, actor: principal.uid } } };
   }
   if (parts.length === 6 && req.method === 'PUT') return updateDraft(req, dependencies, correlationId, agencyId, templateId, version, await readJson(req));
   if (parts[6] === 'actions' && parts[7] && parts.length === 8 && req.method === 'POST') {
