@@ -12,6 +12,12 @@ import {
   type ReportLifecycleStatus,
   type ReportPhotoReference,
 } from '@pcr/domain';
+import {
+  canonicalInspectionTemplateFromRecord,
+  templateAppliesToProperty,
+  validateCanonicalInspectionTemplate,
+  type CanonicalInspectionTemplateContract,
+} from '@pcr/templates/inspectionTemplateCatalogue';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import {
   REPORT_STRUCTURE_RESOLUTION_VERSION,
@@ -20,7 +26,7 @@ import {
 } from '../services/reportStructureResolutionService.js';
 import { routeSpecialisedCloseoutRequest } from './specialisedCloseoutRoutesMounted.js';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies } from './types.js';
+import type { ApiDependencies, StoredRecord } from './types.js';
 
 function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
@@ -257,6 +263,59 @@ function propertyAddress(property: Record<string, unknown>): string {
     .join(', ') || 'Property';
 }
 
+function propertyForPinnedLayout(property: StoredRecord, pinnedLayoutVersionId?: string): StoredRecord {
+  if (!pinnedLayoutVersionId) return property;
+  const layoutVersions = Array.isArray(property.layoutVersions) ? property.layoutVersions : [];
+  const exists = layoutVersions.some((candidate) =>
+    candidate && typeof candidate === 'object' && !Array.isArray(candidate) &&
+    (candidate as Record<string, unknown>).id === pinnedLayoutVersionId,
+  );
+  if (!exists) {
+    throw new ApiError(409, 'PINNED_PROPERTY_LAYOUT_VERSION_NOT_FOUND', 'The Inspection Job references a Property Layout Version that no longer exists. Repair the Job before creating its Report.');
+  }
+  return { ...property, currentLayoutVersionId: pinnedLayoutVersionId } as StoredRecord;
+}
+
+async function resolveReportTemplate(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  inspectionType: ReturnType<typeof canonicalInspectionType>,
+  property: StoredRecord,
+  actorId: string,
+  job: StoredRecord,
+): Promise<CanonicalInspectionTemplateContract> {
+  const pinnedId = typeof job.templateId === 'string' && job.templateId.trim() ? job.templateId.trim() : undefined;
+  const pinnedVersion = typeof job.templateVersion === 'number' && Number.isInteger(job.templateVersion) && job.templateVersion > 0
+    ? job.templateVersion
+    : undefined;
+  if (!pinnedId && !pinnedVersion) {
+    return resolvePublishedInspectionTemplate(dependencies, agencyId, inspectionType, property, actorId);
+  }
+  if (!pinnedId || !pinnedVersion) {
+    throw new ApiError(409, 'PINNED_TEMPLATE_INCOMPLETE', 'The Inspection Job has an incomplete Template pin. Both Template ID and Version are required.');
+  }
+
+  const stored = await dependencies.repository.get('templateVersions', agencyId, `${pinnedId}--v${pinnedVersion}`);
+  if (!stored) {
+    throw new ApiError(409, 'PINNED_TEMPLATE_VERSION_NOT_FOUND', 'The Inspection Job references a Template Version that cannot be resolved. Repair the Job before creating its Report.');
+  }
+  const contract = canonicalInspectionTemplateFromRecord(stored, inspectionType);
+  if (contract.id !== pinnedId || contract.version !== pinnedVersion) {
+    throw new ApiError(409, 'PINNED_TEMPLATE_VERSION_MISMATCH', 'Resolved Template Version does not match the Inspection Job pin.');
+  }
+  if (contract.status !== 'published') {
+    throw new ApiError(409, 'PINNED_TEMPLATE_NOT_PUBLISHED', 'The Inspection Job Template Version is not an immutable published version.');
+  }
+  if (!templateAppliesToProperty(contract, property)) {
+    throw new ApiError(422, 'PINNED_TEMPLATE_PROPERTY_MISMATCH', 'The Inspection Job Template Version does not apply to the linked Property classification.');
+  }
+  const issues = validateCanonicalInspectionTemplate(contract);
+  if (issues.length) {
+    throw new ApiError(409, 'PINNED_TEMPLATE_INVALID', `The Inspection Job Template Version is invalid: ${issues.join(' ')}`);
+  }
+  return contract;
+}
+
 async function recoverDeterministicReport(
   dependencies: ApiDependencies,
   input: { agencyId: string; jobId: string; jobVersion: number; reportId: string; actorId: string },
@@ -343,6 +402,10 @@ export async function routeInspectionReportRequest(
   if (!propertyId) throw new ApiError(422, 'PROPERTY_REQUIRED', 'Inspection job has no linked property.');
   const property = await dependencies.repository.get('properties', agencyId, propertyId);
   if (!property) throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Linked property not found.');
+  const pinnedLayoutVersionId = typeof job.propertyLayoutVersionId === 'string' && job.propertyLayoutVersionId.trim()
+    ? job.propertyLayoutVersionId.trim()
+    : undefined;
+  const structureProperty = propertyForPinnedLayout(property, pinnedLayoutVersionId);
 
   const tenancyId = typeof job.tenancyId === 'string' ? job.tenancyId : undefined;
   const tenancy = tenancyId ? await dependencies.repository.get('tenancies', agencyId, tenancyId) : undefined;
@@ -350,11 +413,11 @@ export async function routeInspectionReportRequest(
 
   const canonicalType = canonicalInspectionType(String(job.reportType ?? body.reportType ?? 'Property Condition Report'));
   const policy = inspectionPolicy(canonicalType);
-  const template = await resolvePublishedInspectionTemplate(dependencies, agencyId, canonicalType, property, principal.uid);
+  const template = await resolveReportTemplate(dependencies, agencyId, canonicalType, structureProperty, principal.uid, job);
   const resolved = await resolveAuthoritativeReportStructure(dependencies, {
     agencyId,
     inspectionType: canonicalType,
-    propertyRecord: property,
+    propertyRecord: structureProperty,
     template,
   });
   let areas = resolved.areas;
@@ -453,10 +516,12 @@ export async function routeInspectionReportRequest(
     correlationId,
     metadata: {
       propertyLayoutVersionId: resolved.propertyLayoutVersion.id,
+      propertyLayoutVersionPinnedByJob: Boolean(pinnedLayoutVersionId),
       structureResolutionVersion: REPORT_STRUCTURE_RESOLUTION_VERSION,
       templateStructureMode: template.structureMode,
       templateId: template.id,
       templateVersion: template.version,
+      templateVersionPinnedByJob: Boolean(job.templateId && job.templateVersion),
       canonicalCatalogueId: resolved.propertyLayoutVersion.canonicalCatalogueId ?? null,
       canonicalCatalogueVersion: resolved.propertyLayoutVersion.canonicalCatalogueVersion ?? null,
       clientSuppliedStructureIgnored: Array.isArray(body.areas),
