@@ -1,44 +1,18 @@
-import type { UserRole } from '../../types/platform';
+import {
+  INTERNAL_USER_ROLES,
+  canAccessInternalSection,
+  isInternalRole as isDomainInternalRole,
+  type InternalSection,
+  type UserRole,
+} from '@pcr/domain';
 
-export const INTERNAL_ROLES: UserRole[] = [
-  'super_admin',
-  'proinspect_admin',
-  'operations',
-  'inspector',
-  'analyst',
-  'reviewer',
-];
+export const INTERNAL_ROLES: UserRole[] = [...INTERNAL_USER_ROLES];
+export type { InternalSection };
 
-export type InternalSection =
-  | 'dashboard'
-  | 'clients'
-  | 'properties'
-  | 'jobs'
-  | 'reports'
-  | 'maintenance'
-  | 'tenants'
-  | 'users'
-  | 'templates'
-  | 'settings';
+export const isInternalRole = (role?: UserRole): boolean => isDomainInternalRole(role);
 
-const ROLE_SECTIONS: Record<UserRole, InternalSection[]> = {
-  super_admin: ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenants', 'users', 'templates', 'settings'],
-  proinspect_admin: ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenants', 'users', 'templates', 'settings'],
-  operations: ['dashboard', 'clients', 'properties', 'jobs', 'reports', 'maintenance', 'tenants'],
-  inspector: ['dashboard', 'maintenance'],
-  analyst: ['dashboard', 'reports', 'maintenance', 'tenants'],
-  reviewer: ['dashboard', 'reports', 'maintenance', 'tenants'],
-  tenant: [],
-  landlord: [],
-  shopify_customer: [],
-};
-
-export const isInternalRole = (role?: UserRole): boolean => Boolean(role && INTERNAL_ROLES.includes(role));
-
-export const canAccessSection = (role: UserRole | undefined, section: InternalSection): boolean => {
-  if (!role) return false;
-  return ROLE_SECTIONS[role].includes(section);
-};
+export const canAccessSection = (role: UserRole | undefined, section: InternalSection): boolean =>
+  canAccessInternalSection(role, section);
 
 export const hasAnyRole = (currentRole: UserRole | undefined, allowedRoles: UserRole[]): boolean => {
   if (!currentRole) return false;

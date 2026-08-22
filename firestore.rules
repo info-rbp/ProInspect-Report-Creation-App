@@ -1,8 +1,28 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function belongsToAgency(agencyId) {
+      return signedIn() && (
+        request.auth.token.agencyId == agencyId ||
+        request.auth.token.firebase.tenant == agencyId
+      );
+    }
+
+    // The browser may read only its own membership so it can construct the
+    // authenticated application profile. Membership writes are Admin SDK/API-only.
+    match /agencies/{agencyId}/memberships/{uid} {
+      allow read: if belongsToAgency(agencyId) && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Operational data is server-authoritative. Browser access goes through the
+    // authenticated API, which applies agency, capability, assignment and lifecycle policy.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
