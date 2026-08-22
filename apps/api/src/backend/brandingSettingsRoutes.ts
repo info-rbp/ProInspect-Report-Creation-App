@@ -126,7 +126,7 @@ export async function routeBrandingSettingsRequest(req: IncomingMessage, depende
     const assetId = route[5];
     if (req.method === 'GET') {
       const principal = await authenticateAndAuthorise(req, dependencies, 'settings.read', { agencyId }, correlationId);
-      const data = assetId ? await dependencies.repository.get('brandingAssets', agencyId, assetId) : (await listAll(dependencies, 'brandingAssets', agencyId));
+      const data = assetId ? await dependencies.repository.get('brandingAssets', agencyId, assetId) : await listAll(dependencies, 'brandingAssets', agencyId);
       return { status: 200, body: { data: data ?? null, meta: { actor: principal.uid, correlationId } } };
     }
     const body = await readJson(req);
@@ -163,7 +163,8 @@ export async function routeBrandingSettingsRequest(req: IncomingMessage, depende
   if ((req.method === 'PUT' || req.method === 'PATCH') && profileId) {
     const current = await dependencies.repository.get('brandingProfiles', agencyId, profileId);
     if (!current) throw new ApiError(404, 'BRANDING_PROFILE_NOT_FOUND', 'Branding profile was not found.');
-    const clean = { ...body, id: profileId }; delete clean.expectedVersion;
+    const clean: Record<string, unknown> = { ...body, id: profileId };
+    delete clean.expectedVersion;
     const validated = validate(agencyBrandingProfileSchema.parse(clean));
     const updated = await dependencies.repository.update('brandingProfiles', agencyId, profileId, validated as unknown as Record<string, unknown>, expectedVersion(body.expectedVersion), principal.uid);
     return { status: 200, body: { data: updated, meta: { actor: principal.uid, correlationId } } };
