@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import {
-  MANAGED_CANONICAL_AREA_V1,
-  MANAGED_CANONICAL_COMPONENT_V1,
+  MANAGED_SYSTEM_AREA_VERSIONS,
+  MANAGED_SYSTEM_COMPONENT_VERSIONS,
   catalogueMachineCode,
   createAreaDraftDefinition,
   createComponentDraftDefinition,
@@ -176,9 +176,7 @@ function componentView(record: StoredComponentVersion): CatalogueComponentVersio
   };
 }
 
-function areaRecordData(
-  view: CatalogueAreaVersionView,
-): Record<string, unknown> {
+function areaRecordData(view: CatalogueAreaVersionView): Record<string, unknown> {
   return {
     definition: structuredClone(view.definition),
     componentRules: structuredClone(view.componentRules),
@@ -187,9 +185,7 @@ function areaRecordData(
   };
 }
 
-function componentRecordData(
-  view: CatalogueComponentVersionView,
-): Record<string, unknown> {
+function componentRecordData(view: CatalogueComponentVersionView): Record<string, unknown> {
   return {
     definition: structuredClone(view.definition),
     immutable: view.immutable,
@@ -237,12 +233,19 @@ async function upsertPointer(
   }
 }
 
+function shouldAdvanceSystemPointer(pointer: StoredRecord | undefined, targetVersion: number): boolean {
+  if (!pointer) return true;
+  if (pointer.systemDefault !== true) return false;
+  const currentVersion = typeof pointer.definitionVersion === 'number' ? pointer.definitionVersion : 0;
+  return targetVersion > currentVersion;
+}
+
 async function ensureCatalogueSeeded(
   dependencies: ApiDependencies,
   agencyId: string,
   actorId: string,
 ): Promise<void> {
-  for (const canonical of MANAGED_CANONICAL_COMPONENT_V1) {
+  for (const canonical of MANAGED_SYSTEM_COMPONENT_VERSIONS) {
     const id = storageId(canonical.definition.id, canonical.definition.version);
     const existing = await dependencies.repository.get(COMPONENT_VERSION_COLLECTION, agencyId, id);
     if (!existing) {
@@ -259,7 +262,7 @@ async function ensureCatalogueSeeded(
       agencyId,
       canonical.definition.id,
     );
-    if (!pointer) {
+    if (shouldAdvanceSystemPointer(pointer, canonical.definition.version)) {
       await upsertPointer(
         dependencies,
         COMPONENT_POINTER_COLLECTION,
@@ -275,7 +278,7 @@ async function ensureCatalogueSeeded(
     }
   }
 
-  for (const canonical of MANAGED_CANONICAL_AREA_V1) {
+  for (const canonical of MANAGED_SYSTEM_AREA_VERSIONS) {
     const id = storageId(canonical.definition.id, canonical.definition.version);
     const existing = await dependencies.repository.get(AREA_VERSION_COLLECTION, agencyId, id);
     if (!existing) {
@@ -292,7 +295,7 @@ async function ensureCatalogueSeeded(
       agencyId,
       canonical.definition.id,
     );
-    if (!pointer) {
+    if (shouldAdvanceSystemPointer(pointer, canonical.definition.version)) {
       await upsertPointer(
         dependencies,
         AREA_POINTER_COLLECTION,
