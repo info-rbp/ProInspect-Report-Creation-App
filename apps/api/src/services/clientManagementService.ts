@@ -12,6 +12,7 @@ import {
   type ClientSnapshot,
   type MaintenanceItem,
   type PropertyClientRelationship,
+  type PropertyClientRelationshipType,
   type PropertyRecord,
 } from '@pcr/domain';
 import type { ApiDependencies, StoredRecord } from '../backend/types.js';
@@ -39,13 +40,28 @@ export async function listAllClientRecords(
   return items;
 }
 
+function relationshipRank(type: PropertyClientRelationshipType): number {
+  const priority: PropertyClientRelationshipType[] = [
+    'engaging_client',
+    'managing_agent',
+    'maintenance_authority',
+    'billing_party',
+    'owner',
+    'strata_manager',
+    'owner_representative',
+    'report_recipient',
+  ];
+  const index = priority.indexOf(type);
+  return index < 0 ? priority.length : index;
+}
+
 function currentRelationshipsForProperty(
   relationships: PropertyClientRelationship[],
   propertyId: string,
 ): PropertyClientRelationship[] {
-  return activePropertyClientRelationships(relationships).filter(
-    (relationship) => relationship.propertyId === propertyId,
-  );
+  return activePropertyClientRelationships(relationships)
+    .filter((relationship) => relationship.propertyId === propertyId)
+    .sort((left, right) => relationshipRank(left.relationshipType) - relationshipRank(right.relationshipType));
 }
 
 export interface ResolvedPropertyClientContext {
@@ -58,52 +74,53 @@ export interface ResolvedPropertyClientContext {
   warnings: string[];
 }
 
-export async function resolvePropertyClientContext(
-  dependencies: ApiDependencies,
-  agencyId: string,
-  propertyId: string,
-): Promise<ResolvedPropertyClientContext> {
-  const property = await dependencies.repository.get('properties', agencyId, propertyId);
-  if (!property) {
-    throw Object.assign(new Error('Property was not found.'), { status: 404, code: 'PROPERTY_NOT_FOUND' });
-  }
+async function clientCollections(dependencies: ApiDependencies, agencyId: string) {
   const [accountRecords, contactRecords, relationshipRecords, engagementRecords] = await Promise.all([
     listAllClientRecords(dependencies, 'clients', agencyId),
     listAllClientRecords(dependencies, 'clientContacts', agencyId),
     listAllClientRecords(dependencies, 'propertyClientRelationships', agencyId),
     listAllClientRecords(dependencies, 'clientEngagements', agencyId),
   ]);
-  const accounts = accountRecords.map(typed<ClientAccount>);
-  const contacts = contactRecords.map(typed<ClientContact>);
-  const relationships = relationshipRecords.map(typed<PropertyClientRelationship>);
-  const engagements = engagementRecords.map(typed<ClientEngagement>);
-  const currentRelationships = currentRelationshipsForProperty(relationships, propertyId);
+  return {
+    accounts: accountRecords.map(typed<ClientAccount>),
+    contacts: contactRecords.map(typed<ClientContact>),
+    relationships: relationshipRecords.map(typed<PropertyClientRelationship>),
+    engagements: engagementRecords.map(typed<ClientEngagement>),
+  };
+}
+
+export async function resolvePropertyClientContext(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  propertyId: string,
+): Promise<ResolvedPropertyClientContext> {
+  const property = await dependencies.repository.get('properties', agencyId, propertyId);
+  if (!property) throw Object.assign(new Error('Property was not found.'), { status: 404, code: 'PROPERTY_NOT_FOUND' });
+  const records = await clientCollections(dependencies, agencyId);
+  const currentRelationships = currentRelationshipsForProperty(records.relationships, propertyId);
   const snapshot = resolveClientSnapshot({
     propertyId,
-    accounts,
-    contacts,
+    accounts: records.accounts,
+    contacts: records.contacts,
     relationships: currentRelationships,
-    engagements,
+    engagements: records.engagements,
   });
-  const account = snapshot
-    ? accounts.find((candidate) => candidate.id === snapshot.clientAccountId)
-    : undefined;
+  const account = snapshot ? records.accounts.find((candidate) => candidate.id === snapshot.clientAccountId) : undefined;
   const engagement = snapshot?.engagementId
-    ? engagements.find((candidate) => candidate.id === snapshot.engagementId)
+    ? records.engagements.find((candidate) => candidate.id === snapshot.engagementId)
     : undefined;
   const warnings: string[] = [];
   if (!currentRelationships.length) warnings.push('No current Client relationship is linked to this Property.');
   if (currentRelationships.length && !snapshot) warnings.push('Current Client relationships could not be resolved to an active Client Account.');
   if (snapshot && !snapshot.reportRecipients.length) warnings.push('No report recipient is configured for the resolved Client Account.');
   if (snapshot && !snapshot.maintenanceApprover) warnings.push('No maintenance approval contact is configured for the resolved Client Account.');
+  const relatedClientIds = new Set(currentRelationships.map((relationship) => relationship.clientAccountId));
   return {
     propertyId,
     ...(snapshot ? { snapshot } : {}),
     ...(account ? { account } : {}),
     relationships: currentRelationships,
-    contacts: snapshot
-      ? contacts.filter((contact) => currentRelationships.some((relationship) => relationship.clientAccountId === contact.clientAccountId))
-      : [],
+    contacts: records.contacts.filter((contact) => relatedClientIds.has(contact.clientAccountId)),
     ...(engagement ? { engagement } : {}),
     warnings,
   };
@@ -117,13 +134,15 @@ function openMaintenanceStatus(status: unknown): boolean {
   return !['closed', 'dismissed', 'cancelled', 'duplicate', 'not_actionable'].includes(String(status || ''));
 }
 
+function orderedClientIds(context: ResolvedPropertyClientContext): string[] {
+  const ids = context.relationships.map((relationship) => relationship.clientAccountId);
+  if (!context.snapshot) return [...new Set(ids)];
+  return [context.snapshot.clientAccountId, ...new Set(ids.filter((id) => id !== context.snapshot?.clientAccountId))];
+}
+
 export async function syncPropertyClientContext(
   dependencies: ApiDependencies,
-  input: {
-    agencyId: string;
-    propertyId: string;
-    actorId: string;
-  },
+  input: { agencyId: string; propertyId: string; actorId: string },
 ): Promise<{
   context: ResolvedPropertyClientContext;
   updatedProperty: boolean;
@@ -134,7 +153,7 @@ export async function syncPropertyClientContext(
   const context = await resolvePropertyClientContext(dependencies, input.agencyId, input.propertyId);
   const propertyRecord = await dependencies.repository.get('properties', input.agencyId, input.propertyId);
   if (!propertyRecord) throw Object.assign(new Error('Property was not found.'), { status: 404, code: 'PROPERTY_NOT_FOUND' });
-  const clientIds = [...new Set(context.relationships.map((relationship) => relationship.clientAccountId))];
+  const clientIds = orderedClientIds(context);
   const relationshipIds = context.relationships.map((relationship) => relationship.id);
   const existingClientIds = Array.isArray(propertyRecord.clientIds)
     ? propertyRecord.clientIds.filter((value): value is string => typeof value === 'string')
@@ -143,10 +162,7 @@ export async function syncPropertyClientContext(
     ? propertyRecord.currentClientRelationshipIds.filter((value): value is string => typeof value === 'string')
     : [];
   let updatedProperty = false;
-  if (
-    JSON.stringify(existingClientIds) !== JSON.stringify(clientIds) ||
-    JSON.stringify(existingRelationshipIds) !== JSON.stringify(relationshipIds)
-  ) {
+  if (JSON.stringify(existingClientIds) !== JSON.stringify(clientIds) || JSON.stringify(existingRelationshipIds) !== JSON.stringify(relationshipIds)) {
     await dependencies.repository.update(
       'properties',
       input.agencyId,
@@ -161,9 +177,7 @@ export async function syncPropertyClientContext(
     );
     updatedProperty = true;
   }
-  if (!context.snapshot) {
-    return { context, updatedProperty, requestsUpdated: 0, jobsUpdated: 0, maintenanceItemsUpdated: 0 };
-  }
+  if (!context.snapshot) return { context, updatedProperty, requestsUpdated: 0, jobsUpdated: 0, maintenanceItemsUpdated: 0 };
 
   const [requestRecords, jobRecords, maintenanceRecords] = await Promise.all([
     listAllClientRecords(dependencies, 'inspectionRequests', input.agencyId),
@@ -176,54 +190,59 @@ export async function syncPropertyClientContext(
   for (const request of requestRecords) {
     if (request.propertyId !== input.propertyId || request.cancelledAt) continue;
     await dependencies.repository.update(
-      'inspectionRequests',
-      input.agencyId,
-      request.id,
+      'inspectionRequests', input.agencyId, request.id,
       {
         clientAccountId: context.snapshot.clientAccountId,
         ...(context.snapshot.engagementId ? { clientEngagementId: context.snapshot.engagementId } : {}),
         clientSnapshot: context.snapshot,
       },
-      Number(request.version),
-      input.actorId,
+      Number(request.version), input.actorId,
     );
     requestsUpdated += 1;
   }
   for (const job of jobRecords) {
     if (job.propertyId !== input.propertyId || !openJobStatus(job.status)) continue;
     await dependencies.repository.update(
-      'inspectionJobs',
-      input.agencyId,
-      job.id,
+      'inspectionJobs', input.agencyId, job.id,
       {
         clientAccountId: context.snapshot.clientAccountId,
         ...(context.snapshot.engagementId ? { clientEngagementId: context.snapshot.engagementId } : {}),
         clientSnapshot: context.snapshot,
       },
-      Number(job.version),
-      input.actorId,
+      Number(job.version), input.actorId,
     );
     jobsUpdated += 1;
   }
   for (const item of maintenanceRecords) {
     if (item.propertyId !== input.propertyId || !openMaintenanceStatus(item.status)) continue;
     await dependencies.repository.update(
-      'maintenanceItems',
-      input.agencyId,
-      item.id,
+      'maintenanceItems', input.agencyId, item.id,
       {
         clientAccountId: context.snapshot.clientAccountId,
         clientSnapshot: context.snapshot,
-        ...(context.snapshot.maintenanceApprover?.contactId
-          ? { maintenanceApprovalContactId: context.snapshot.maintenanceApprover.contactId }
-          : {}),
+        ...(context.snapshot.maintenanceApprover?.contactId ? { maintenanceApprovalContactId: context.snapshot.maintenanceApprover.contactId } : {}),
       },
-      Number(item.version),
-      input.actorId,
+      Number(item.version), input.actorId,
     );
     maintenanceItemsUpdated += 1;
   }
   return { context, updatedProperty, requestsUpdated, jobsUpdated, maintenanceItemsUpdated };
+}
+
+function snapshotForAccount(
+  account: ClientAccount,
+  contact?: ClientContact,
+): ClientSnapshot {
+  return {
+    clientAccountId: account.id,
+    clientName: clientDisplayName(account),
+    clientType: account.clientType,
+    ...(contact ? { primaryContact: { contactId: contact.id, name: contact.displayName, ...(contact.email ? { email: contact.email } : {}), ...(contact.phone || contact.mobile ? { phone: contact.phone || contact.mobile } : {}) } } : {}),
+    reportRecipients: contact?.receivesReports ? [{ contactId: contact.id, name: contact.displayName, ...(contact.email ? { email: contact.email } : {}) }] : [],
+    ...(contact?.canApproveMaintenance ? { maintenanceApprover: { contactId: contact.id, name: contact.displayName, ...(contact.email ? { email: contact.email } : {}) } } : {}),
+    ...((account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId) ? { xeroContactId: account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId } : {}),
+    capturedAt: new Date().toISOString(),
+  };
 }
 
 export async function attachClientContextToRequest(
@@ -232,15 +251,33 @@ export async function attachClientContextToRequest(
   request: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const propertyId = typeof request.propertyId === 'string' ? request.propertyId : '';
-  if (!propertyId) return request;
-  const context = await resolvePropertyClientContext(dependencies, agencyId, propertyId);
-  if (!context.snapshot) return request;
-  return {
-    ...request,
-    clientAccountId: context.snapshot.clientAccountId,
-    ...(context.snapshot.engagementId ? { clientEngagementId: context.snapshot.engagementId } : {}),
-    clientSnapshot: context.snapshot,
-  };
+  if (propertyId) {
+    const context = await resolvePropertyClientContext(dependencies, agencyId, propertyId);
+    if (!context.snapshot) return request;
+    return {
+      ...request,
+      clientAccountId: context.snapshot.clientAccountId,
+      ...(context.snapshot.engagementId ? { clientEngagementId: context.snapshot.engagementId } : {}),
+      clientSnapshot: context.snapshot,
+    };
+  }
+
+  const shopifyOrder = request.shopifyOrder && typeof request.shopifyOrder === 'object'
+    ? request.shopifyOrder as Record<string, unknown>
+    : undefined;
+  const customerId = typeof shopifyOrder?.customerId === 'string' ? shopifyOrder.customerId : '';
+  const customerEmail = typeof request.customerEmail === 'string' ? request.customerEmail.trim().toLowerCase() : '';
+  if (!customerId && !customerEmail) return request;
+  const records = await clientCollections(dependencies, agencyId);
+  const matches = records.accounts.filter((account) => {
+    const shopifyIds = account.externalReferences?.shopifyCustomerIds || (account.shopifyCustomerId ? [account.shopifyCustomerId] : []);
+    return (customerId && shopifyIds.includes(customerId)) ||
+      (customerEmail && [account.generalEmail, account.email].filter(Boolean).some((value) => value?.trim().toLowerCase() === customerEmail));
+  });
+  if (matches.length !== 1) return request;
+  const account = matches[0];
+  const contact = records.contacts.find((candidate) => candidate.clientAccountId === account.id && candidate.isPrimary && candidate.status === 'active');
+  return { ...request, clientAccountId: account.id, clientSnapshot: snapshotForAccount(account, contact) };
 }
 
 export async function snapshotClientContextForJob(
@@ -256,17 +293,21 @@ export async function snapshotClientContextForJob(
   const context = await resolvePropertyClientContext(dependencies, agencyId, propertyId);
   if (!context.snapshot) throw Object.assign(new Error('No current Client relationship is available for the Property.'), { status: 422, code: 'CLIENT_CONTEXT_REQUIRED' });
   return dependencies.repository.update(
-    'inspectionJobs',
-    agencyId,
-    jobId,
+    'inspectionJobs', agencyId, jobId,
     {
       clientAccountId: context.snapshot.clientAccountId,
       ...(context.snapshot.engagementId ? { clientEngagementId: context.snapshot.engagementId } : {}),
       clientSnapshot: context.snapshot,
     },
-    Number(job.version),
-    actorId,
+    Number(job.version), actorId,
   );
+}
+
+function storedClientSnapshot(value: unknown): ClientSnapshot | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.clientAccountId !== 'string' || typeof candidate.clientName !== 'string') return undefined;
+  return value as ClientSnapshot;
 }
 
 export async function snapshotClientContextForReport(
@@ -279,25 +320,30 @@ export async function snapshotClientContextForReport(
   if (!report) throw Object.assign(new Error('Report was not found.'), { status: 404, code: 'REPORT_NOT_FOUND' });
   const status = String(report.lifecycleStatus || 'draft');
   if (['approved_for_issue', 'issued_to_tenant', 'tenant_response_in_progress', 'tenant_submitted', 'agent_response_required', 'finalisation_ready', 'finalised', 'archived'].includes(status)) {
-    if (report.clientSnapshot && report.clientAccountId) return report;
+    if (storedClientSnapshot(report.clientSnapshot) && report.clientAccountId) return report;
     throw Object.assign(new Error('Client context cannot be introduced after an immutable Report Version has been approved.'), { status: 409, code: 'REPORT_CLIENT_SNAPSHOT_LOCKED' });
   }
-  const propertyId = typeof report.propertyId === 'string' ? report.propertyId : '';
-  if (!propertyId) throw Object.assign(new Error('Report has no linked Property.'), { status: 422, code: 'PROPERTY_REQUIRED' });
-  const context = await resolvePropertyClientContext(dependencies, agencyId, propertyId);
-  if (!context.snapshot) throw Object.assign(new Error('No current Client relationship is available for the Property.'), { status: 422, code: 'CLIENT_CONTEXT_REQUIRED' });
+  let snapshot: ClientSnapshot | undefined;
+  const inspectionJobId = typeof report.inspectionJobId === 'string' ? report.inspectionJobId : '';
+  if (inspectionJobId) {
+    const job = await dependencies.repository.get('inspectionJobs', agencyId, inspectionJobId);
+    snapshot = storedClientSnapshot(job?.clientSnapshot);
+  }
+  if (!snapshot) {
+    const propertyId = typeof report.propertyId === 'string' ? report.propertyId : '';
+    if (!propertyId) throw Object.assign(new Error('Report has no linked Property.'), { status: 422, code: 'PROPERTY_REQUIRED' });
+    snapshot = (await resolvePropertyClientContext(dependencies, agencyId, propertyId)).snapshot;
+  }
+  if (!snapshot) throw Object.assign(new Error('No Client context is available for the Report.'), { status: 422, code: 'CLIENT_CONTEXT_REQUIRED' });
   return dependencies.repository.update(
-    'reports',
-    agencyId,
-    reportId,
+    'reports', agencyId, reportId,
     {
-      clientAccountId: context.snapshot.clientAccountId,
-      ...(context.snapshot.engagementId ? { clientEngagementId: context.snapshot.engagementId } : {}),
-      clientName: context.snapshot.clientName,
-      clientSnapshot: context.snapshot,
+      clientAccountId: snapshot.clientAccountId,
+      ...(snapshot.engagementId ? { clientEngagementId: snapshot.engagementId } : {}),
+      clientName: snapshot.clientName,
+      clientSnapshot: snapshot,
     },
-    Number(report.version),
-    actorId,
+    Number(report.version), actorId,
   );
 }
 
@@ -335,7 +381,7 @@ export async function clientOverview(
 ): Promise<Record<string, unknown>> {
   const client = await dependencies.repository.get('clients', agencyId, clientAccountId);
   if (!client) throw Object.assign(new Error('Client Account was not found.'), { status: 404, code: 'CLIENT_NOT_FOUND' });
-  const collections = await Promise.all([
+  const [contacts, relationships, engagements, documents, portalUsers, timeline, jobs, reports, maintenance, requests] = await Promise.all([
     listAllClientRecords(dependencies, 'clientContacts', agencyId),
     listAllClientRecords(dependencies, 'propertyClientRelationships', agencyId),
     listAllClientRecords(dependencies, 'clientEngagements', agencyId),
@@ -347,15 +393,15 @@ export async function clientOverview(
     listAllClientRecords(dependencies, 'maintenanceItems', agencyId),
     listAllClientRecords(dependencies, 'inspectionRequests', agencyId),
   ]);
-  const [contacts, relationships, engagements, documents, portalUsers, timeline, jobs, reports, maintenance, requests] = collections;
   const currentRelationships = activePropertyClientRelationships(
     relationships.map(typed<PropertyClientRelationship>),
   ).filter((relationship) => relationship.clientAccountId === clientAccountId);
   const propertyIds = [...new Set(currentRelationships.map((relationship) => relationship.propertyId))];
-  const linked = (record: StoredRecord): boolean =>
+  const linked = (record: StoredRecord): boolean => Boolean(
     record.clientAccountId === clientAccountId ||
     propertyIds.includes(String(record.propertyId || '')) ||
-    (record.clientSnapshot && typeof record.clientSnapshot === 'object' && (record.clientSnapshot as Record<string, unknown>).clientAccountId === clientAccountId);
+    (record.clientSnapshot && typeof record.clientSnapshot === 'object' && (record.clientSnapshot as Record<string, unknown>).clientAccountId === clientAccountId),
+  );
   return {
     client,
     contacts: contacts.filter((record) => record.clientAccountId === clientAccountId),
@@ -371,6 +417,7 @@ export async function clientOverview(
       openMaintenance: maintenance.filter((record) => linked(record) && openMaintenanceStatus(record.status)).length,
       pendingInspectionRequests: requests.filter((record) => linked(record) && !['converted', 'cancelled', 'duplicate', 'failed'].includes(String(record.intakeStatus || ''))).length,
     },
+    recentRequests: requests.filter(linked).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''))).slice(0, 20),
     recentJobs: jobs.filter(linked).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''))).slice(0, 20),
     recentReports: reports.filter(linked).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''))).slice(0, 20),
     recentMaintenance: maintenance.filter(linked).sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''))).slice(0, 20),
@@ -388,27 +435,19 @@ export async function duplicateCandidates(
 
 export async function createLegacyLandlordClient(
   dependencies: ApiDependencies,
-  input: {
-    agencyId: string;
-    propertyId: string;
-    actorId: string;
-  },
+  input: { agencyId: string; propertyId: string; actorId: string },
 ): Promise<{ account: StoredRecord; contact: StoredRecord; relationship: StoredRecord; context: ResolvedPropertyClientContext }> {
   const propertyRecord = await dependencies.repository.get('properties', input.agencyId, input.propertyId);
   if (!propertyRecord) throw Object.assign(new Error('Property was not found.'), { status: 404, code: 'PROPERTY_NOT_FOUND' });
   const property = typed<PropertyRecord>(propertyRecord);
-  if (!property.landlordDetails?.name?.trim()) {
-    throw Object.assign(new Error('The Property does not contain legacy landlord details to migrate.'), { status: 422, code: 'LEGACY_LANDLORD_DETAILS_REQUIRED' });
-  }
+  if (!property.landlordDetails?.name?.trim()) throw Object.assign(new Error('The Property does not contain legacy landlord details to migrate.'), { status: 422, code: 'LEGACY_LANDLORD_DETAILS_REQUIRED' });
   const duplicate = await duplicateCandidates(dependencies, input.agencyId, {
     legalName: property.landlordDetails.companyName || property.landlordDetails.name,
     primaryEmail: property.landlordDetails.email,
   });
   if (duplicate[0] && duplicate[0].score >= 0.8) {
     throw Object.assign(new Error('A likely matching Client Account already exists. Link the existing Client rather than creating a duplicate.'), {
-      status: 409,
-      code: 'CLIENT_DUPLICATE_REVIEW_REQUIRED',
-      details: { duplicateCandidates: duplicate },
+      status: 409, code: 'CLIENT_DUPLICATE_REVIEW_REQUIRED', details: { duplicateCandidates: duplicate },
     });
   }
   const now = new Date().toISOString();
@@ -416,7 +455,7 @@ export async function createLegacyLandlordClient(
   const contactId = randomUUID();
   const relationshipId = randomUUID();
   const legalName = property.landlordDetails.companyName || property.landlordDetails.name;
-  const accountData: Omit<ClientAccount, 'id' | 'agencyId' | 'createdAt' | 'updatedAt' | 'version'> = {
+  const account = await dependencies.repository.create('clients', input.agencyId, accountId, {
     legalName,
     ...(property.landlordDetails.companyName ? { tradingName: property.landlordDetails.companyName } : {}),
     clientType: 'private_landlord',
@@ -433,8 +472,7 @@ export async function createLegacyLandlordClient(
     phone: property.landlordDetails.phone,
     type: legacyClientType('private_landlord'),
     defaultApprovalEmail: property.landlordDetails.email,
-  };
-  const account = await dependencies.repository.create('clients', input.agencyId, accountId, accountData as unknown as Record<string, unknown>, input.actorId);
+  }, input.actorId);
   const contact = await dependencies.repository.create('clientContacts', input.agencyId, contactId, {
     clientAccountId: accountId,
     displayName: property.landlordDetails.name,
@@ -459,10 +497,6 @@ export async function createLegacyLandlordClient(
     isCurrent: true,
     startDate: now.slice(0, 10),
   }, input.actorId);
-  const context = (await syncPropertyClientContext(dependencies, {
-    agencyId: input.agencyId,
-    propertyId: input.propertyId,
-    actorId: input.actorId,
-  })).context;
+  const context = (await syncPropertyClientContext(dependencies, { agencyId: input.agencyId, propertyId: input.propertyId, actorId: input.actorId })).context;
   return { account, contact, relationship, context };
 }
