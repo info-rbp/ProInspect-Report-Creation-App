@@ -18,10 +18,23 @@ const tenantWorkspace = [
   'tenant_instruction.manage',
 ] satisfies SecurityCapability[];
 
+const settingsAdministration = [
+  'settings.read',
+  'settings.organisation.manage',
+  'settings.branding.manage',
+  'settings.operations.manage',
+  'settings.communications.manage',
+  'settings.security.manage',
+  'integration.read',
+  'integration.manage',
+  'integration.credentials.manage',
+  'maintenance.policy.manage',
+] satisfies SecurityCapability[];
+
 const capabilities: Record<UserRole, ReadonlySet<SecurityCapability>> = {
   super_admin: new Set(SECURITY_CAPABILITIES),
   proinspect_admin: new Set([
-    'agency.read', 'agency.manage', 'user.invite', 'user.suspend', ...clientAdministration,
+    'agency.read', 'agency.manage', ...settingsAdministration, 'user.invite', 'user.suspend', ...clientAdministration,
     'property.read', 'property.manage', ...tenantWorkspace, 'job.read', 'job.manage', 'job.inspect',
     'report.read', 'report.edit', 'report.review', 'report.issue', 'report.finalise', 'template.manage', 'audit.read',
     'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare',
@@ -30,7 +43,7 @@ const capabilities: Record<UserRole, ReadonlySet<SecurityCapability>> = {
     'notification.send', 'external_contact.manage', 'client_approval.manage',
   ]),
   operations: new Set([
-    'agency.read', ...clientAdministration,
+    'agency.read', 'settings.read', 'integration.read', ...clientAdministration,
     'property.read', 'property.manage', ...tenantWorkspace, 'job.read', 'job.manage', 'report.read',
     'report.issue', 'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare',
     'maintenance.quote.send', 'maintenance.work_order.issue', 'maintenance.verify', 'upload.create', 'analysis.create',
