@@ -5,6 +5,7 @@ on:
       - main
       - 'feat/**'
       - 'fix/**'
+      - 'feature/**'
   pull_request:
   workflow_dispatch:
 permissions:
@@ -59,6 +60,10 @@ jobs:
         run: npm run typecheck --workspace @pcr/notification-worker
       - name: Type check dashboard worker
         run: npm run typecheck --workspace @pcr/dashboard-worker
+      - name: Type check document worker
+        run: npm run typecheck --workspace @pcr/document-worker
+      - name: Type check integration worker
+        run: npm run typecheck --workspace @pcr/integration-worker
       - name: Type check shared packages
         run: npm run typecheck --workspace @pcr/domain && npm run typecheck --workspace @pcr/config && npm run typecheck --workspace @pcr/validation && npm run typecheck --workspace @pcr/templates && npm run typecheck --workspace @pcr/report-presentation && npm run typecheck --workspace @pcr/testing && npm run typecheck --workspace @pcr/ui
       - name: Formatting

@@ -379,7 +379,6 @@ export async function bulkImportClientRows(
             ...(email(row.invoiceRecipientEmail || row.accountsEmail)
               ? { invoiceRecipientEmail: email(row.invoiceRecipientEmail || row.accountsEmail) }
               : primaryEmail ? { invoiceRecipientEmail: primaryEmail } : {}),
-            ...(text(row.xeroContactId) ? { xeroContactId: text(row.xeroContactId) } : {}),
             ...(Number.isFinite(Number(row.paymentTermsDays)) ? { paymentTermsDays: Number(row.paymentTermsDays) } : {}),
           },
           maintenancePolicy: {
@@ -391,7 +390,6 @@ export async function bulkImportClientRows(
           },
           externalReferences: {
             ...(text(row.shopifyCustomerId) ? { shopifyCustomerIds: [text(row.shopifyCustomerId)] } : {}),
-            ...(text(row.xeroContactId) ? { xeroContactId: text(row.xeroContactId) } : {}),
           },
           status: 'onboarding',
           name: text(row.tradingName) || legalName,

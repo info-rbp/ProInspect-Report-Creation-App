@@ -45,7 +45,7 @@ const TABS = [
   'Engagement & Services',
   'Inspection Preferences',
   'Maintenance & Approvals',
-  'Billing & Xero',
+  'Commercial Terms',
   'Documents & Agreements',
   'Orders & Bookings',
   'Portal & Access',
@@ -61,7 +61,7 @@ const PORTAL_PERMISSIONS: ClientPortalPermission[] = [
   'client.maintenance.read',
   'client.maintenance.approve',
   'client.quotes.approve',
-  'client.billing.read',
+  'client.commercial.read',
   'client.documents.read',
   'client.users.manage',
 ];
@@ -368,7 +368,7 @@ const ClientWorkspacePage: React.FC = () => {
 
       {tab === 'Inspection Preferences' && <PreferencesEditor account={account} busy={busy} save={saveAccount} />}
       {tab === 'Maintenance & Approvals' && <MaintenancePolicyEditor account={account} busy={busy} save={saveAccount} />}
-      {tab === 'Billing & Xero' && <BillingEditor account={account} busy={busy} save={saveAccount} />}
+      {tab === 'Commercial Terms' && <CommercialTermsEditor account={account} busy={busy} save={saveAccount} />}
 
       {tab === 'Documents & Agreements' && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -479,11 +479,10 @@ function MaintenancePolicyEditor({ account, busy, save }: { account: ClientAccou
   return <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 font-black"><Wrench size={17} /> Maintenance authority</div><div className="mt-4 grid gap-3 md:grid-cols-2"><input value={manager} onChange={(event) => setManager(event.target.value)} placeholder="Property Manager approval limit" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={landlord} onChange={(event) => setLandlord(event.target.value)} placeholder="Landlord approval threshold" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={emergency} onChange={(event) => setEmergency(event.target.value)} placeholder="Emergency limit" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={second} onChange={(event) => setSecond(event.target.value)} placeholder="Second approval threshold" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><button disabled={busy} onClick={() => void save({ maintenancePolicy: { ...account.maintenancePolicy, propertyManagerApprovalLimit: Number(manager) || undefined, landlordApprovalThreshold: Number(landlord) || undefined, emergencyAuthorisationLimit: Number(emergency) || undefined, secondApprovalThreshold: Number(second) || undefined } })} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white md:col-span-2">Save approval policy</button></div></section>;
 }
 
-function BillingEditor({ account, busy, save }: { account: ClientAccount; busy: boolean; save: (updates: Partial<ClientAccount>) => Promise<void> }) {
+function CommercialTermsEditor({ account, busy, save }: { account: ClientAccount; busy: boolean; save: (updates: Partial<ClientAccount>) => Promise<void> }) {
   const [email, setEmail] = useState(account.billingProfile?.invoiceRecipientEmail || account.accountsEmail || '');
   const [terms, setTerms] = useState(String(account.billingProfile?.paymentTermsDays || 14));
-  const [xero, setXero] = useState(account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId || '');
-  return <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 font-black"><BadgeDollarSign size={17} /> Billing & Xero</div><div className="mt-4 grid gap-3 md:grid-cols-2"><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Invoice recipient" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={terms} onChange={(event) => setTerms(event.target.value)} placeholder="Payment terms days" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={xero} onChange={(event) => setXero(event.target.value)} placeholder="Xero Contact ID" className="rounded-xl border border-slate-200 px-3 py-2 text-sm md:col-span-2" /><button disabled={busy} onClick={() => void save({ accountsEmail: email || undefined, billingProfile: { method: account.billingProfile?.method || 'invoice_per_inspection', ...account.billingProfile, invoiceRecipientEmail: email || undefined, paymentTermsDays: Number(terms) || undefined, xeroContactId: xero || undefined }, externalReferences: { ...account.externalReferences, xeroContactId: xero || undefined } })} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white md:col-span-2">Save billing configuration</button></div></section>;
+  return <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 font-black"><BadgeDollarSign size={17} /> Commercial terms</div><p className="mt-1 text-xs text-slate-500">Operational commercial metadata only. ProInspect does not execute payments, maintain trust ledgers or reconcile accounts.</p><div className="mt-4 grid gap-3 md:grid-cols-2"><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Invoice recipient" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={terms} onChange={(event) => setTerms(event.target.value)} placeholder="Payment terms days" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><button disabled={busy} onClick={() => void save({ accountsEmail: email || undefined, billingProfile: { method: account.billingProfile?.method || 'invoice_per_inspection', ...account.billingProfile, invoiceRecipientEmail: email || undefined, paymentTermsDays: Number(terms) || undefined } })} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white md:col-span-2">Save commercial terms</button></div></section>;
 }
 
 export default ClientWorkspacePage;

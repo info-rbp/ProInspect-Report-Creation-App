@@ -187,7 +187,7 @@ export interface MaintenancePolicySettings extends VersionedAgencySettingsRecord
   multiQuoteThreshold?: number;
   minimumContractorQuoteCount: number;
   completionEvidenceRequired: boolean;
-  invoiceReconciliationRequired: boolean;
+  costVarianceReviewRequired: boolean;
   responseSlaHours: Partial<Record<'emergency' | 'urgent' | 'routine' | 'planned', number>>;
 }
 

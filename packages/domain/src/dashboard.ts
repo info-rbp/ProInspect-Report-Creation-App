@@ -67,7 +67,7 @@ export interface DashboardCommercial {
   quoteValueAwaitingApproval: number;
   acceptedQuoteValue: number;
   workOrdersInProgress: number;
-  xeroExceptions: number;
+  integrationExceptions: number;
 }
 
 export interface DashboardSnapshot {

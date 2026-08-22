@@ -38,7 +38,7 @@ describe('agency settings validation', () => {
       quoteValidityDays: 30,
       minimumContractorQuoteCount: 1,
       completionEvidenceRequired: true,
-      invoiceReconciliationRequired: true,
+      costVarianceReviewRequired: true,
       responseSlaHours: {},
     });
     expect(result.ok).toBe(false);

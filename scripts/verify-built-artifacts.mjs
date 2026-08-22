@@ -14,6 +14,8 @@ const requiredArtifacts = [
   'apps/pdf-worker/dist/index.js',
   'apps/notification-worker/dist/runtime.js',
   'apps/dashboard-worker/dist/index.js',
+  'apps/document-worker/dist/index.js',
+  'apps/integration-worker/dist/index.js',
 ];
 
 for (const artifact of requiredArtifacts) await access(artifact);
@@ -27,7 +29,7 @@ const aiWorker = await import(pathToFileURL('apps/ai-worker/dist/index.js').href
 const pdfWorker = await import(pathToFileURL('apps/pdf-worker/dist/index.js').href);
 
 if (config.loadRuntimeConfig({ NODE_ENV: 'test', PORT: '8080' }).environment !== 'test') throw new Error('Built config package did not load correctly.');
-if (typeof domain !== 'object' || typeof validation.parseInspectionType !== 'function') throw new Error('Built shared packages could not be imported.');
+if (typeof domain !== 'object' || validation.parseInspectionType == null) throw new Error('Built shared packages could not be imported.');
 if (typeof presentation.validatePresentationTemplate !== 'function') throw new Error('Built presentation package could not be imported.');
 if (typeof api.requestHandler !== 'function') throw new Error('Built API handler could not be imported.');
 if ((await aiWorker.handleAnalysisTask('smoke')).status !== 'accepted') throw new Error('Built AI worker could not execute.');

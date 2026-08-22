@@ -49,8 +49,6 @@ export interface ClientBillingProfile {
   defaultPurchaseOrderReference?: string;
   pricingProfile?: 'standard' | 'contract' | 'custom';
   gstTreatment?: string;
-  xeroContactId?: string;
-  xeroTenantId?: string;
 }
 
 export interface ClientReportRecipientRule {
@@ -93,7 +91,6 @@ export interface ClientMaintenancePolicy {
 
 export interface ClientExternalReferences {
   shopifyCustomerIds?: string[];
-  xeroContactId?: string;
   propertyManagementSystemIds?: Record<string, string>;
 }
 
@@ -130,7 +127,7 @@ export interface ClientAccount {
   mergedIntoClientId?: string;
   status: ClientAccountStatus;
 
-  /** Compatibility fields consumed by earlier Properties, Maintenance and Xero code. */
+  /** Compatibility fields consumed by earlier Properties and Maintenance code. */
   name?: string;
   email?: string;
   phone?: string;
@@ -311,7 +308,7 @@ export const CLIENT_PORTAL_PERMISSIONS = [
   'client.maintenance.read',
   'client.maintenance.approve',
   'client.quotes.approve',
-  'client.billing.read',
+  'client.commercial.read',
   'client.documents.read',
   'client.users.manage',
 ] as const;
@@ -354,7 +351,7 @@ export interface ClientTimelineEvent {
     | 'inspection_created'
     | 'report_issued'
     | 'maintenance_approval'
-    | 'billing_sync'
+    | 'commercial_terms_updated'
     | 'general';
   summary: string;
   relatedEntityType?: string;
@@ -384,7 +381,6 @@ export interface ClientSnapshot {
   billingParty?: ClientContactSnapshot;
   reportRecipients: ClientContactSnapshot[];
   maintenanceApprover?: ClientContactSnapshot;
-  xeroContactId?: string;
   capturedAt: string;
 }
 
@@ -472,12 +468,6 @@ export function findClientDuplicateCandidates(
       if (candidate.acn && account.acn && normalise(candidate.acn) === normalise(account.acn)) {
         score += 0.65;
         reasons.push('ACN matches');
-      }
-      const candidateXero = candidate.billingProfile?.xeroContactId || candidate.externalReferences?.xeroContactId;
-      const accountXero = account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId;
-      if (candidateXero && accountXero && candidateXero === accountXero) {
-        score += 0.8;
-        reasons.push('Xero Contact ID matches');
       }
       const candidateShopify = candidate.externalReferences?.shopifyCustomerIds || [];
       const accountShopify = account.externalReferences?.shopifyCustomerIds || [];
@@ -597,9 +587,6 @@ export function resolveClientSnapshot(input: {
     ...(contactSnapshot(billingContact, 'accounts') ? { billingParty: contactSnapshot(billingContact, 'accounts') } : {}),
     reportRecipients: fallbackRecipients.map((contact) => contactSnapshot(contact)!).filter(Boolean),
     ...(contactSnapshot(maintenanceContact) ? { maintenanceApprover: contactSnapshot(maintenanceContact) } : {}),
-    ...((account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId)
-      ? { xeroContactId: account.billingProfile?.xeroContactId || account.externalReferences?.xeroContactId }
-      : {}),
     capturedAt: input.capturedAt || new Date().toISOString(),
   };
 }
