@@ -33,6 +33,7 @@ import { routePropertyDocumentRequest } from './backend/propertyDocumentRoutes.j
 import { routePropertyHistoryRequest } from './backend/propertyHistoryRoutes.js';
 import { routeCatalogueRequest } from './backend/catalogueRoutes.js';
 import { routeTemplateRequest } from './backend/templateRoutes.js';
+import { routeDashboardRequest } from './backend/dashboardRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
@@ -109,6 +110,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
         if (clientManagementResponse) { send(res, clientManagementResponse, correlationId); return; }
       }
 
+      const dashboardResponse = await routeDashboardRequest(req, dependencies, correlationId); if (dashboardResponse) { send(res, dashboardResponse, correlationId); return; }
       const reportOperationsResponse = await routeReportOperationsRequest(req, dependencies, correlationId); if (reportOperationsResponse) { send(res, reportOperationsResponse, correlationId); return; }
       const reportLifecycleResponse = await routeReportLifecycleActionRequest(req, dependencies, correlationId); if (reportLifecycleResponse) { send(res, reportLifecycleResponse, correlationId); return; }
       const shopifyResponse = await routeShopifyIntegrationRequest(req, dependencies, correlationId); if (shopifyResponse) { send(res, shopifyResponse, correlationId); return; }
