@@ -2,7 +2,6 @@ import * as XLSX from 'xlsx';
 import type {
   ClientApproval,
   MaintenanceEstimate,
-  MaintenanceFinancialReconciliation,
   MaintenanceItem,
   MaintenanceQuote,
   MaintenanceQuoteVersion,
@@ -50,7 +49,6 @@ export interface MaintenanceOperationsOverview {
   quotes: { total: number; awaitingInternalApproval: number; awaitingClient: number; accepted: number; pipelineValue: number };
   workOrders: { total: number; active: number };
   variations: { awaitingApproval: number };
-  financials: { varianceReview: number };
   integrations: { syncExceptions: number };
 }
 
@@ -178,21 +176,6 @@ export async function transitionMaintenanceVariation(
   return apiRequest(variation.agencyId, `/api/v1/maintenance-variations/${encodeURIComponent(variation.id)}/actions/${action}`, {
     method: 'POST', body: { expectedVersion: variation.version }, idempotencyKey: idempotencyKey(`maintenance-variation-${variation.id}-${action}`),
   });
-}
-
-export async function reconcileMaintenanceFinancials(input: {
-  maintenanceItemId: string;
-  quoteId: string;
-  actualContractorCost?: number;
-  clientInvoiceTotal?: number;
-}): Promise<MaintenanceFinancialReconciliation> {
-  return apiRequest(agencyId(), '/api/v1/maintenance-financial-reconciliations', {
-    method: 'POST', body: input, idempotencyKey: idempotencyKey(`maintenance-reconcile-${input.maintenanceItemId}`),
-  });
-}
-
-export async function listFinancialReconciliations(): Promise<MaintenanceFinancialReconciliation[]> {
-  return apiRequest(agencyId(), '/api/v1/maintenance-financial-reconciliations');
 }
 
 export async function listQuoteApprovalPolicies(): Promise<QuoteApprovalPolicy[]> { return apiRequest(agencyId(), '/api/v1/quote-approval-policies'); }
