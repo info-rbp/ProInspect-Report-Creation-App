@@ -38,6 +38,7 @@ import { routeBrandingAssetUploadRequest } from './backend/brandingAssetUploadRo
 import { routeSettingsRequest } from './backend/settingsRoutes.js';
 import { routeCachedDashboardRequest } from './backend/dashboardCachedRoutes.js';
 import { routePlatformEnhancementRequest } from './backend/platformEnhancementRoutes.js';
+import { routeESignCommandRequest, routeESignExternalWebhook } from './backend/eSignCommandRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
@@ -58,14 +59,15 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
     if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
     try {
       if (req.method === 'GET' && req.url === '/health') { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', correlationId } }, correlationId); return; }
-      if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: buildOpenApiDocument() }, correlationId); return; }
-      const callbackResponse = await routeNotificationCallbackRequest(req, correlationId); if (callbackResponse) { send(res, callbackResponse, correlationId); return; }
+      if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: { ...buildOpenApiDocument(), financialBoundary: 'No trust accounting, payments, receipts, disbursements or reconciliation.' } }, correlationId); return; }
+      const notificationCallback = await routeNotificationCallbackRequest(req, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
+      const esignWebhook = await routeESignExternalWebhook(req, dependencies, correlationId); if (esignWebhook) { send(res, esignWebhook, correlationId); return; }
       if (req.method === 'POST' && req.url === '/v1/security/authorise') { const requestBody = await readJson(req); const capability = requestBody.capability as SecurityCapability; const target = requestBody.target as AuthorisationTarget; const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId); send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return; }
 
       const peopleResponse = await routePeopleRequest(req, dependencies, correlationId); if (peopleResponse) { send(res, peopleResponse, correlationId); return; }
       if (isClientManagementRoute(req.url)) { const r = await routeClientManagementRequest(req, dependencies, correlationId); if (r) { send(res, r, correlationId); return; } }
 
-      const handlers = [routeCachedDashboardRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
+      const handlers = [routeCachedDashboardRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
       for (const handler of handlers) { const response = await handler(req, dependencies, correlationId); if (response) { send(res, response, correlationId); return; } }
 
       const specialReportRoute = reportRoute(req.url);
