@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, FileText, Hammer, KeyRound, Mail, MessageSquare, Plus, RefreshCw, UserRound } from 'lucide-react';
 import type {
   ReportIndex,
-  Tenant,
   TenantInstruction,
   TenantInstructionType,
   TenantStatus,
