@@ -29,7 +29,18 @@ export async function saveMaintenancePolicy(agencyId: string | undefined, settin
 export async function listBrandingProfiles(agencyId?: string): Promise<AgencyBrandingProfile[]> { return apiRequest(agencyId, '/api/v1/settings/branding'); }
 export async function getActiveBranding(agencyId?: string): Promise<PublicAgencyBranding | null> { return apiRequest(agencyId, '/api/v1/settings/branding/active'); }
 export async function createBrandingProfile(agencyId: string | undefined, profile: Omit<AgencyBrandingProfile, 'agencyId' | 'version' | 'createdAt' | 'updatedAt'>): Promise<AgencyBrandingProfile> { return apiRequest(agencyId, '/api/v1/settings/branding', { method: 'POST', body: profile }); }
-export async function updateBrandingProfile(agencyId: string | undefined, profile: AgencyBrandingProfile): Promise<AgencyBrandingProfile> { const { agencyId: _a, createdAt: _c, updatedAt: _u, ...body } = profile; return apiRequest(agencyId, `/api/v1/settings/branding/${encodeURIComponent(profile.id)}`, { method: 'PUT', body: { ...body, expectedVersion: profile.version ?? 1 } }); }
+export async function updateBrandingProfile(agencyId: string | undefined, profile: AgencyBrandingProfile): Promise<AgencyBrandingProfile> {
+  const {
+    agencyId: ignoredAgencyId,
+    createdAt: ignoredCreatedAt,
+    updatedAt: ignoredUpdatedAt,
+    ...body
+  } = profile;
+  void ignoredAgencyId;
+  void ignoredCreatedAt;
+  void ignoredUpdatedAt;
+  return apiRequest(agencyId, `/api/v1/settings/branding/${encodeURIComponent(profile.id)}`, { method: 'PUT', body: { ...body, expectedVersion: profile.version ?? 1 } });
+}
 export async function listBrandingAssets(agencyId?: string): Promise<BrandingAsset[]> { return apiRequest(agencyId, '/api/v1/settings/branding/assets'); }
 export async function createBrandingAsset(agencyId: string | undefined, asset: Omit<BrandingAsset, 'agencyId' | 'version' | 'createdAt' | 'updatedAt'>): Promise<BrandingAsset> { return apiRequest(agencyId, '/api/v1/settings/branding/assets', { method: 'POST', body: asset }); }
 export async function getSettingsOverview(agencyId?: string): Promise<SettingsOverview> { return apiRequest(agencyId, '/api/v1/settings/overview'); }
