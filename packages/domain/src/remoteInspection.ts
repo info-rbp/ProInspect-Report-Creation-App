@@ -15,6 +15,7 @@ export interface RemoteInspectionAssignment {
   id: string;
   agencyId: string;
   inspectionJobId: string;
+  propertyId?: string;
   tenantId: string;
   tenancyId: string;
   executionMode: Exclude<InspectionExecutionMode, 'professional'>;
