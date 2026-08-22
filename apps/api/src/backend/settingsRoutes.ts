@@ -3,6 +3,7 @@ import type { DomainErrorShape, SecurityCapability } from '@pcr/domain';
 import { agencyOperationalSettingsSchema, agencyOrganisationSettingsSchema, communicationPolicySchema, maintenancePolicySettingsSchema, type ValidationSchema } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { routeBrandingSettingsRequest } from './brandingSettingsRoutes.js';
+import { routeCommunicationSettingsRequest } from './communicationSettingsRoutes.js';
 import { routeSettingsOverviewRequest } from './settingsOverviewRoutes.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -23,6 +24,7 @@ function expectedVersion(value: unknown): number | undefined { if (value === und
 export async function routeSettingsRequest(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse | undefined> {
   const route = parts(req); if (route[0] !== 'api' || route[1] !== 'v1' || route[2] !== 'settings') return undefined;
   if (route[3] === 'branding') return routeBrandingSettingsRequest(req, dependencies, correlationId);
+  if (route[3] === 'communications' && route[4]) return routeCommunicationSettingsRequest(req, dependencies, correlationId);
   if (route[3] === 'overview' || route[3] === 'integrations') return routeSettingsOverviewRequest(req, dependencies, correlationId);
   const section = route[3] as SettingsSection | undefined;
   if (!section || !(section in SECTION_CONFIG)) {
