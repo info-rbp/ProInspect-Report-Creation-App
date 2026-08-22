@@ -11,6 +11,11 @@ export interface CommentaryEntry {
   id: string;
   area: string;
   component: string;
+  /** Canonical identity takes precedence over display labels when present. */
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
   subComponent?: string;
   inspectionTypes: InspectionType[];
   condition: ConditionState | string;
@@ -57,6 +62,10 @@ export interface InspectionTypeTemplate {
 export interface StructuredInspectionFact {
   area: string;
   component: string;
+  canonicalAreaDefinitionId?: string;
+  canonicalAreaDefinitionVersion?: number;
+  canonicalComponentDefinitionId?: string;
+  canonicalComponentDefinitionVersion?: number;
   subComponent?: string;
   material?: string;
   colour?: string;
@@ -246,15 +255,25 @@ export function importCommentaryBank(rows: ImportRow[], existingBank: Commentary
   };
 }
 
+function identityMatches(entry: CommentaryEntry, fact: StructuredInspectionFact): boolean {
+  const entryHasCanonical = Boolean(entry.canonicalAreaDefinitionId || entry.canonicalComponentDefinitionId);
+  const factHasCanonical = Boolean(fact.canonicalAreaDefinitionId || fact.canonicalComponentDefinitionId);
+  if (entryHasCanonical && factHasCanonical) {
+    if (entry.canonicalAreaDefinitionId && entry.canonicalAreaDefinitionId !== fact.canonicalAreaDefinitionId) return false;
+    if (entry.canonicalComponentDefinitionId && entry.canonicalComponentDefinitionId !== fact.canonicalComponentDefinitionId) return false;
+    return true;
+  }
+  if (entryHasCanonical) return false;
+  return normalizeName(entry.area) === normalizeName(fact.area)
+    && normalizeName(entry.component) === normalizeName(fact.component);
+}
+
 export function matchBankEntry(template: InspectionTypeTemplate, fact: StructuredInspectionFact): CommentaryEntry | undefined {
-  const area = normalizeName(fact.area);
-  const component = normalizeName(fact.component);
   const activeType = fact.inspectionType || template.inspectionType;
 
   const candidates = template.commentaryBank.filter((entry) => {
     if (entry.active === false) return false;
-    if (normalizeName(entry.area) !== area) return false;
-    if (normalizeName(entry.component) !== component) return false;
+    if (!identityMatches(entry, fact)) return false;
     if (entry.condition !== fact.condition && entry.condition !== 'any') return false;
     if (entry.inspectionTypes.length > 0 && !entry.inspectionTypes.includes(activeType)) return false;
     return true;
@@ -262,12 +281,21 @@ export function matchBankEntry(template: InspectionTypeTemplate, fact: Structure
 
   if (!candidates.length) return undefined;
 
-  // Score candidate specificity
   let bestCandidate = candidates[0];
   let maxScore = -1;
 
   for (const candidate of candidates) {
     let score = 0;
+    if (candidate.canonicalAreaDefinitionId && candidate.canonicalAreaDefinitionId === fact.canonicalAreaDefinitionId) score += 50;
+    if (candidate.canonicalComponentDefinitionId && candidate.canonicalComponentDefinitionId === fact.canonicalComponentDefinitionId) score += 100;
+    if (
+      candidate.canonicalComponentDefinitionVersion &&
+      candidate.canonicalComponentDefinitionVersion === fact.canonicalComponentDefinitionVersion
+    ) score += 5;
+    if (
+      candidate.canonicalAreaDefinitionVersion &&
+      candidate.canonicalAreaDefinitionVersion === fact.canonicalAreaDefinitionVersion
+    ) score += 5;
     if (candidate.subComponent && fact.subComponent && candidate.subComponent.toLowerCase() === fact.subComponent.toLowerCase()) score += 10;
     if (candidate.cleanliness && fact.cleanliness && candidate.cleanliness.toLowerCase() === fact.cleanliness.toLowerCase()) score += 5;
     if (candidate.workingStatus && fact.workingState && candidate.workingStatus.toLowerCase() === fact.workingState.toLowerCase()) score += 5;
@@ -298,14 +326,12 @@ export function generateCommentary(template: InspectionTypeTemplate, fact: Struc
 
   const bank = matchBankEntry(template, fact);
 
-  // Description construction
   const descriptionParts: string[] = [];
   if (fact.colour) descriptionParts.push(capitalizeFirst(fact.colour.trim()));
   if (fact.material) descriptionParts.push(fact.material.trim());
 
   let typeStr = fact.type ? fact.type.trim() : '';
   if (typeStr) {
-    // Avoid repeating component name if typeStr already includes it
     if (typeStr.toLowerCase().startsWith(component.toLowerCase())) {
       typeStr = typeStr.slice(component.length).trim();
     }
@@ -319,7 +345,6 @@ export function generateCommentary(template: InspectionTypeTemplate, fact: Struc
   const quantityPrefix = fact.quantity && fact.quantity > 1 ? `${fact.quantity}x ` : '';
   const fullDesc = `${quantityPrefix}${descString}`.trim();
 
-  // Observations
   const obsParts: string[] = [];
   if (fact.conditionIssue && fact.conditionIssue.trim()) {
     let condIssue = fact.conditionIssue.trim();
@@ -354,7 +379,6 @@ export function generateCommentary(template: InspectionTypeTemplate, fact: Struc
     commentary = `${component} - ${detail}${otherwiseIntact}.`.replace(/\s+/g, ' ').replace(/,\s*\./g, '.');
   }
 
-  // Ensure clean capitalization
   commentary = commentary.charAt(0).toUpperCase() + commentary.slice(1);
 
   validateGeneratedClaim(fact, commentary);
@@ -441,7 +465,6 @@ function adaptBank(bankText: string, fact: StructuredInspectionFact, detail: str
   text = text.replace(/\{\{cleanliness_issue\}\}/g, fact.cleanlinessIssue || '');
   text = text.replace(/\{\{working_status\}\}/g, workingText(fact.workingState) || '');
 
-  // If entry didn't have placeholders but was custom text, prepend component if not present
   if (!text.toLowerCase().startsWith(component.toLowerCase())) {
     text = `${component} - ${text}`;
   }
