@@ -2,15 +2,17 @@
 
 ## Purpose
 
-Clients is the authoritative account layer between a physical Property and the people or organisations that engage ProInspect, receive reports, approve maintenance and pay for services.
+Clients is the authoritative account layer between a physical Property and the people or organisations that engage ProInspect, receive reports, approve maintenance and agree commercial terms for services.
 
-The module deliberately separates those concepts. An owner, managing agent, engaging client, billing party, report recipient and maintenance approver may be different people or entities.
+The module deliberately separates those concepts. An owner, managing agent, engaging client, commercial recipient, report recipient and maintenance approver may be different people or entities.
+
+ProInspect records operational commercial metadata such as quoted amounts, approval limits, invoice-recipient details, payment terms and purchase-order references. It does not receive, hold, transfer, reconcile or disburse money and does not provide trust accounting or a financial ledger.
 
 ```text
 Client Account
     ├── Contacts & Team
     ├── Engagements & Services
-    ├── Billing & Xero
+    ├── Commercial Terms
     ├── Inspection Preferences
     ├── Maintenance Approval Policy
     ├── Documents & Agreements
@@ -57,7 +59,7 @@ Contacts may independently be marked as:
 - primary contact
 - report recipient
 - maintenance contact
-- accounts contact
+- accounts/contact recipient
 - emergency contact
 - maintenance approver
 
@@ -70,7 +72,7 @@ A Property may have multiple current and historical Client relationships:
 - owner
 - managing agent
 - engaging client
-- billing party
+- commercial recipient
 - report recipient
 - maintenance authority
 - strata manager
@@ -87,7 +89,7 @@ The onboarding workspace has ten stages:
 1. Identity
 2. Contacts
 3. Engagement & Services
-4. Billing
+4. Commercial Terms
 5. Operational Preferences
 6. Maintenance & Approvals
 7. Properties
@@ -99,7 +101,7 @@ Activation requires at minimum:
 
 - legal identity, account type and entity type
 - a primary contact with an email or telephone number
-- a billing method
+- a commercial billing arrangement, used only as service-agreement metadata
 
 Missing engagements, inspection preferences and maintenance policy are surfaced as warnings because agency defaults can still apply.
 
@@ -109,8 +111,7 @@ Client creation and bulk import compare candidate records with existing accounts
 
 - ABN
 - ACN
-- Xero Contact ID
-- Shopify Customer ID
+- Shopify Customer ID where applicable
 - primary/general email
 - normalised legal name
 - normalised trading name
@@ -130,7 +131,7 @@ The browser parses the spreadsheet into structured rows. The server performs dup
 
 The commit action is disabled in the user interface until review-required and rejected rows are resolved.
 
-Rows can include Client identity, contact details, billing terms, Xero and Shopify references, Property IDs, relationship types and maintenance approval limits.
+Rows can include Client identity, contact details, commercial terms, Shopify references, Property IDs, relationship types and maintenance approval limits. Provider-specific accounting identifiers are not part of the canonical Client identity.
 
 ## Engagements and services
 
@@ -157,9 +158,9 @@ Client defaults may define:
 
 These are defaults rather than mutable historical truth. Inspection Requests and Inspection Jobs snapshot resolved Client context when they are linked or converted.
 
-## Shopify and Google Calendar
+## Shopify, Google Calendar and PMS connections
 
-When Shopify or Google Calendar produces an Inspection Request and the Property is resolved, the intake service resolves the Property's current Client relationships and snapshots:
+When Shopify, Google Calendar or a bounded PMS connection produces or enriches an Inspection Request and the Property is resolved, the intake service resolves the Property's current Client relationships and snapshots:
 
 - Client Account
 - active Engagement
@@ -167,9 +168,10 @@ When Shopify or Google Calendar produces an Inspection Request and the Property 
 - Property Manager
 - report recipients
 - maintenance approver
-- Xero Contact ID
 
 That Client snapshot follows the Request into the Inspection Job.
+
+PMS connectors may import operational property, client, tenant and tenancy context and publish operational inspection, report, maintenance and document events. They do not import or execute trust-accounting transactions, payments, receipts, disbursements, bank reconciliations or general-ledger entries.
 
 ## Reports
 
@@ -204,13 +206,13 @@ Rules may include:
 
 The Maintenance Item Console displays the currently resolved Client and approver before the quote is sent.
 
-## Billing and Xero
+## Commercial terms and accounting boundary
 
-The Client Account is the stable financial counterparty and stores the Xero Contact ID. Billing supports Shopify prepaid, account, per-inspection invoicing, consolidated monthly invoicing and other arrangements.
+The Client Account stores service-commercial metadata needed for ProInspect workflows. Supported arrangements include Shopify prepaid, account, per-inspection invoicing, consolidated monthly invoicing and other contracted arrangements.
 
-The profile can also retain invoice-recipient email, payment terms, purchase-order rules and pricing profile.
+The profile can retain invoice-recipient email, payment terms, purchase-order requirements and pricing profile because those facts govern approval and service delivery. They are not a transaction ledger.
 
-Xero remains the accounting mirror. It does not decide operational inspection or maintenance authority.
+The connected property-management or accounting system remains authoritative for rent, trust accounting, receipts, payments, disbursements, bank reconciliation, bond financial transactions and general-ledger accounting. ProInspect may publish operational outcomes or references to that system but does not execute the financial transaction.
 
 ## Client documents
 
@@ -223,7 +225,7 @@ Client-level documents include:
 - privacy consent
 - authority to act
 - maintenance authority
-- purchase orders
+- purchase-order reference documents
 - insurance/compliance records
 - client instructions
 - pricing agreements
@@ -245,11 +247,13 @@ Supported permissions are:
 - `client.maintenance.read`
 - `client.maintenance.approve`
 - `client.quotes.approve`
-- `client.billing.read`
+- `client.commercial.read`
 - `client.documents.read`
 - `client.users.manage`
 
-Internal ProInspect access uses separate server-side capabilities such as `client.read`, `client.manage`, `client.contact.manage`, `client.relationship.manage`, `client.document.manage`, `client.portal.manage` and `client.billing.manage`.
+Internal ProInspect access uses separate server-side capabilities such as `client.read`, `client.manage`, `client.contact.manage`, `client.relationship.manage`, `client.document.manage`, `client.portal.manage` and `client.commercial.manage`.
+
+The portal exposes operational information and commercial approval context. It does not expose trust balances, bank accounts, payment execution or ledger reconciliation.
 
 ## Offboarding
 
@@ -290,8 +294,8 @@ A strong potential duplicate blocks automatic migration for human review.
 | Operational inspection | Inspection Jobs |
 | Inspection facts | Reports |
 | Maintenance scope and work | Maintenance |
-| Accounting mirror | Xero |
-| Store order/payment | Shopify |
+| Rent, trust accounting, payments and ledgers | Connected PMS/accounting system |
+| Store order/payment reference | Shopify |
 | Appointment time | Google Calendar |
 
 ## Release acceptance
@@ -299,14 +303,14 @@ A strong potential duplicate blocks automatic migration for human review.
 A release candidate must demonstrate:
 
 - Client onboarding creates one account, primary contact and engagement
-- duplicate ABN/ACN/external IDs do not silently create duplicate accounts
+- duplicate ABN/ACN/approved external IDs do not silently create duplicate accounts
 - bulk import dry-run separates ready, duplicate, review and rejected rows
 - Property relationships synchronise compatibility Client IDs
 - legacy landlord migration refuses strong duplicates
-- Shopify/Calendar Property matching carries Client context into the Request and Job
+- Shopify/Calendar/PMS Property matching carries Client context into the Request and Job
 - Report creation retains a version-bound Client snapshot
 - Maintenance resolves the Client and approval authority from Property relationships
-- Xero Contact identity remains on the Client Account
+- Client commercial metadata does not create or execute financial-ledger transactions
 - Client documents pass size, generation and SHA-256 verification
 - offboarding ends relationships and revokes access without deleting history
 - merged Clients preserve subordinate records and historical auditability
