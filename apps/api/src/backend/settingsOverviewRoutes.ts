@@ -24,16 +24,36 @@ async function listAll(dependencies: ApiDependencies, collection: string, agency
 function connectionHealth(provider: string, connection: StoredRecord | undefined, exceptions: StoredRecord[]): IntegrationHealth {
   const open = exceptions.filter((item) => item.status === 'open' && (!item.provider || item.provider === provider));
   const connected = connection?.status === 'connected';
-  const status: IntegrationHealth['status'] = !connection ? 'not_configured' : open.some((item) => item.severity === 'critical') ? 'error' : open.length ? 'warning' : connected ? 'healthy' : 'warning';
+  const status: IntegrationHealth['status'] = !connection
+    ? 'not_configured'
+    : open.some((item) => item.severity === 'critical')
+      ? 'error'
+      : open.length
+        ? 'warning'
+        : connected
+          ? 'healthy'
+          : 'warning';
+  const accountLabel = typeof connection?.externalAccountLabel === 'string'
+    ? connection.externalAccountLabel
+    : typeof connection?.tenantName === 'string'
+      ? connection.tenantName
+      : undefined;
+  const lastError = typeof connection?.lastErrorMessage === 'string'
+    ? connection.lastErrorMessage
+    : typeof connection?.lastError === 'string'
+      ? connection.lastError
+      : open[0] && typeof open[0].detail === 'string'
+        ? open[0].detail
+        : undefined;
   return {
     provider,
     status,
-    accountLabel: typeof connection?.externalAccountLabel === 'string' ? connection.externalAccountLabel : undefined,
+    accountLabel,
     connectedAt: typeof connection?.connectedAt === 'string' ? connection.connectedAt : undefined,
     lastSuccessfulSyncAt: typeof connection?.lastSuccessfulSyncAt === 'string' ? connection.lastSuccessfulSyncAt : undefined,
     lastAttemptedSyncAt: typeof connection?.lastAttemptedSyncAt === 'string' ? connection.lastAttemptedSyncAt : undefined,
     openExceptionCount: open.length,
-    lastError: typeof connection?.lastError === 'string' ? connection.lastError : open[0] && typeof open[0].detail === 'string' ? open[0].detail : undefined,
+    lastError,
   };
 }
 
@@ -43,18 +63,20 @@ export async function routeSettingsOverviewRequest(req: IncomingMessage, depende
   if (req.method !== 'GET') throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Settings overview is read-only.');
   const agencyId = agencyHeader(req);
   const principal = await authenticateAndAuthorise(req, dependencies, route[3] === 'integrations' ? 'integration.read' : 'settings.read', { agencyId }, correlationId);
-  const [settings, branding, connections, syncExceptions, xeroExceptions] = await Promise.all([
+  const [settings, branding, connections, xeroConnections, syncExceptions, xeroExceptions] = await Promise.all([
     listAll(dependencies, 'agencySettings', agencyId),
     listAll(dependencies, 'brandingProfiles', agencyId),
     listAll(dependencies, 'integrationConnections', agencyId),
+    listAll(dependencies, 'xeroConnections', agencyId),
     listAll(dependencies, 'integrationSyncExceptions', agencyId),
     listAll(dependencies, 'xeroSyncExceptions', agencyId),
   ]);
   const find = (provider: string) => connections.find((item) => item.id === provider || item.provider === provider);
+  const xeroConnection = xeroConnections.find((item) => item.status === 'connected') || xeroConnections[0];
   const integrations = [
     connectionHealth('shopify', find('shopify'), syncExceptions),
     connectionHealth('google_calendar', find('google_calendar'), syncExceptions),
-    connectionHealth('xero', find('xero') || find('xero-account'), xeroExceptions),
+    connectionHealth('xero', xeroConnection, xeroExceptions),
   ];
   if (route[3] === 'integrations') return { status: 200, body: { data: integrations, meta: { actor: principal.uid, correlationId } } };
   const has = (id: string) => settings.some((item) => item.id === id);
