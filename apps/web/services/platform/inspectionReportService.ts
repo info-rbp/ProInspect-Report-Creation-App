@@ -13,6 +13,8 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
   return rooms.map((room, index) => ({
     id: room.id,
     name: room.name,
+    ...(room.canonicalAreaDefinitionId ? { canonicalAreaDefinitionId: room.canonicalAreaDefinitionId } : {}),
+    ...(room.canonicalAreaDefinitionVersion ? { canonicalAreaDefinitionVersion: room.canonicalAreaDefinitionVersion } : {}),
     sequence: index + 1,
     overallCommentary: room.overallComment || '',
     photoReferences: (room.photos || []).flatMap((photo, photoIndex) => {
@@ -23,6 +25,10 @@ function roomAreas(rooms: Room[]): ReportAggregate['areas'] {
     components: room.items.map((item) => ({
       id: item.id,
       component: item.name,
+      ...(item.canonicalComponentDefinitionId ? { canonicalComponentDefinitionId: item.canonicalComponentDefinitionId } : {}),
+      ...(item.canonicalComponentDefinitionVersion ? { canonicalComponentDefinitionVersion: item.canonicalComponentDefinitionVersion } : {}),
+      ...(item.canonicalAreaComponentRuleId ? { canonicalAreaComponentRuleId: item.canonicalAreaComponentRuleId } : {}),
+      ...(item.canonicalAreaComponentRuleVersion ? { canonicalAreaComponentRuleVersion: item.canonicalAreaComponentRuleVersion } : {}),
       ...(item.subComponent ? { subComponent: item.subComponent } : {}),
       ...(item.material ? { material: item.material } : {}),
       ...(item.colour ? { colour: item.colour } : {}),
@@ -129,6 +135,8 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
     rooms: aggregate.areas.map((area) => ({
       id: area.id,
       name: area.name,
+      canonicalAreaDefinitionId: area.canonicalAreaDefinitionId,
+      canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion,
       status: area.components.every((component) => component.reviewStatus === 'reviewer_approved') ? 'complete' : 'draft',
       overallComment: area.overallCommentary || '',
       isExpanded: true,
@@ -136,6 +144,10 @@ export function aggregateToReportData(aggregate: ReportAggregate): ReportData {
       items: area.components.map((component) => ({
         id: component.id,
         name: component.component,
+        canonicalComponentDefinitionId: component.canonicalComponentDefinitionId,
+        canonicalComponentDefinitionVersion: component.canonicalComponentDefinitionVersion,
+        canonicalAreaComponentRuleId: component.canonicalAreaComponentRuleId,
+        canonicalAreaComponentRuleVersion: component.canonicalAreaComponentRuleVersion,
         subComponent: component.subComponent,
         material: component.material,
         colour: component.colour,
