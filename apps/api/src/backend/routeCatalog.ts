@@ -71,7 +71,6 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   'maintenance-quote-versions': { collection: 'maintenanceQuoteVersions', readCapability: 'maintenance.read', target },
   'maintenance-work-orders': { collection: 'maintenanceWorkOrders', readCapability: 'maintenance.read', target },
   'maintenance-variations': { collection: 'maintenanceVariations', readCapability: 'maintenance.read', target },
-  'maintenance-financial-reconciliations': { collection: 'maintenanceFinancialReconciliations', readCapability: 'maintenance.read', target },
   'price-books': { collection: 'priceBooks', readCapability: 'maintenance.read', target },
   'price-book-versions': { collection: 'priceBookVersions', readCapability: 'maintenance.read', target },
   'price-book-imports': { collection: 'priceBookImports', readCapability: 'maintenance.read', target },
