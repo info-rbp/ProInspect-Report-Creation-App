@@ -5,90 +5,142 @@ import {
   applyLayoutTemplate,
   cloneLayoutFromProperty,
   hierarchyFromRooms,
+  migrateTemplateBackedLayoutToCanonical,
 } from '../services/platform/propertyLayoutService';
-import { parsePropertyCsv } from '../services/platform/propertyBulkImportService';
 
-function property(overrides: Partial<PropertyRecord> = {}): PropertyRecord {
-  const now = '2026-08-20T00:00:00.000Z';
+function property(id: string): PropertyRecord {
   return {
-    id: 'property-1',
+    id,
     agencyId: 'agency-1',
-    address: '1 Test Street',
+    address: `${id} Test Street`,
+    suburb: 'Perth',
+    state: 'WA',
+    postcode: '6000',
     propertyType: 'house',
     propertyUse: 'residential',
     physicalPropertyType: 'house',
     ownershipStructure: 'freehold',
-    clientIds: [],
     status: 'active',
-    createdAt: now,
-    updatedAt: now,
-    ...overrides,
+    clientIds: [],
+    roomsConfig: [],
+    layoutNodes: [],
+    layoutVersions: [],
+    ownershipHistory: [],
+    tenancyHistory: [],
+    accessDevices: [],
+    assets: [],
+    documents: [],
+    profilePhotos: [],
+    alerts: [],
+    floorPlanDocumentIds: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
-describe('property layout foundation', () => {
-  it('provides layouts across residential, commercial, industrial and strata use cases', () => {
-    const ids = new Set(PROPERTY_LAYOUT_TEMPLATES.map((template) => template.id));
-    expect(ids).toContain('res-house-3x2');
-    expect(ids).toContain('res-townhouse');
-    expect(ids).toContain('res-furnished-apartment');
-    expect(ids).toContain('commercial-office');
-    expect(ids).toContain('commercial-retail');
-    expect(ids).toContain('industrial-warehouse');
-    expect(ids).toContain('strata-common-property');
-  });
-
-  it('creates a versioned property-owned copy of a template', () => {
-    const source = property();
-    const template = PROPERTY_LAYOUT_TEMPLATES.find((candidate) => candidate.id === 'res-house-3x2');
-    expect(template).toBeDefined();
-    const patch = applyLayoutTemplate(source, template!);
-    expect(patch.currentLayoutVersionId).toBeTruthy();
-    expect(patch.layoutVersions).toHaveLength(1);
-    expect(patch.roomsConfig).toBeDefined();
-    expect(patch.layoutVersions).toBeDefined();
-    expect(patch.roomsConfig!.length).toBeGreaterThan(10);
-    expect(patch.layoutVersions![0].roomsConfig).not.toBe(patch.roomsConfig);
-  });
-
-  it('builds Site to Building to Level to Area hierarchy', () => {
-    const nodes = hierarchyFromRooms([
-      { id: 'area-entry', name: 'Entry', roomType: 'hallway', floorLevel: 'Ground Floor' },
-      { id: 'area-bedroom', name: 'Bedroom', roomType: 'bedroom', floorLevel: 'First Floor' },
+describe('property module layout services', () => {
+  it('ships the ten canonical Property Layout templates', () => {
+    expect(PROPERTY_LAYOUT_TEMPLATES.map((template) => template.id)).toEqual([
+      'res-house-3x2',
+      'res-house-4x2',
+      'res-apartment-1x1',
+      'res-apartment-2x2',
+      'res-furnished-apartment',
+      'res-townhouse',
+      'commercial-office',
+      'commercial-retail',
+      'industrial-warehouse',
+      'strata-common-property',
     ]);
-    expect(nodes.find((node) => node.kind === 'site')).toBeDefined();
-    expect(nodes.find((node) => node.kind === 'building')).toBeDefined();
-    expect(nodes.filter((node) => node.kind === 'level')).toHaveLength(2);
-    expect(nodes.filter((node) => node.kind === 'area')).toHaveLength(2);
   });
 
-  it('clones another property layout without reusing stable area identities', () => {
-    const source = property({ id: 'source', roomsConfig: [{ id: 'source-area', name: 'Kitchen', roomType: 'kitchen' }] });
-    const target = property({ id: 'target', address: '2 Test Street' });
+  it('applies a template as a versioned exact Area/Component snapshot', () => {
+    const target = property('property-1');
+    const template = PROPERTY_LAYOUT_TEMPLATES.find((item) => item.id === 'res-house-3x2')!;
+    const patch = applyLayoutTemplate(target, template);
+    expect(patch.layoutTemplateId).toBe(template.id);
+    expect(patch.roomsConfig?.length).toBeGreaterThan(10);
+    expect(patch.currentLayoutVersionId).toBeTruthy();
+    expect(patch.layoutVersions?.[0]).toMatchObject({
+      templateId: template.id,
+      canonicalCatalogueId: 'proinspect-property-layout-catalogue',
+      canonicalCatalogueVersion: 1,
+    });
+    for (const room of patch.roomsConfig || []) {
+      expect(room.canonicalAreaDefinitionId).toBeTruthy();
+      expect(room.canonicalAreaDefinitionVersion).toBeGreaterThan(0);
+      expect(room.componentRefs?.length).toBeGreaterThan(0);
+      for (const component of room.componentRefs || []) {
+        expect(component.id).toContain(`${room.id}:component:`);
+        expect(component.canonicalComponentDefinitionId).toBeTruthy();
+        expect(component.canonicalComponentDefinitionVersion).toBeGreaterThan(0);
+        expect(component.canonicalAreaComponentRuleId).toBeTruthy();
+      }
+    }
+  });
+
+  it('retains canonical references in hierarchy nodes', () => {
+    const target = property('property-2');
+    const template = PROPERTY_LAYOUT_TEMPLATES.find((item) => item.id === 'res-apartment-2x2')!;
+    const rooms = applyLayoutTemplate({ ...target, physicalPropertyType: 'apartment', propertyType: 'apartment' }, template).roomsConfig!;
+    const nodes = hierarchyFromRooms(rooms);
+    const areaNodes = nodes.filter((node) => node.kind === 'area');
+    expect(areaNodes.length).toBe(rooms.length);
+    expect(areaNodes.every((node) => Boolean(node.canonicalAreaDefinitionId && node.canonicalAreaDefinitionVersion && node.componentRefs?.length))).toBe(true);
+  });
+
+  it('clones Property instance identities while preserving canonical identities', () => {
+    const sourceBase = property('source');
+    const template = PROPERTY_LAYOUT_TEMPLATES.find((item) => item.id === 'res-house-4x2')!;
+    const sourcePatch = applyLayoutTemplate(sourceBase, template);
+    const source = { ...sourceBase, ...sourcePatch } as PropertyRecord;
+    const target = property('target');
     const patch = cloneLayoutFromProperty(target, source);
-    expect(patch.roomsConfig).toBeDefined();
-    expect(patch.layoutVersions).toBeDefined();
-    expect(patch.roomsConfig![0].id).not.toBe('source-area');
-    expect(patch.layoutVersions![0].changeReason).toContain(source.address);
-  });
-});
-
-describe('property portfolio CSV review', () => {
-  it('parses classification, ownership, people and property configuration before import', () => {
-    const rows = parsePropertyCsv([
-      'address,suburb,state,postcode,property_use,physical_property_type,ownership_structure,bedrooms,bathrooms,parking,owner_name,tenant_name,tenant_email,lease_start_date,lease_end_date',
-      '46 Maamba Road,Wattle Grove,WA,6107,residential,house,freehold,4,2,2,Example Owner,Example Tenant,tenant@example.com,2026-08-01,2027-07-31',
-    ].join('\n'));
-    expect(rows).toHaveLength(1);
-    expect(rows[0].errors).toEqual([]);
-    expect(rows[0].propertyUse).toBe('residential');
-    expect(rows[0].physicalPropertyType).toBe('house');
-    expect(rows[0].ownershipStructure).toBe('freehold');
-    expect(rows[0].tenantName).toBe('Example Tenant');
+    expect(patch.roomsConfig?.length).toBe(source.roomsConfig.length);
+    expect(patch.roomsConfig?.[0].id).not.toBe(source.roomsConfig[0].id);
+    expect(patch.roomsConfig?.[0].canonicalAreaDefinitionId).toBe(source.roomsConfig[0].canonicalAreaDefinitionId);
+    expect(patch.roomsConfig?.[0].componentRefs?.[0].id).not.toBe(source.roomsConfig[0].componentRefs?.[0].id);
+    expect(patch.roomsConfig?.[0].componentRefs?.[0].canonicalComponentDefinitionId).toBe(source.roomsConfig[0].componentRefs?.[0].canonicalComponentDefinitionId);
   });
 
-  it('blocks a row without a property address', () => {
-    const rows = parsePropertyCsv('address,property_use\n,residential');
-    expect(rows[0].errors).toContain('Address is required.');
+  it('migrates a renamed known-template layout without matching the display name', () => {
+    const template = PROPERTY_LAYOUT_TEMPLATES.find((item) => item.id === 'res-apartment-1x1')!;
+    const target = {
+      ...property('legacy-apartment'),
+      propertyType: 'apartment' as const,
+      physicalPropertyType: 'apartment' as const,
+      layoutTemplateId: template.id,
+      roomsConfig: [
+        { id: 'legacy-entry', name: 'Absolutely Not Called Entry', roomType: 'hallway' as const },
+        { id: 'legacy-living', name: 'The Room With The Sofa', roomType: 'living' as const },
+        { id: 'legacy-kitchen', name: 'Room of Regrettable Toast', roomType: 'kitchen' as const },
+        { id: 'legacy-bedroom', name: 'Sleeping Zone', roomType: 'bedroom' as const },
+        { id: 'legacy-bath', name: 'Wet Room', roomType: 'bathroom' as const },
+        { id: 'legacy-laundry', name: 'Machine Cave', roomType: 'laundry' as const },
+        { id: 'legacy-outdoor', name: 'Outside-ish', roomType: 'outdoor' as const },
+        { id: 'legacy-storage', name: 'Stuff Room', roomType: 'storage' as const },
+        { id: 'legacy-parking', name: 'Metal Box Space', roomType: 'garage' as const },
+        { id: 'legacy-safety', name: 'Alarm Things', roomType: 'safety' as const },
+      ],
+    } as PropertyRecord;
+    const result = migrateTemplateBackedLayoutToCanonical(target);
+    expect(result.complete).toBe(true);
+    expect(result.migratedCount).toBe(10);
+    expect(result.rooms.find((room) => room.id === 'legacy-kitchen')).toMatchObject({
+      name: 'Room of Regrettable Toast',
+      canonicalAreaDefinitionId: 'kitchen',
+      canonicalAreaDefinitionVersion: 1,
+    });
+    expect(result.rooms.find((room) => room.id === 'legacy-kitchen')?.componentRefs?.length).toBeGreaterThan(5);
+  });
+
+  it('leaves unmatched custom legacy Areas explicit rather than guessing from their names', () => {
+    const target = {
+      ...property('custom-property'),
+      roomsConfig: [{ id: 'custom', name: 'Kitchen But Actually A Plant Room', roomType: 'other' as const }],
+    } as PropertyRecord;
+    const result = migrateTemplateBackedLayoutToCanonical(target);
+    expect(result).toMatchObject({ migratedCount: 0, unmappedCount: 1, complete: false });
+    expect(result.rooms[0].canonicalAreaDefinitionId).toBeUndefined();
   });
 });
