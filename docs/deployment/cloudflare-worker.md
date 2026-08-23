@@ -21,17 +21,20 @@ Use these build settings:
 
 - Production branch: `main` after the deployment PR is merged.
 - Root directory: repository root.
-- Build command: `npm run cloudflare:build`.
-- Deploy command: `npx wrangler deploy`.
-- Non-production deploy command: `npx wrangler versions upload`.
+- Build command: `npm run cloudflare:ci`.
+- Deploy command: `npm run cloudflare:deploy`.
+- Non-production deploy command: `npm run cloudflare:preview`.
 - Node version: the repository `.nvmrc` pins Node 22.
+
+Workers Builds normally performs dependency installation before the configured build command. This repository deliberately owns that step so a stale or generated `package-lock.json` cannot cause Cloudflare to execute `npm ci` against the wrong workspace graph. Set the build variable `SKIP_DEPENDENCY_INSTALL=1`. The `cloudflare:ci` script then runs the repository-controlled npm install, validates the environment, builds the shared packages and builds the React application.
 
 If a previous Cloudflare build was created from an older branch containing `package-lock.json` or `packages/migrations`, clear the Cloudflare build cache after switching the production branch. The current source tree does not contain `packages/migrations`.
 
 ## Cloudflare build variables
 
-Configure these under Workers > Settings > Build > Variables and Secrets. These Firebase web values are deployment configuration, not privileged server credentials:
+Configure these under Workers > Settings > Build > Variables and Secrets:
 
+- `SKIP_DEPENDENCY_INSTALL=1`
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
@@ -42,7 +45,9 @@ Configure these under Workers > Settings > Build > Variables and Secrets. These 
 - `VITE_FIREBASE_APP_CHECK_SITE_KEY`
 - `VITE_DEMO_MODE=false`
 
-The Cloudflare build forces `VITE_API_BASE_URL=/` so browser API calls remain same-origin and are proxied by the Worker.
+The Firebase web values are deployment configuration, not privileged server credentials. The Cloudflare build forces `VITE_API_BASE_URL=/` so browser API calls remain same-origin and are proxied by the Worker.
+
+The repository pins npm 10.9.2 and Wrangler 4.120.0. Do not replace the build command with `npm ci` unless and until a newly generated, reviewed `package-lock.json` for the current complete workspace graph is committed.
 
 ## Cloudflare runtime configuration
 
@@ -100,4 +105,6 @@ After deployment:
 
 ## Build failure addressed by this deployment change
 
-The failed Cloudflare build used `npm ci` against a different/stale dependency graph and reported `@pcr/migrations@0.1.0`, which is not present in the current repository. This deployment configuration removes the stale Bun lock, pins npm as the repository package manager, adds an explicit Wrangler configuration and records the exact Cloudflare commit/branch in the build verification output. If Cloudflare still reports `@pcr/migrations`, it is building the wrong branch/commit or restoring stale build state; switch the production branch and clear the build cache before retrying.
+The failed Cloudflare build used `npm ci` against a different/stale dependency graph and reported `@pcr/migrations@0.1.0`, which is not present in the current repository. This deployment configuration removes the stale Bun lock, pins npm and Wrangler, disables Cloudflare's automatic dependency install, and performs installation from the checked-out source tree inside `npm run cloudflare:ci`. The build verifier records the exact Cloudflare commit/branch and rejects a build where `SKIP_DEPENDENCY_INSTALL=1` or required Firebase build variables are missing.
+
+If Cloudflare still reports `@pcr/migrations`, it is building the wrong branch/commit or restoring stale build state. Switch the production branch to the merged `main` revision and clear the build cache before retrying.
