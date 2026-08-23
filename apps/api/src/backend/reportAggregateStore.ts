@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import {
-  getFirestore,
   type DocumentData,
   type DocumentReference,
   type DocumentSnapshot,
@@ -21,6 +20,7 @@ import {
   type ReportMetadataRecord,
   type UserRole,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import type { ReportAggregateStore, ReportTransitionCommand } from './types.js';
 
 const MAX_TRANSACTION_WRITES = 450;
@@ -41,7 +41,7 @@ function now(): string {
 }
 
 function reportReference(agencyId: string, reportId: string) {
-  return getFirestore(adminApp()).doc(`agencies/${agencyId}/reports/${reportId}`);
+  return firestoreDb(adminApp()).doc(`agencies/${agencyId}/reports/${reportId}`);
 }
 
 function error(code: string, status: number, message: string, details?: Record<string, unknown>): Error {
@@ -239,7 +239,7 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
     expectedVersion: number | undefined,
     actorId: string,
   ): Promise<ReportAggregate> {
-    const database = getFirestore(adminApp());
+    const database = firestoreDb(adminApp());
     const reference = reportReference(aggregate.report.agencyId, aggregate.report.id);
     const requestedWrites =
       1 + aggregate.areas.length + aggregate.areas.reduce((count, area) => count + area.components.length, 0);
@@ -319,7 +319,7 @@ export class FirestoreReportAggregateStore implements ReportAggregateStore {
   }
 
   async transition(agencyId: string, command: ReportTransitionCommand): Promise<Record<string, unknown>> {
-    const database = getFirestore(adminApp());
+    const database = firestoreDb(adminApp());
     const reference = reportReference(agencyId, command.reportId);
     return database.runTransaction(async (transaction) => {
       const records = await readAggregateInTransaction(transaction, agencyId, command.reportId);
