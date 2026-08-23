@@ -1,5 +1,5 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { firestoreDb } from '../firestoreDatabase.js';
 import type { IdempotencyResult, IdempotencyStore } from './types.js';
 
 function adminApp() {
@@ -35,7 +35,7 @@ export class FirestoreIdempotencyStore implements IdempotencyStore {
     payloadHash: string,
     action: () => Promise<IdempotencyResult>,
   ): Promise<{ replayed: boolean; result: IdempotencyResult }> {
-    const database = getFirestore(adminApp());
+    const database = firestoreDb(adminApp());
     const documentId = Buffer.from(`${operation}:${key}`).toString('base64url');
     const reference = database.doc(`agencies/${agencyId}/idempotencyKeys/${documentId}`);
     const now = new Date().toISOString();
