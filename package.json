@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": "22.x"
+  },
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -13,6 +17,10 @@
     "build": "npm run build:packages && npm run build:apps",
     "build:packages": "npm run build --workspace @pcr/domain && npm run build --workspace @pcr/config && npm run build --workspace @pcr/validation && npm run build --workspace @pcr/templates && npm run build --workspace @pcr/report-presentation && npm run build --workspace @pcr/testing && npm run build --workspace @pcr/ui",
     "build:apps": "npm run build --workspace @pcr/web && npm run build --workspace @pcr/api && npm run build --workspace @pcr/ai-worker && npm run build --workspace @pcr/pdf-worker && npm run build --workspace @pcr/notification-worker && npm run build --workspace @pcr/dashboard-worker && npm run build --workspace @pcr/document-worker && npm run build --workspace @pcr/integration-worker",
+    "cloudflare:verify": "node scripts/verify-cloudflare-build-inputs.mjs",
+    "cloudflare:build": "npm run cloudflare:verify && node scripts/build-cloudflare.mjs",
+    "cloudflare:deploy": "npx wrangler deploy",
+    "cloudflare:preview": "npx wrangler versions upload",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "npm run build:packages && npm run typecheck:workspaces",
     "typecheck:workspaces": "npm run typecheck --workspaces --if-present",
