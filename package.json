@@ -17,8 +17,10 @@
     "build": "npm run build:packages && npm run build:apps",
     "build:packages": "npm run build --workspace @pcr/domain && npm run build --workspace @pcr/config && npm run build --workspace @pcr/validation && npm run build --workspace @pcr/templates && npm run build --workspace @pcr/report-presentation && npm run build --workspace @pcr/testing && npm run build --workspace @pcr/ui",
     "build:apps": "npm run build --workspace @pcr/web && npm run build --workspace @pcr/api && npm run build --workspace @pcr/ai-worker && npm run build --workspace @pcr/pdf-worker && npm run build --workspace @pcr/notification-worker && npm run build --workspace @pcr/dashboard-worker && npm run build --workspace @pcr/document-worker && npm run build --workspace @pcr/integration-worker",
+    "cloudflare:install": "npm install --include=dev --ignore-scripts --no-audit --no-fund --package-lock=false",
     "cloudflare:verify": "node scripts/verify-cloudflare-build-inputs.mjs",
     "cloudflare:build": "npm run cloudflare:verify && node scripts/build-cloudflare.mjs",
+    "cloudflare:ci": "npm run cloudflare:install && npm run cloudflare:build",
     "cloudflare:deploy": "npx wrangler deploy",
     "cloudflare:preview": "npx wrangler versions upload",
     "lint": "eslint . --max-warnings=0",
@@ -64,6 +66,7 @@
     "typescript": "~5.8.2",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.2.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "4.120.0"
   }
 }
