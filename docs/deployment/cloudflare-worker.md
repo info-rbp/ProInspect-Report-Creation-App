@@ -26,26 +26,42 @@ Use these build settings:
 - Non-production deploy command: `npm run cloudflare:preview`.
 - Node version: the repository `.nvmrc` pins Node 22.
 
-Workers Builds normally performs dependency installation before the configured build command. This repository deliberately owns that step so a stale or generated `package-lock.json` cannot cause Cloudflare to execute `npm ci` against the wrong workspace graph. Set the build variable `SKIP_DEPENDENCY_INSTALL=1`. The `cloudflare:ci` script then runs the repository-controlled npm install, validates the environment, builds the shared packages and builds the React application.
+`SKIP_DEPENDENCY_INSTALL=1` is recommended because Workers Builds may otherwise perform an automatic dependency install before the repository-controlled install. The build verifier treats a missing skip flag as a warning rather than a deployment blocker. This keeps preview builds functional even when Cloudflare applies trigger-specific build variables inconsistently.
 
 If a previous Cloudflare build was created from an older branch containing `package-lock.json` or `packages/migrations`, clear the Cloudflare build cache after switching the production branch. The current source tree does not contain `packages/migrations`.
 
-## Cloudflare build variables
+## Firebase web configuration
 
-Configure these under Workers > Settings > Build > Variables and Secrets:
+Cloudflare production uses `firebase-cloudflare-config.json` as the public Firebase web configuration fallback. Environment variables still override the checked-in values when supplied. This file contains browser configuration only, not privileged Google credentials.
 
-- `SKIP_DEPENDENCY_INSTALL=1`
+The checked-in production Firebase configuration includes:
+
+- project ID `business-plan-applicatio-17047`
+- the supplied Firebase Web App ID
+- Firebase web API key
+- authentication domain
+- storage bucket
+- messaging sender ID
+- analytics measurement ID
+- the existing named Firestore database ID used by this application
+
+Optional build-time overrides can still be configured under Workers > Settings > Build > Variables and Secrets:
+
+- `SKIP_DEPENDENCY_INSTALL=1` (recommended)
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
-- `VITE_FIREBASE_FIRESTORE_DATABASE_ID` when using a named Firestore database
+- `VITE_FIREBASE_FIRESTORE_DATABASE_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
 - `VITE_FIREBASE_APP_CHECK_SITE_KEY`
 - `VITE_DEMO_MODE=false`
 
-The Firebase web values are deployment configuration, not privileged server credentials. The Cloudflare build forces `VITE_API_BASE_URL=/` so browser API calls remain same-origin and are proxied by the Worker.
+The six core Firebase build variables are no longer required for Cloudflare to compile the application because the repository fallback is complete. `VITE_FIREBASE_APP_CHECK_SITE_KEY` is intentionally not embedded because no App Check/reCAPTCHA Enterprise site key has been supplied. When the Google API uses `REQUIRE_APP_CHECK=true`, configure that site key before production acceptance.
+
+The Cloudflare build forces `VITE_API_BASE_URL=/` so browser API calls remain same-origin and are proxied by the Worker.
 
 The repository pins npm 10.9.2 and Wrangler 4.120.0. Do not replace the build command with `npm ci` unless and until a newly generated, reviewed `package-lock.json` for the current complete workspace graph is committed.
 
@@ -103,8 +119,8 @@ After deployment:
 6. Confirm a direct request to the Google API for a protected route returns `403 EDGE_REQUIRED` after origin protection is enabled.
 7. Confirm Workers Logs record proxy status without logging authorization headers, origin secrets or tokens.
 
-## Build failure addressed by this deployment change
+## Build failure handling
 
-The failed Cloudflare build used `npm ci` against a different/stale dependency graph and reported `@pcr/migrations@0.1.0`, which is not present in the current repository. This deployment configuration removes the stale Bun lock, pins npm and Wrangler, disables Cloudflare's automatic dependency install, and performs installation from the checked-out source tree inside `npm run cloudflare:ci`. The build verifier records the exact Cloudflare commit/branch and rejects a build where `SKIP_DEPENDENCY_INSTALL=1` or required Firebase build variables are missing.
+The Cloudflare build verifier distinguishes hard configuration failures from build-environment quirks. A generated `bun.lock` inside Workers CI or a missing `SKIP_DEPENDENCY_INSTALL` value produces a warning, not a failure. Missing Firebase environment variables also no longer fail the build when `firebase-cloudflare-config.json` is complete.
 
-If Cloudflare still reports `@pcr/migrations`, it is building the wrong branch/commit or restoring stale build state. Switch the production branch to the merged `main` revision and clear the build cache before retrying.
+If Cloudflare again reports `@pcr/migrations`, it is building the wrong repository/branch or restoring stale source state. The `ProInspect-Report-Creation-App` Cloudflare branch does not contain that workspace.
