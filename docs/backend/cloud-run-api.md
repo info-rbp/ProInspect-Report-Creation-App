@@ -6,6 +6,20 @@ The browser authenticates with Identity Platform and sends its Firebase ID token
 
 Local-only development may continue to use IndexedDB. A configured Firebase deployment uses `/api/v1`; it does not fall back to direct operational Firestore writes.
 
+## Production Firestore database
+
+The production API must set `FIRESTORE_DATABASE_ID` to the same named Firestore database used by the browser build. The API resolves membership, operational records, report aggregates, audit events, idempotency records, upload metadata and task-outbox records through this setting.
+
+For the current ProInspect production project:
+
+```text
+FIRESTORE_DATABASE_ID=ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60
+```
+
+Production backend paths deliberately reject a missing `FIRESTORE_DATABASE_ID` rather than silently connecting Firebase Admin to the `(default)` database. This prevents an active user in the named database from being misreported as `MEMBERSHIP_INACTIVE` and prevents operational records from being split across databases.
+
+Provider administrator provisioning also requires `FIRESTORE_DATABASE_ID` and writes the provider membership, agency membership and user profile to that database.
+
 ## Versioned routes
 
 The route catalogue generates the OpenAPI document served at `/api/v1/openapi.json`.
