@@ -5,14 +5,19 @@ import { getFirestore } from 'firebase-admin/firestore';
 const email = (process.argv[2] || process.env.PROINSPECT_PROVIDER_ADMIN_EMAIL || '').trim().toLowerCase();
 const providerId = (process.env.PROINSPECT_PROVIDER_ID || 'proinspect').trim();
 const homeAgencyId = (process.env.PROINSPECT_HOME_AGENCY_ID || 'agency-1').trim();
+const databaseId = process.env.FIRESTORE_DATABASE_ID?.trim();
 if (!email) {
   console.error('Usage: npm run provision:provider-admin -- admin@example.com');
   process.exit(64);
 }
+if (!databaseId) {
+  console.error('FIRESTORE_DATABASE_ID is required so provider administration cannot be provisioned into the wrong Firestore database.');
+  process.exit(78);
+}
 
 const app = getApps()[0] ?? initializeApp({ credential: applicationDefault() });
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getFirestore(app, databaseId);
 const user = await auth.getUserByEmail(email);
 const now = new Date().toISOString();
 const existingClaims = user.customClaims || {};
@@ -24,4 +29,5 @@ await Promise.all([
   db.doc(`users/${user.uid}`).set({ email, agencyId:homeAgencyId, providerId, role:'super_admin', status:'active', updatedAt:now }, { merge:true }),
 ]);
 console.log(`Provisioned ${email} as explicit ProInspect provider super_admin (${providerId}) with home agency ${homeAgencyId}.`);
+console.log(`Firestore database: ${databaseId}`);
 console.log('The user must sign out and sign back in so refreshed Firebase custom claims are issued.');
