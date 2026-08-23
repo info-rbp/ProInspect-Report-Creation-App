@@ -1,6 +1,6 @@
 import { getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type { AgencyMembership } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import type { MembershipRepository } from './types.js';
 
 const PROVIDER_ID = process.env.PROINSPECT_PROVIDER_ID?.trim() || 'proinspect';
@@ -11,7 +11,7 @@ function adminApp() {
 
 export class FirestoreMembershipRepository implements MembershipRepository {
   async getMembership(uid: string, agencyId: string): Promise<AgencyMembership | undefined> {
-    const db = getFirestore(adminApp());
+    const db = firestoreDb(adminApp());
     const agencyMembership = await db.doc(`agencies/${agencyId}/memberships/${uid}`).get();
     if (agencyMembership.exists) return agencyMembership.data() as AgencyMembership;
 
