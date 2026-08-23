@@ -1,7 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { originalObjectPath, type AuthenticatedPrincipal, type EvidenceMediaType, type UploadSessionRecord } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import type { TaskDispatcher, TaskKind, UploadSessionIssuer } from './types.js';
 import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 
@@ -19,7 +19,7 @@ const TOPIC_BY_KIND: Record<TaskKind, string> = {
 
 export class FirestoreTaskOutbox implements TaskDispatcher {
   async dispatch(kind: TaskKind, agencyId: string, taskId: string, payload: Record<string, unknown>): Promise<void> {
-    const now = new Date().toISOString(); const database = getFirestore(adminApp()); const outboxRef = database.doc(`agencies/${agencyId}/taskOutbox/${taskId}`);
+    const now = new Date().toISOString(); const database = firestoreDb(adminApp()); const outboxRef = database.doc(`agencies/${agencyId}/taskOutbox/${taskId}`);
     await outboxRef.create({ id: taskId, agencyId, kind, payload, status: 'pending', attempts: 0, createdAt: now, updatedAt: now });
     const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
     if (!projectId || process.env.NODE_ENV === 'test') { await outboxRef.update({ status: 'pending_runtime_dispatch', topic: TOPIC_BY_KIND[kind], updatedAt: new Date().toISOString() }); return; }
