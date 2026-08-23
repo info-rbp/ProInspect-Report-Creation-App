@@ -1,6 +1,6 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type { EvidenceUploadCompletion, PhotoEvidenceRecord, UploadSessionRecord } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 
 function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
@@ -11,16 +11,16 @@ function failure(code: string, status: number, message: string, details?: Record
 }
 
 function sessionRef(agencyId: string, sessionId: string) {
-  return getFirestore(adminApp()).doc(`agencies/${agencyId}/uploadSessions/${sessionId}`);
+  return firestoreDb(adminApp()).doc(`agencies/${agencyId}/uploadSessions/${sessionId}`);
 }
 
 function photoRef(agencyId: string, photoId: string) {
-  return getFirestore(adminApp()).doc(`agencies/${agencyId}/photoEvidence/${photoId}`);
+  return firestoreDb(adminApp()).doc(`agencies/${agencyId}/photoEvidence/${photoId}`);
 }
 
 export class FirestorePhotoEvidenceStore {
   async findByHash(agencyId: string, inspectionJobId: string, sha256: string): Promise<PhotoEvidenceRecord | undefined> {
-    const snapshot = await getFirestore(adminApp())
+    const snapshot = await firestoreDb(adminApp())
       .collection(`agencies/${agencyId}/photoEvidence`)
       .where('inspectionJobId', '==', inspectionJobId)
       .where('sha256', '==', sha256)
@@ -39,7 +39,8 @@ export class FirestorePhotoEvidenceStore {
   }
 
   async complete(agencyId: string, sessionId: string, completion: EvidenceUploadCompletion): Promise<PhotoEvidenceRecord> {
-    return getFirestore(adminApp()).runTransaction(async (transaction) => {
+    const database = firestoreDb(adminApp());
+    return database.runTransaction(async (transaction) => {
       const reference = sessionRef(agencyId, sessionId);
       const snapshot = await transaction.get(reference);
       if (!snapshot.exists) throw failure('UPLOAD_SESSION_NOT_FOUND', 404, 'Upload session not found.');
@@ -84,7 +85,7 @@ export class FirestorePhotoEvidenceStore {
       };
       transaction.create(photoRef(agencyId, photo.id), photo);
       transaction.update(reference, { status: 'completed', updatedAt: now });
-      transaction.create(getFirestore(adminApp()).doc(`agencies/${agencyId}/photoProcessingJobs/${photo.id}`), {
+      transaction.create(database.doc(`agencies/${agencyId}/photoProcessingJobs/${photo.id}`), {
         id: photo.id,
         agencyId,
         photoId: photo.id,
