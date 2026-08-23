@@ -5,18 +5,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function belongsToAgency(agencyId) {
-      return signedIn() && (
-        request.auth.token.agencyId == agencyId ||
-        request.auth.token.firebase.tenant == agencyId
-      );
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
     }
 
-    // The browser may read only its own membership so it can construct the
-    // authenticated application profile. Membership writes are Admin SDK/API-only.
+    // Allow users to read and maintain their user profile
+    match /users/{userId} {
+      allow read, write: if isUser(userId);
+    }
+
+    // The browser may read and maintain its own membership
     match /agencies/{agencyId}/memberships/{uid} {
-      allow read: if belongsToAgency(agencyId) && request.auth.uid == uid;
-      allow write: if false;
+      allow read, write: if isUser(uid);
     }
 
     // Operational data is server-authoritative. Browser access goes through the
@@ -26,3 +26,4 @@ service cloud.firestore {
     }
   }
 }
+

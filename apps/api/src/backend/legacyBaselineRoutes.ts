@@ -92,7 +92,9 @@ function bindMappings(aggregate: ReportAggregate, reviewedMappings: LegacyBaseli
       existingTargets.add(key);
       const mapping = byTarget.get(key);
       if (!mapping) {
-        const { baselineComponentId: _baselineId, baselineComponentData: _baselineData, ...rest } = component;
+        const rest = { ...component };
+        delete (rest as Partial<typeof component>).baselineComponentId;
+        delete (rest as Partial<typeof component>).baselineComponentData;
         return {
           ...rest,
           baselineEvidencePhotoIds: [],

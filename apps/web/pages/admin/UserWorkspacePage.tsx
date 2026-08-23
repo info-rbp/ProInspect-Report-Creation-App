@@ -13,7 +13,7 @@ import {
 import { listAuditEventsForEntity } from '../../services/platform/auditService';
 import type { AuditEvent } from '../../types/platform';
 
-const roleOptions: UserRole[] = ['proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer'];
+const roleOptions: UserRole[] = ['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer'];
 const tabs = ['Profile', 'Access', 'Work profile', 'Assignments', 'Security', 'Activity'] as const;
 
 const UserWorkspacePage: React.FC = () => {

@@ -169,7 +169,7 @@ function routineException(component: Record<string, unknown>): boolean {
   if (!['clean', 'not_applicable'].includes(cleanliness)) return true;
   if (['not_working', 'unable_to_confirm'].includes(working)) return true;
   if (['tested_failed', 'unable_to_confirm'].includes(test)) return true;
-  if (Boolean(component.maintenanceRequired)) return true;
+  if (component.maintenanceRequired) return true;
   if (asArray(component.defects).some((value) => valueText(value))) return true;
   return false;
 }

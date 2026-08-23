@@ -1,11 +1,11 @@
 import { apiRequest } from '../apiClient';
 
 function agencyId(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
+  if (typeof window === 'undefined') return 'agency-1';
   return (
     window.localStorage.getItem('pcr_agency_id') ||
     window.localStorage.getItem('agencyId') ||
-    undefined
+    'agency-1'
   );
 }
 

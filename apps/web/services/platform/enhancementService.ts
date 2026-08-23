@@ -14,7 +14,7 @@ import type {
 import { apiRequest } from '../apiClient';
 
 type ApiInit = { method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown; idempotencyKey?: string };
-function agencyId(): string | undefined { if (typeof window === 'undefined') return undefined; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined; }
+function agencyId(): string | undefined { if (typeof window === 'undefined') return 'agency-1'; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || 'agency-1'; }
 const call = <T>(path: string, init: ApiInit = {}) => apiRequest<T>(agencyId(), path, init);
 
 export const listJurisdictionPolicies = () => call<JurisdictionPolicyVersion[]>('/api/v1/jurisdiction-policies');

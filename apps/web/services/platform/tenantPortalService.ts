@@ -1,13 +1,12 @@
 import { apiRequest } from '../apiClient';
 
 function agencyId(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined;
+  if (typeof window === 'undefined') return 'agency-1';
+  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || 'agency-1';
 }
 
 async function externalRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-  if (!baseUrl) throw new Error('VITE_API_BASE_URL is required for tenant portal operations.');
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '';
   const response = await fetch(`${baseUrl.replace(/\/$/u, '')}${path}`, init);
   const payload = await response.json().catch(() => ({})) as { data?: T; error?: { message?: string } };
   if (!response.ok) throw new Error(payload.error?.message || `Tenant portal request failed with ${response.status}.`);

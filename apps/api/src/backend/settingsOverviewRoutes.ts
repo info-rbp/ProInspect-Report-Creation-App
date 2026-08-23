@@ -64,5 +64,5 @@ export async function routeSettingsOverviewRequest(req: IncomingMessage, depende
     { key: 'integrations', label: 'Integrations', status: integrations.some((item) => item.status === 'error') ? 'error' : integrations.some((item) => item.status !== 'healthy') ? 'warning' : 'healthy', detail: `${integrations.reduce((sum, item) => sum + item.openExceptionCount, 0)} open exception(s)`, checkedAt },
   ];
   const data: SettingsOverview = { completionPercent, missingItems, health, integrations };
-  return { status: 200, body: { data, meta: { actor: principal.uid, correlationId } };
+  return { status: 200, body: { data, meta: { actor: principal.uid, correlationId } } };
 }

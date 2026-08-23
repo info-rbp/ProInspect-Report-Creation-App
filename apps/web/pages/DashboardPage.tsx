@@ -13,22 +13,44 @@ const ranges: Array<{ value: DashboardRange; label: string }> = [
 ];
 
 function severityClass(severity?: DashboardMetric['severity']): string {
-  if (severity === 'critical') return 'border-red-200 bg-red-50';
-  if (severity === 'warning') return 'border-amber-200 bg-amber-50';
-  return 'border-gray-200 bg-white';
+  if (severity === 'critical') return 'border-rose-200 bg-rose-50/70 text-rose-950';
+  if (severity === 'warning') return 'border-amber-200 bg-amber-50/70 text-amber-950';
+  return 'border-slate-200 bg-white text-slate-900 hover:border-slate-300';
 }
 
 const MetricGrid: React.FC<{ title: string; metrics: DashboardMetric[] }> = ({ title, metrics }) => (
-  <section>
-    <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">{title}</h2>
+  <section className="space-y-2.5">
+    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{title}</h2>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       {metrics.map((item) => {
         const card = (
-          <div className={`h-full rounded-lg border p-4 shadow-sm transition hover:shadow ${severityClass(item.severity)}`}>
-            <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-medium text-gray-600">{item.label}</p><p className="mt-1 text-2xl font-bold text-gray-950">{item.value}</p></div>{item.deepLink ? <ArrowRight size={16} className="mt-1 text-gray-400" /> : null}</div>
+          <div
+            className={`h-full rounded-xl border p-4 shadow-2xs transition-all duration-200 hover:shadow-md ${severityClass(
+              item.severity,
+            )}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-slate-500 leading-tight">{item.label}</p>
+                <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">{item.value}</p>
+              </div>
+              {item.deepLink ? (
+                <ArrowRight size={16} className="mt-0.5 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+              ) : null}
+            </div>
           </div>
         );
-        return item.deepLink ? <Link key={item.key} to={item.deepLink}>{card}</Link> : <div key={item.key}>{card}</div>;
+        return item.deepLink ? (
+          <Link
+            key={item.key}
+            to={item.deepLink}
+            className="group block rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          >
+            {card}
+          </Link>
+        ) : (
+          <div key={item.key}>{card}</div>
+        );
       })}
     </div>
   </section>

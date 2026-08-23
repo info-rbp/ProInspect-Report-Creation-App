@@ -41,9 +41,29 @@ async function render(task: DocumentTask) {
   for (const [name, raw] of Object.entries(task.fields)) {
     if (!(name in schema)) continue;
     const value = raw == null ? '' : String(raw);
-    try { form.getTextField(name).setText(value); continue; } catch {}
-    try { const check = form.getCheckBox(name); ['true', 'yes', '1', 'checked'].includes(value.toLowerCase()) ? check.check() : check.uncheck(); continue; } catch {}
-    try { form.getDropdown(name).select(value); continue; } catch {}
+    try {
+      form.getTextField(name).setText(value);
+      continue;
+    } catch {
+      // Field is not a text field, continue matching other form field types
+    }
+    try {
+      const check = form.getCheckBox(name);
+      if (['true', 'yes', '1', 'checked'].includes(value.toLowerCase())) {
+        check.check();
+      } else {
+        check.uncheck();
+      }
+      continue;
+    } catch {
+      // Field is not a checkbox
+    }
+    try {
+      form.getDropdown(name).select(value);
+      continue;
+    } catch {
+      // Field is not a dropdown
+    }
   }
   form.flatten();
 

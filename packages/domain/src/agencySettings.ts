@@ -133,11 +133,11 @@ export interface AgencyOperationalSettings extends VersionedAgencySettingsRecord
   inspectionDefaults: InspectionTypeDefaults[];
 }
 
-export type CommunicationChannel = 'email' | 'sms';
+export type CommunicationDeliveryChannel = 'email' | 'sms' | 'portal';
 export type CommunicationProviderKind = 'sendgrid' | 'twilio' | 'custom';
 
 export interface CommunicationProviderSettings {
-  channel: CommunicationChannel;
+  channel: 'email' | 'sms';
   provider: CommunicationProviderKind;
   senderName?: string;
   senderAddress?: string;
@@ -157,7 +157,7 @@ export interface CommunicationPolicy extends VersionedAgencySettingsRecord {
 
 export interface CommunicationTemplate extends VersionedAgencySettingsRecord {
   eventType: string;
-  channel: CommunicationChannel;
+  channel: CommunicationDeliveryChannel;
   name: string;
   subject?: string;
   body: string;
@@ -166,7 +166,7 @@ export interface CommunicationTemplate extends VersionedAgencySettingsRecord {
 
 export interface NotificationRule extends VersionedAgencySettingsRecord {
   eventType: string;
-  channel: CommunicationChannel;
+  channel: CommunicationDeliveryChannel;
   templateId: string;
   delayMinutes: number;
   retryCount: number;

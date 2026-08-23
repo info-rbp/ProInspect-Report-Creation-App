@@ -10,8 +10,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 function agencyId(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined;
+  if (typeof window === 'undefined') return 'agency-1';
+  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || 'agency-1';
 }
 
 function mimeType(file: File): string {

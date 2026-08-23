@@ -4,7 +4,15 @@ import type { InternalSection } from '../services/platform/roleAccess';
 import { canAccessSection, hasAnyRole } from '../services/platform/roleAccess';
 import { ensureAppCheck } from '../services/appCheckService';
 import { getOrCreateUserProfile } from '../services/platform/userProfileService';
-import { auth, isFirebaseConfigured, onAuthStateChanged, signInWithEmailPassword, signOutUser } from '../services/storageService';
+import {
+  auth,
+  isFirebaseConfigured,
+  onAuthStateChanged,
+  signInWithEmailPassword,
+  signInWithGoogle,
+  registerWithEmailPassword,
+  signOutUser,
+} from '../services/storageService';
 import type { UserProfile, UserRole } from '../types/platform';
 
 interface AuthContextValue {
@@ -13,6 +21,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   hasRole: (...roles: UserRole[]) => boolean;
   canAccess: (section: InternalSection) => boolean;
@@ -84,6 +94,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogleUser = async (): Promise<void> => {
+    if (!auth || !isFirebaseConfigured()) {
+      throw new Error('Identity Platform must be configured before signing in.');
+    }
+
+    ensureAppCheck();
+    const firebaseUser = await signInWithGoogle();
+    try {
+      const profile = await getOrCreateUserProfile(firebaseUser);
+      setCurrentUser(firebaseUser);
+      setUserProfile(profile);
+    } catch (error) {
+      try {
+        await signOutUser();
+      } catch {
+        // Preserve the original error.
+      }
+      setCurrentUser(null);
+      setUserProfile(null);
+      throw error;
+    }
+  };
+
+  const registerUser = async (email: string, password: string): Promise<void> => {
+    if (!auth || !isFirebaseConfigured()) {
+      throw new Error('Identity Platform must be configured before signing in.');
+    }
+
+    ensureAppCheck();
+    const firebaseUser = await registerWithEmailPassword(email.trim(), password);
+    try {
+      const profile = await getOrCreateUserProfile(firebaseUser);
+      setCurrentUser(firebaseUser);
+      setUserProfile(profile);
+    } catch (error) {
+      try {
+        await signOutUser();
+      } catch {
+        // Preserve error
+      }
+      setCurrentUser(null);
+      setUserProfile(null);
+      throw error;
+    }
+  };
+
   const logout = async (): Promise<void> => {
     if (auth) await signOutUser();
     setCurrentUser(null);
@@ -96,6 +152,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: Boolean(currentUser && userProfile?.status === 'active'),
     isLoadingAuth,
     login,
+    loginWithGoogle: loginWithGoogleUser,
+    register: registerUser,
     logout,
     hasRole: (...roles) => hasAnyRole(userProfile?.role, roles),
     canAccess: (section) => canAccessSection(userProfile?.role, section),

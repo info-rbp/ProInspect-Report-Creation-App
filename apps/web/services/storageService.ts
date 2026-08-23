@@ -3,8 +3,11 @@ import { getFirestore } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as storageRef } from 'firebase/storage';
 import {
   getAuth,
+  GoogleAuthProvider,
   onAuthStateChanged as onFirebaseAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -50,6 +53,19 @@ export const onAuthStateChanged = onFirebaseAuthStateChanged;
 export const signInWithEmailPassword = async (email: string, password: string): Promise<User> => {
   if (!auth) throw new Error('Identity Platform is not configured for this deployment.');
   return (await signInWithEmailAndPassword(auth, email, password)).user;
+};
+
+export const signInWithGoogle = async (): Promise<User> => {
+  if (!auth) throw new Error('Identity Platform is not configured for this deployment.');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const result = await signInWithPopup(auth, provider);
+  return result.user;
+};
+
+export const registerWithEmailPassword = async (email: string, password: string): Promise<User> => {
+  if (!auth) throw new Error('Identity Platform is not configured for this deployment.');
+  return (await createUserWithEmailAndPassword(auth, email, password)).user;
 };
 
 export const signOutUser = async (): Promise<void> => {

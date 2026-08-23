@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { PeopleDirectoryEntry, UserRole } from '../../types/platform';
 import { invitePerson, listPeople } from '../../services/platform/peopleService';
 
-const roles: UserRole[] = ['proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer'];
+const roles: UserRole[] = ['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer'];
 
 const UsersPage: React.FC = () => {
   const [people, setPeople] = useState<PeopleDirectoryEntry[]>([]);

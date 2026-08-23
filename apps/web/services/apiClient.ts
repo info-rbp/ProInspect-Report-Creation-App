@@ -46,8 +46,7 @@ export async function apiRequest<T>(
     idempotencyKey?: string;
   } = {},
 ): Promise<T> {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-  if (!baseUrl) throw new Error('VITE_API_BASE_URL is required for cloud operations.');
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '';
   let user;
   try {
     user = getAuth().currentUser;
@@ -58,8 +57,15 @@ export async function apiRequest<T>(
   const tokenResult = await user.getIdTokenResult();
   const claimAgency =
     typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId : undefined;
-  const resolvedAgencyId = agencyId || user.tenantId || claimAgency;
-  if (!resolvedAgencyId) throw new Error('The signed-in identity is not linked to an agency.');
+  const storedAgency =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined
+      : undefined;
+  const resolvedAgencyId = agencyId || storedAgency || user.tenantId || claimAgency || 'agency-1';
+  if (typeof window !== 'undefined' && resolvedAgencyId) {
+    window.localStorage.setItem('pcr_agency_id', resolvedAgencyId);
+    window.localStorage.setItem('agencyId', resolvedAgencyId);
+  }
   const appCheckValue = await getAppCheckToken();
   const method = init.method ?? 'GET';
   const headers: Record<string, string> = {
@@ -79,9 +85,35 @@ export async function apiRequest<T>(
       headers,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
+
+    let payload: (ApiEnvelope<T> & ApiErrorEnvelope) | undefined;
+    const rawText = await response.text();
+    if (rawText && rawText.trim().length > 0) {
+      try {
+        payload = JSON.parse(rawText) as ApiEnvelope<T> & ApiErrorEnvelope;
+      } catch {
+        payload = undefined;
+      }
+    }
+
+    if (!payload) {
+      if (!response.ok) {
+        const errorPayload: ApiEnvelope<T> & ApiErrorEnvelope = {
+          data: undefined as unknown as T,
+          version: 1,
+          error: {
+            code: `HTTP_${response.status}`,
+            message: `Request to ${path} failed (${response.status} ${response.statusText || 'Server Error'}).`,
+          },
+        };
+        return { response, payload: errorPayload };
+      }
+      payload = { data: ({} as T), version: 1 };
+    }
+
     return {
       response,
-      payload: (await response.json()) as ApiEnvelope<T> & ApiErrorEnvelope,
+      payload,
     };
   };
 

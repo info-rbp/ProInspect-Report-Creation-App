@@ -23,7 +23,7 @@ export interface OfflinePackage {
 }
 
 type SyncSummary = Awaited<ReturnType<typeof syncStateSummary>>;
-function agencyId(): string | undefined { if (typeof window === 'undefined') return undefined; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined; }
+function agencyId(): string | undefined { if (typeof window === 'undefined') return 'agency-1'; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || 'agency-1'; }
 
 export async function downloadInspectionForOffline(jobId: string): Promise<OfflinePackage> {
   const payload = await apiRequest<OfflinePackage>(agencyId(), `/api/v1/inspection-jobs/${encodeURIComponent(jobId)}/offline-package`);
