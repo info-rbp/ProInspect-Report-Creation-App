@@ -44,15 +44,20 @@ Configure these under Workers > Settings > Build > Variables and Secrets. These 
 
 The Cloudflare build forces `VITE_API_BASE_URL=/` so browser API calls remain same-origin and are proxied by the Worker.
 
-## Cloudflare runtime variable
+## Cloudflare runtime configuration
 
-Configure this under Workers > Settings > Variables & Secrets as a plaintext variable:
+Configure under Workers > Settings > Variables & Secrets:
 
-- `GOOGLE_API_ORIGIN=https://<your-google-api-host>`
+- Plaintext variable: `GOOGLE_API_ORIGIN=https://<your-google-api-host>`
+- Secret: `CLOUDFLARE_ORIGIN_SECRET=<high-entropy-random-value>`
 
-The value must be an HTTPS origin only. Do not include a path, query string, credentials or fragment.
+Create the edge secret once, for example with `openssl rand -base64 32`, and store the same value in the Google backend environment/Secret Manager as `CLOUDFLARE_ORIGIN_SECRET`. Never commit the value.
+
+The Worker removes any client-supplied ProInspect edge headers, injects the shared origin secret, and forwards the Cloudflare client IP in `x-proinspect-client-ip`. When the Google backend has `CLOUDFLARE_ORIGIN_SECRET` configured, all routes except `GET /health` reject direct requests that do not carry the Worker secret. The backend only trusts the forwarded client IP after the secret is verified with a timing-safe comparison, preserving per-client rate limiting and audit source addresses behind Cloudflare.
 
 `wrangler.jsonc` uses `keep_vars=true` so dashboard-managed runtime configuration is retained during deploys. Secrets remain managed in Cloudflare and must not be committed to source control.
+
+For local `wrangler dev`, copy `.dev.vars.example` to `.dev.vars` and replace the example secret.
 
 ## Google configuration that remains server-side
 
@@ -61,6 +66,7 @@ Keep the following on the Google backend rather than moving them into the Cloudf
 - `GEMINI_API_KEY`
 - `UPLOAD_BUCKET`
 - `REQUIRE_APP_CHECK=true`
+- `CLOUDFLARE_ORIGIN_SECRET` (same value as the Cloudflare Worker secret)
 - `GOOGLE_CALENDAR_CLIENT_SECRET`
 - notification provider credentials
 - integration encryption/state secrets
@@ -77,7 +83,8 @@ Before production acceptance:
 2. Add the domain to the reCAPTCHA Enterprise/App Check web-key allow-list.
 3. Update Google OAuth redirect URIs, including Google Calendar integration, to the Cloudflare public origin where applicable.
 4. Configure Cloud Run/API CORS conservatively even though browser calls are same-origin through Cloudflare.
-5. Keep direct Google backend URLs out of browser configuration; the Worker is the public API facade.
+5. Set `CLOUDFLARE_ORIGIN_SECRET` on the API before treating Cloudflare as the enforced public boundary.
+6. Keep direct Google backend URLs out of browser configuration; the Worker is the public API facade.
 
 ## Validation
 
@@ -88,7 +95,8 @@ After deployment:
 3. Run the existing API smoke suite against the Cloudflare origin.
 4. Confirm `/api/v1/inspection-route-plans` does not return `Route not found`.
 5. Confirm an unknown SPA route returns the React application shell, not a Cloudflare 404.
-6. Confirm Workers Logs record proxy status without logging authorization headers or tokens.
+6. Confirm a direct request to the Google API for a protected route returns `403 EDGE_REQUIRED` after origin protection is enabled.
+7. Confirm Workers Logs record proxy status without logging authorization headers, origin secrets or tokens.
 
 ## Build failure addressed by this deployment change
 

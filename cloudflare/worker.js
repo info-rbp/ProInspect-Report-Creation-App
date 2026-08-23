@@ -25,6 +25,11 @@ function resolveGoogleApiOrigin(value) {
   return url.origin;
 }
 
+function edgeSecret(env) {
+  const value = typeof env.CLOUDFLARE_ORIGIN_SECRET === 'string' ? env.CLOUDFLARE_ORIGIN_SECRET.trim() : '';
+  return value || undefined;
+}
+
 async function proxyToGoogle(request, env) {
   let origin;
   try {
@@ -41,13 +46,25 @@ async function proxyToGoogle(request, env) {
     return jsonError(503, 'UPSTREAM_NOT_CONFIGURED', 'The Google API origin has not been configured.');
   }
 
+  const secret = edgeSecret(env);
+  if (!secret) {
+    return jsonError(503, 'EDGE_SECRET_NOT_CONFIGURED', 'The application edge origin secret has not been configured.');
+  }
+
   const incomingUrl = new URL(request.url);
   const upstreamUrl = new URL(`${incomingUrl.pathname}${incomingUrl.search}`, `${origin}/`);
   const upstreamRequest = new Request(upstreamUrl.toString(), request);
   upstreamRequest.headers.delete('host');
+  upstreamRequest.headers.delete('x-proinspect-origin-secret');
+  upstreamRequest.headers.delete('x-proinspect-client-ip');
+  upstreamRequest.headers.delete('x-proinspect-edge');
   upstreamRequest.headers.set('x-forwarded-host', incomingUrl.host);
   upstreamRequest.headers.set('x-forwarded-proto', incomingUrl.protocol.replace(':', ''));
   upstreamRequest.headers.set('x-proinspect-edge', 'cloudflare');
+  upstreamRequest.headers.set('x-proinspect-origin-secret', secret);
+
+  const clientIp = request.headers.get('cf-connecting-ip');
+  if (clientIp) upstreamRequest.headers.set('x-proinspect-client-ip', clientIp);
 
   try {
     const response = await fetch(upstreamRequest);

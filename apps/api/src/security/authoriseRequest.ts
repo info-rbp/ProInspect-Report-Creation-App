@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { AuthenticatedPrincipal, AuthorisationTarget, SecurityCapability, UserRole } from '@pcr/domain';
 import { authorise, requiresMfa } from './policy.js';
+import { requestSourceIp } from './trustedEdge.js';
 import { bearerToken, type SecurityDependencies } from './types.js';
 
 const roles = new Set<UserRole>(['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer', 'tenant', 'landlord', 'shopify_customer']);
@@ -61,7 +62,7 @@ export async function authenticateAndAuthorise(
   }
 
   const result = authorise(principal, capability, { ...target, agencyId });
-  const sourceIp = req.socket.remoteAddress;
+  const sourceIp = requestSourceIp(req);
   const userAgent = req.headers['user-agent'];
   await dependencies.audit.append({
     id: randomUUID(), timestamp: now.toISOString(), actorId: principal.uid, actorRole: principal.role,

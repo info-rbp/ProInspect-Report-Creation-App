@@ -47,6 +47,11 @@ import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
 import { createSecurityDependencies } from './security/defaultDependencies.js';
 import { SlidingWindowRateLimiter } from './security/rateLimit.js';
+import {
+  isCloudflareOriginProtectionConfigured,
+  isTrustedCloudflareEdge,
+  requestSourceIp,
+} from './security/trustedEdge.js';
 
 const limiter = new SlidingWindowRateLimiter();
 function send(res: ServerResponse, response: ApiResponse, correlationId: string): void { res.writeHead(response.status, { 'content-type': 'application/json', 'x-correlation-id': correlationId, 'cache-control': 'no-store', ...response.headers }); res.end(JSON.stringify(response.body)); }
@@ -54,13 +59,26 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 function errorResponse(error: unknown, correlationId: string): ApiResponse { if (error instanceof SecurityError || error instanceof ApiError) return { status: error.status, body: { error: { code: error.code, message: error.message, status: error.status, correlationId, ...('details' in error && error.details ? { details: error.details } : {}) } } }; if (error && typeof error === 'object') { const candidate = error as { status?: unknown; code?: unknown; message?: unknown; details?: unknown }; if (typeof candidate.status === 'number' && typeof candidate.code === 'string') return { status: candidate.status, body: { error: { code: candidate.code, message: typeof candidate.message === 'string' ? candidate.message : 'The request could not be completed.', status: candidate.status, correlationId, ...(candidate.details && typeof candidate.details === 'object' ? { details: candidate.details } : {}) } } }; } console.error(JSON.stringify({ level: 'error', message: 'api.unhandled_error', correlationId, error: error instanceof Error ? error.message : String(error) })); return { status: 500, body: { error: { code: 'INTERNAL_ERROR', message: 'The request could not be completed.', status: 500, correlationId } } }; }
 function reportRoute(urlValue: string | undefined): { reportId?: string; command?: string } | undefined { const route = new URL(urlValue ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); if (route[0] !== 'api' || route[1] !== 'v1' || route[2] !== 'reports') return undefined; return { ...(route[3] ? { reportId: route[3] } : {}), ...(route[4] ? { command: route[4] } : {}) }; }
 function isClientManagementRoute(urlValue: string | undefined): boolean { const path = new URL(urlValue ?? '/', 'http://localhost').pathname; return path.startsWith('/api/v1/client-management/') || /^\/api\/v1\/clients\/[^/]+\/documents(?:\/|$)/u.test(path) || /^\/api\/v1\/maintenance-quotes\/[^/]+\/actions\/send$/u.test(path); }
+function isHealthRequest(req: IncomingMessage): boolean { return req.method === 'GET' && new URL(req.url ?? '/', 'http://localhost').pathname === '/health'; }
 
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID(); const rateKey = `${req.socket.remoteAddress ?? 'unknown'}:${req.url ?? '/'}`;
+    const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID();
+    if (isCloudflareOriginProtectionConfigured() && !isHealthRequest(req) && !isTrustedCloudflareEdge(req)) {
+      const error: DomainErrorShape = {
+        code: 'EDGE_REQUIRED',
+        message: 'Requests to this API must pass through the configured application edge.',
+        status: 403,
+        correlationId,
+      };
+      send(res, { status: 403, body: { error } }, correlationId);
+      return;
+    }
+
+    const rateKey = `${requestSourceIp(req) ?? 'unknown'}:${req.url ?? '/'}`;
     if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
     try {
-      if (req.method === 'GET' && req.url === '/health') { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', correlationId } }, correlationId); return; }
+      if (isHealthRequest(req)) { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', correlationId } }, correlationId); return; }
       if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: { ...buildOpenApiDocument(), financialBoundary: 'No trust accounting, payments, receipts, disbursements or reconciliation.' } }, correlationId); return; }
       const notificationCallback = await routeNotificationCallbackRequest(req, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
       const esignWebhook = await routeESignExternalWebhook(req, dependencies, correlationId); if (esignWebhook) { send(res, esignWebhook, correlationId); return; }
