@@ -1,4 +1,5 @@
 import appletConfig from '../../../firebase-applet-config.json';
+import cloudflareConfig from '../../../firebase-cloudflare-config.json';
 
 export interface RuntimeConfig {
   apiKey: string;
@@ -18,6 +19,7 @@ export interface FirebaseRuntimeConfig {
   messagingSenderId: string;
   appId: string;
   firestoreDatabaseId?: string;
+  measurementId?: string;
 }
 
 const CONFIG_KEY = 'rbp_runtime_config';
@@ -87,6 +89,9 @@ export const getEnvFirebaseConfig = (): FirebaseRuntimeConfig => ({
   ...(sanitizeString(import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID)
     ? { firestoreDatabaseId: sanitizeString(import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) }
     : {}),
+  ...(sanitizeString(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID)
+    ? { measurementId: sanitizeString(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) }
+    : {}),
 });
 
 export const getRuntimeFirebaseConfig = (): FirebaseRuntimeConfig => {
@@ -101,26 +106,38 @@ export const getRuntimeFirebaseConfig = (): FirebaseRuntimeConfig => {
   };
 };
 
-function getAppletFirebaseConfig(): FirebaseRuntimeConfig | undefined {
-  if (!appletConfig || !appletConfig.apiKey || !appletConfig.projectId) return undefined;
+function firebaseConfigFromSource(source: typeof appletConfig | typeof cloudflareConfig): FirebaseRuntimeConfig | undefined {
+  if (!source || !source.apiKey || !source.projectId) return undefined;
   return {
-    apiKey: appletConfig.apiKey,
-    authDomain: appletConfig.authDomain,
-    projectId: appletConfig.projectId,
-    storageBucket: appletConfig.storageBucket,
-    messagingSenderId: appletConfig.messagingSenderId,
-    appId: appletConfig.appId,
-    ...(appletConfig.firestoreDatabaseId ? { firestoreDatabaseId: appletConfig.firestoreDatabaseId } : {}),
+    apiKey: source.apiKey,
+    authDomain: source.authDomain,
+    projectId: source.projectId,
+    storageBucket: source.storageBucket,
+    messagingSenderId: source.messagingSenderId,
+    appId: source.appId,
+    ...(source.firestoreDatabaseId ? { firestoreDatabaseId: source.firestoreDatabaseId } : {}),
+    ...(source.measurementId ? { measurementId: source.measurementId } : {}),
   };
+}
+
+function getCloudflareFirebaseConfig(): FirebaseRuntimeConfig | undefined {
+  return firebaseConfigFromSource(cloudflareConfig);
+}
+
+function getAppletFirebaseConfig(): FirebaseRuntimeConfig | undefined {
+  return firebaseConfigFromSource(appletConfig);
 }
 
 export const getResolvedFirebaseConfig = (): FirebaseRuntimeConfig | undefined => {
   const envConfig = getEnvFirebaseConfig();
   if (hasCompleteFirebaseConfig(envConfig)) return envConfig;
 
-  // The checked-in AI Studio applet configuration is development-only. Production
-  // deployments must use explicit environment configuration so one environment
-  // cannot silently authenticate against another project's Firebase resources.
+  if (import.meta.env.PROD) {
+    const productionConfig = getCloudflareFirebaseConfig();
+    if (productionConfig && hasCompleteFirebaseConfig(productionConfig)) return productionConfig;
+    return undefined;
+  }
+
   if (import.meta.env.DEV) {
     const applet = getAppletFirebaseConfig();
     if (applet) return applet;
