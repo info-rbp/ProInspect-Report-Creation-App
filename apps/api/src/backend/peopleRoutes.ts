@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
 import {
   roleCapabilities,
   type PeopleDirectoryEntry,
@@ -12,6 +11,7 @@ import {
   type WorkloadSummary,
 } from '@pcr/domain';
 import { parseChangeRoleInput, parseInvitePersonInput, parseMembershipActionInput } from '@pcr/validation';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import type { ApiDependencies } from './types.js';
 import { ApiError, type ApiResponse } from './router.js';
@@ -72,7 +72,7 @@ function sameUtcDate(left: Date, right: Date): boolean {
     && left.getUTCDate() === right.getUTCDate();
 }
 async function workload(agency: string, uid: string, maxJobsPerDay?: number): Promise<WorkloadSummary> {
-  const db = getFirestore(adminApp());
+  const db = firestoreDb(adminApp());
   const [jobs, reports] = await Promise.all([
     db.collection(`agencies/${agency}/inspectionJobs`).get(),
     db.collection(`agencies/${agency}/reports`).get(),
@@ -110,7 +110,7 @@ async function workload(agency: string, uid: string, maxJobsPerDay?: number): Pr
   };
 }
 async function listDirectory(agency: string): Promise<PeopleDirectoryEntry[]> {
-  const db = getFirestore(adminApp());
+  const db = firestoreDb(adminApp());
   const [membershipSnapshot, workforceSnapshot] = await Promise.all([
     db.collection(`agencies/${agency}/memberships`).get(),
     db.collection(`agencies/${agency}/workforceProfiles`).get(),
@@ -158,11 +158,11 @@ async function listDirectory(agency: string): Promise<PeopleDirectoryEntry[]> {
   }));
 }
 async function countActiveAdmins(agency: string): Promise<number> {
-  const snapshot = await getFirestore(adminApp()).collection(`agencies/${agency}/memberships`).where('status', '==', 'active').get();
+  const snapshot = await firestoreDb(adminApp()).collection(`agencies/${agency}/memberships`).where('status', '==', 'active').get();
   return snapshot.docs.filter((document) => ['proinspect_admin', 'super_admin'].includes(String(document.data().role))).length;
 }
 async function impact(agency: string, uid: string) {
-  const db = getFirestore(adminApp());
+  const db = firestoreDb(adminApp());
   const [jobs, reports, maintenance] = await Promise.all([
     db.collection(`agencies/${agency}/inspectionJobs`).get(),
     db.collection(`agencies/${agency}/reports`).get(),
@@ -183,14 +183,14 @@ async function impact(agency: string, uid: string) {
   return {
     userId: uid,
     activeInspectionJobIds: activeJobIds,
-    activeReportIds,
+    activeReportIds: activeReportIds,
     activeMaintenanceItemIds,
     totalImpactedAssignments: activeJobIds.length + activeReportIds.length + activeMaintenanceItemIds.length,
   };
 }
 async function reassign(agency: string, fromUid: string, toUid: string): Promise<ReassignmentResult> {
   if (fromUid === toUid) throw new ApiError(400, 'REASSIGNMENT_TARGET_INVALID', 'Choose a different replacement user.');
-  const db = getFirestore(adminApp());
+  const db = firestoreDb(adminApp());
   const replacement = await db.doc(`agencies/${agency}/memberships/${toUid}`).get();
   if (!replacement.exists || replacement.data()?.status !== 'active') {
     throw new ApiError(409, 'REASSIGNMENT_TARGET_INACTIVE', 'The replacement user must have an active agency membership.');
@@ -262,7 +262,7 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
   }
   if (req.method === 'GET' && uid && action === 'workload') {
     const principal = await authenticateAndAuthorise(req, deps, 'user.read', { agencyId: agency }, correlationId);
-    const profile = await getFirestore(adminApp()).doc(`agencies/${agency}/workforceProfiles/${uid}`).get();
+    const profile = await firestoreDb(adminApp()).doc(`agencies/${agency}/workforceProfiles/${uid}`).get();
     return { status: 200, body: { data: await workload(agency, uid, profile.data()?.maxJobsPerDay), meta: { correlationId, actor: principal.uid } } };
   }
   if (req.method === 'POST' && !uid) {
@@ -272,7 +272,7 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
     let identity;
     try { identity = await auth.getUserByEmail(input.email); }
     catch { identity = await auth.createUser({ email: input.email, displayName: input.displayName, emailVerified: false }); }
-    const membershipRef = getFirestore(adminApp()).doc(`agencies/${agency}/memberships/${identity.uid}`);
+    const membershipRef = firestoreDb(adminApp()).doc(`agencies/${agency}/memberships/${identity.uid}`);
     if ((await membershipRef.get()).exists) throw new ApiError(409, 'MEMBERSHIP_EXISTS', 'This person already has an agency membership.');
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (input.expiresInDays ?? 7) * 86_400_000).toISOString();
@@ -283,14 +283,14 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
     };
     await Promise.all([
       membershipRef.create({ uid: identity.uid, agencyId: agency, email: input.email, displayName: input.displayName ?? identity.displayName ?? '', role: input.role, status: 'invited', invitationExpiresAt: expiresAt, mfaRequired: invitation.mfaRequired, updatedAt: now.toISOString(), version: 1 }),
-      getFirestore(adminApp()).doc(`agencies/${agency}/invitations/${invitation.id}`).create(invitation),
+      firestoreDb(adminApp()).doc(`agencies/${agency}/invitations/${invitation.id}`).create(invitation),
     ]);
     await appendAudit(deps, principal, 'user.invite', 'user_invited', identity.uid, correlationId, { invitationId: invitation.id, role: input.role });
     return { status: 201, body: { data: { userId: identity.uid, invitation } } };
   }
   if (!uid) return undefined;
 
-  const membershipRef = getFirestore(adminApp()).doc(`agencies/${agency}/memberships/${uid}`);
+  const membershipRef = firestoreDb(adminApp()).doc(`agencies/${agency}/memberships/${uid}`);
   const snapshot = await membershipRef.get();
   if (!snapshot.exists) throw new ApiError(404, 'MEMBERSHIP_NOT_FOUND', 'User membership was not found.');
   const membership = snapshot.data() as any;
@@ -318,7 +318,7 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
     await membershipRef.update({ status: newStatus, updatedAt: new Date().toISOString(), version: (membership.version ?? 1) + 1 });
     if (action !== 'reactivate') await getAuth(adminApp()).revokeRefreshTokens(uid);
     await appendAudit(deps, principal, capability, `user_${action}`, uid, correlationId, { reason: input.reason, ...(assignmentImpact ? { assignmentImpact } : {}) });
-    return { status: 200, body: { data: { id: uid, status: newStatus, ...(assignmentImpact ? { assignmentImpact } : {}) } } };
+    return { status: 200, body: { data: { id: uid, status: newStatus, ...(assignmentImpact ? { assignmentImpact } : {}) } };
   }
   if (req.method === 'POST' && action === 'reassign') {
     const principal = await authenticateAndAuthorise(req, deps, 'user.scope.manage', { agencyId: agency }, correlationId);
@@ -342,7 +342,7 @@ export async function routePeopleRequest(req: IncomingMessage, deps: ApiDependen
     const principal = await authenticateAndAuthorise(req, deps, 'workforce.manage', { agencyId: agency }, correlationId);
     const input = await body(req);
     const now = new Date().toISOString();
-    const reference = getFirestore(adminApp()).doc(`agencies/${agency}/workforceProfiles/${uid}`);
+    const reference = firestoreDb(adminApp()).doc(`agencies/${agency}/workforceProfiles/${uid}`);
     const existing = await reference.get();
     const record = {
       ...input, id: uid, agencyId: agency, userId: uid, active: input.active !== false,
