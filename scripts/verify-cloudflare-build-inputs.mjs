@@ -7,6 +7,9 @@ const wrangler = JSON.parse(readFileSync(new URL('../wrangler.jsonc', import.met
 if (packageJson.packageManager !== 'npm@10.9.2') {
   problems.push('package.json must pin packageManager to npm@10.9.2 for the Cloudflare build image.');
 }
+if (packageJson.devDependencies?.wrangler !== '4.120.0') {
+  problems.push('Wrangler must be pinned to 4.120.0 so deploy behavior cannot drift between builds.');
+}
 if (existsSync(new URL('../bun.lock', import.meta.url))) {
   problems.push('bun.lock must not be present; npm is the canonical package manager for this repository.');
 }
@@ -24,8 +27,13 @@ const requiredFirebaseBuildVars = [
   'VITE_FIREBASE_APP_ID',
 ];
 const missingFirebaseBuildVars = requiredFirebaseBuildVars.filter((name) => !process.env[name]?.trim());
-if (process.env.WORKERS_CI && missingFirebaseBuildVars.length) {
-  problems.push(`Missing Cloudflare build variables: ${missingFirebaseBuildVars.join(', ')}`);
+if (process.env.WORKERS_CI) {
+  if (!['1', 'true'].includes((process.env.SKIP_DEPENDENCY_INSTALL || '').toLowerCase())) {
+    problems.push('Cloudflare build variable SKIP_DEPENDENCY_INSTALL=1 is required so Workers Builds does not run npm ci before the repository-controlled install.');
+  }
+  if (missingFirebaseBuildVars.length) {
+    problems.push(`Missing Cloudflare build variables: ${missingFirebaseBuildVars.join(', ')}`);
+  }
 }
 
 if (problems.length) {
