@@ -1,6 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import { FieldPath } from 'firebase-admin/firestore';
 import { IMMUTABLE_REPORT_STATUSES, type ReportLifecycleStatus } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import type { OperationalRepository, Page, StoredRecord } from './types.js';
 
 function adminApp() {
@@ -95,7 +96,7 @@ async function enrichMaintenanceCanonicalSource(
   data: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (collection !== 'maintenanceCandidates' && collection !== 'maintenanceItems') return data;
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
 
   if (collection === 'maintenanceItems' && typeof data.candidateId === 'string') {
     const candidate = await database.doc(`agencies/${agencyId}/maintenanceCandidates/${data.candidateId}`).get();
@@ -156,7 +157,7 @@ async function enrichMaintenanceCanonicalSource(
 export class FirestoreOperationalRepository implements OperationalRepository {
   async list(collection: string, agencyId: string, limit: number, cursor?: string): Promise<Page<StoredRecord>> {
     const effectiveLimit = Math.min(Math.max(limit, 1), 100);
-    let query = getFirestore(adminApp())
+    let query = firestoreDb(adminApp())
       .collection(collectionPath(collection, agencyId))
       .orderBy(FieldPath.documentId())
       .limit(effectiveLimit);
@@ -168,7 +169,7 @@ export class FirestoreOperationalRepository implements OperationalRepository {
   }
 
   async get(collection: string, agencyId: string, id: string): Promise<StoredRecord | undefined> {
-    const snapshot = await getFirestore(adminApp()).collection(collectionPath(collection, agencyId)).doc(id).get();
+    const snapshot = await firestoreDb(adminApp()).collection(collectionPath(collection, agencyId)).doc(id).get();
     return snapshot.exists ? ({ id: snapshot.id, ...snapshot.data() } as StoredRecord) : undefined;
   }
 
@@ -186,7 +187,7 @@ export class FirestoreOperationalRepository implements OperationalRepository {
       createdBy: actorId,
       updatedBy: actorId,
     };
-    const reference = getFirestore(adminApp()).collection(collectionPath(collection, agencyId)).doc(id);
+    const reference = firestoreDb(adminApp()).collection(collectionPath(collection, agencyId)).doc(id);
     try {
       await reference.create(record);
       return record;
@@ -201,8 +202,9 @@ export class FirestoreOperationalRepository implements OperationalRepository {
 
   async update(collection: string, agencyId: string, id: string, data: Record<string, unknown>, expectedVersion: number, actorId: string): Promise<StoredRecord> {
     assertReportMetadata(collection, data);
-    const reference = getFirestore(adminApp()).collection(collectionPath(collection, agencyId)).doc(id);
-    return getFirestore(adminApp()).runTransaction(async (transaction) => {
+    const database = firestoreDb(adminApp());
+    const reference = database.collection(collectionPath(collection, agencyId)).doc(id);
+    return database.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(reference);
       if (!snapshot.exists) throw Object.assign(new Error('Record not found.'), { code: 'NOT_FOUND', status: 404 });
       const existing = { id: snapshot.id, ...snapshot.data() } as StoredRecord;
