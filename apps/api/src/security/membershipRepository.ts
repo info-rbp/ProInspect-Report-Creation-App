@@ -13,16 +13,23 @@ export class FirestoreMembershipRepository implements MembershipRepository {
   async getMembership(uid: string, agencyId: string): Promise<AgencyMembership | undefined> {
     const db = firestoreDb(adminApp());
     const agencyMembership = await db.doc(`agencies/${agencyId}/memberships/${uid}`).get();
-    if (agencyMembership.exists) return agencyMembership.data() as AgencyMembership;
+    if (agencyMembership.exists) {
+      const data = agencyMembership.data() as AgencyMembership;
+      if (data.status === 'active') return data;
+    }
 
     // ProInspect provider administrators are deliberately provisioned in a separate,
-    // explicit provider membership. This allows cross-agency administration without
-    // silently turning every authenticated Firebase user into an administrator.
+    // explicit provider membership. An active provider super administrator can
+    // administer an agency even when that agency does not contain a normal active
+    // membership for the provider user. This keeps platform administration distinct
+    // from ordinary agency-user access while avoiding a false MEMBERSHIP_INACTIVE.
     const providerMembership = await db.doc(`serviceProviders/${PROVIDER_ID}/memberships/${uid}`).get();
-    if (!providerMembership.exists) return undefined;
+    if (!providerMembership.exists) return agencyMembership.exists ? agencyMembership.data() as AgencyMembership : undefined;
 
     const data = providerMembership.data() as Partial<AgencyMembership> & { role?: string; status?: string };
-    if (data.status !== 'active' || data.role !== 'super_admin') return undefined;
+    if (data.status !== 'active' || data.role !== 'super_admin') {
+      return agencyMembership.exists ? agencyMembership.data() as AgencyMembership : undefined;
+    }
 
     return {
       uid,
