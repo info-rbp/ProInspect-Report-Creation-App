@@ -24,6 +24,9 @@ export const getOrCreateUserProfile = async (user: User): Promise<UserProfile> =
   const tokenAgencyId = typeof token.claims.agencyId === 'string'
     ? token.claims.agencyId
     : typeof firebaseClaim === 'object' && firebaseClaim && 'tenant' in firebaseClaim ? String(firebaseClaim.tenant) : undefined;
+  const providerId = typeof token.claims.providerId === 'string' ? token.claims.providerId : undefined;
+  const providerRole = typeof token.claims.providerRole === 'string' ? token.claims.providerRole : undefined;
+  const providerSuperAdmin = providerId === PROVIDER_ID && providerRole === 'super_admin';
 
   const userSnapshot = await getDoc(doc(db, 'users', user.uid));
   const userData = userSnapshot.exists() ? userSnapshot.data() as Record<string, unknown> : undefined;
@@ -31,27 +34,27 @@ export const getOrCreateUserProfile = async (user: User): Promise<UserProfile> =
   const agencyId = tokenAgencyId || profileAgencyId;
   if (!agencyId) throw new Error('Your account has not been provisioned with a ProInspect or agency workspace.');
 
-  const [membershipSnapshot, providerMembershipSnapshot] = await Promise.all([
-    getDoc(doc(db, 'agencies', agencyId, 'memberships', user.uid)),
-    getDoc(doc(db, 'serviceProviders', PROVIDER_ID, 'memberships', user.uid)),
-  ]);
-
+  const membershipSnapshot = await getDoc(doc(db, 'agencies', agencyId, 'memberships', user.uid));
   const agencyMembership = membershipSnapshot.exists()
     ? membershipSnapshot.data() as { role?: string; status?: string; displayName?: string; createdAt?: string; updatedAt?: string }
     : undefined;
-  const providerMembership = providerMembershipSnapshot.exists()
-    ? providerMembershipSnapshot.data() as { role?: string; status?: string; displayName?: string; createdAt?: string; updatedAt?: string }
-    : undefined;
 
-  const providerSuperAdmin = providerMembership?.status === 'active' && providerMembership.role === 'super_admin';
-  const membership = agencyMembership?.status === 'active' ? agencyMembership : providerSuperAdmin ? providerMembership : agencyMembership;
+  // An explicitly provisioned ProInspect provider super administrator is allowed
+  // to enter the application shell for the agency in their signed identity claim,
+  // even if that agency membership is missing or inactive. The API independently
+  // verifies the provider membership server-side before authorising operations.
+  const membership = agencyMembership?.status === 'active'
+    ? agencyMembership
+    : providerSuperAdmin
+      ? { role: 'super_admin', status: 'active' }
+      : agencyMembership;
 
   if (!membership) throw new Error('Your agency membership has not been provisioned.');
   if (membership.status !== 'active') throw new Error('Your agency membership is not active.');
   if (!membership.role || !validRoles.has(membership.role as UserRole)) throw new Error('Your agency role is invalid.');
 
   const timestamp = new Date().toISOString();
-  const displayName = membership.displayName || (typeof userData?.displayName === 'string' ? userData.displayName : undefined) || user.displayName || undefined;
+  const displayName = agencyMembership?.displayName || (typeof userData?.displayName === 'string' ? userData.displayName : undefined) || user.displayName || undefined;
   return storeAgency({
     id: user.uid,
     agencyId,
@@ -59,7 +62,7 @@ export const getOrCreateUserProfile = async (user: User): Promise<UserProfile> =
     email: user.email || '',
     role: membership.role as UserRole,
     status: 'active',
-    createdAt: membership.createdAt || timestamp,
-    updatedAt: membership.updatedAt || timestamp,
+    createdAt: agencyMembership?.createdAt || timestamp,
+    updatedAt: agencyMembership?.updatedAt || timestamp,
   });
 };
