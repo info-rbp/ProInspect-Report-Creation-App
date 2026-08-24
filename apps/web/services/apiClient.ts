@@ -22,6 +22,17 @@ function legacyExitFallback(path: string, body: unknown, error: ApiErrorEnvelope
   return { ...body, allowLegacyBaseline: true };
 }
 
+function storedAgencyId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined;
+}
+
+function persistAuthoritativeAgency(agencyId: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('pcr_agency_id', agencyId);
+  window.localStorage.setItem('agencyId', agencyId);
+}
+
 export async function apiRequest<T>(agencyId: string | undefined, path: string, init: {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown; idempotencyKey?: string;
 } = {}): Promise<T> {
@@ -30,13 +41,20 @@ export async function apiRequest<T>(agencyId: string | undefined, path: string, 
   try { user = getAuth().currentUser; } catch { user = null; }
   if (!user) throw new Error('Sign in before accessing cloud records.');
 
-  const tokenResult = await user.getIdTokenResult();
-  const claimAgency = typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId : undefined;
-  const storedAgency = typeof window !== 'undefined'
-    ? window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined
-    : undefined;
-  const resolvedAgencyId = agencyId || storedAgency || user.tenantId || claimAgency;
+  // Force-refresh the ID token so newly provisioned agency/provider claims are used
+  // immediately after sign-in or an administrator changes a user's access.
+  const tokenResult = await user.getIdTokenResult(true);
+  const claimAgency = typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId.trim() || undefined : undefined;
+  const tenantAgency = user.tenantId?.trim() || undefined;
+  const storedAgency = storedAgencyId();
+
+  // Explicit route context wins when a page is deliberately operating on another
+  // agency. Otherwise signed Firebase identity data is authoritative. Browser
+  // storage is only a last-resort compatibility fallback and must never override
+  // current token claims.
+  const resolvedAgencyId = agencyId?.trim() || claimAgency || tenantAgency || storedAgency;
   if (!resolvedAgencyId) throw new Error('The signed-in identity is not linked to an agency.');
+  if (!agencyId && (claimAgency || tenantAgency)) persistAuthoritativeAgency(resolvedAgencyId);
 
   const appCheckValue = await getAppCheckToken();
   const method = init.method ?? 'GET';
