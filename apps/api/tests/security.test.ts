@@ -49,9 +49,20 @@ async function post(deps: ApiDependencies, body: unknown) {
 }
 
 describe('server-authoritative security', () => {
-  it('rejects cross-agency access even when the browser supplies the target agency', async () => {
+  it('rejects cross-agency access when the resolved membership belongs to another agency', async () => {
     const response = await post(dependencies(), { capability: 'report.read', target: { agencyId: 'agency-b', reportId: 'r1', assignedReviewerId: 'reviewer-1' } });
     expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: 'AGENCY_MEMBERSHIP_MISMATCH' } });
+  });
+
+  it('allows cross-agency provider administration only when membership resolves to the requested agency', async () => {
+    const deps = dependencies({
+      memberships: {
+        getMembership: async (_uid, agencyId) => ({ uid: 'reviewer-1', agencyId, role: 'super_admin', status: 'active', mfaRequired: true, updatedAt: new Date().toISOString() }),
+      },
+    });
+    const response = await post(deps, { capability: 'report.read', target: { agencyId: 'agency-b', reportId: 'r1' } });
+    expect(response.status).toBe(200);
   });
 
   it('rejects privilege escalation from the token when the membership role is lower', async () => {
