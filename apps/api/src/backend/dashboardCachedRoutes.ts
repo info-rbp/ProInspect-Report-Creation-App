@@ -39,6 +39,12 @@ function responseData(response: ApiResponse): unknown | undefined {
   return (response.body as { data?: unknown }).data;
 }
 
+function roleFromOverview(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
+  const role = (data as { role?: unknown }).role;
+  return typeof role === 'string' ? role : undefined;
+}
+
 function compactCache(now: number): void {
   for (const [key, entry] of overviewCache) {
     if (entry.expiresAt <= now) overviewCache.delete(key);
@@ -55,8 +61,10 @@ function compactCache(now: number): void {
  * when a browser refreshes, multiple dashboard widgets render together, or a
  * user revisits the page within a short interval. The key includes a one-way
  * hash of the bearer identity because dashboard visibility is role/assignment
- * scoped. Cached responses are still re-authorised on every request so account
- * suspension, membership changes and App Check enforcement are never bypassed.
+ * scoped. Cached responses are re-authorised on every hit and are discarded if
+ * the current server-side membership role differs from the role that produced
+ * the cached overview. This prevents a role downgrade from receiving stale
+ * privileged dashboard data while retaining the short-lived identity cache.
  */
 export async function routeCachedDashboardRequest(
   req: IncomingMessage,
@@ -70,14 +78,17 @@ export async function routeCachedDashboardRequest(
   const cached = overviewCache.get(key);
   if (cached && cached.expiresAt > now) {
     const scopedAgencyId = agencyId(req);
-    await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId: scopedAgencyId }, correlationId);
-    return {
-      status: 200,
-      body: {
-        data: structuredClone(cached.data),
-        meta: { correlationId, cache: { source: 'identity-scoped-memory', maxAgeSeconds: 30 } },
-      },
-    };
+    const principal = await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId: scopedAgencyId }, correlationId);
+    if (roleFromOverview(cached.data) === principal.role) {
+      return {
+        status: 200,
+        body: {
+          data: structuredClone(cached.data),
+          meta: { correlationId, cache: { source: 'identity-scoped-memory', maxAgeSeconds: 30 } },
+        },
+      };
+    }
+    overviewCache.delete(key);
   }
 
   const response = await routeDashboardRequest(req, dependencies, correlationId);
