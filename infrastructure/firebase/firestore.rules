@@ -27,6 +27,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /serviceProviders/{providerId}/memberships/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     match /agencies/{agency}/auditEvents/{eventId} {
       allow read: if activeMembership(agency) && privilegedRole();
       allow create, update, delete: if false;
