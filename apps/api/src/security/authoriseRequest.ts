@@ -39,6 +39,9 @@ export async function authenticateAndAuthorise(
   if (!membership || membership.status !== 'active') {
     throw new SecurityError(403, 'MEMBERSHIP_INACTIVE', 'The requested agency membership is not active.');
   }
+  if (membership.agencyId !== agencyId) {
+    throw new SecurityError(403, 'AGENCY_MEMBERSHIP_MISMATCH', 'The resolved membership does not belong to the requested agency.');
+  }
   if (!roles.has(membership.role)) throw new SecurityError(403, 'ROLE_INVALID', 'The membership role is invalid.');
 
   const now = dependencies.now?.() ?? new Date();
