@@ -14,17 +14,9 @@ service cloud.firestore {
       allow read, write: if isUser(userId);
     }
 
-    // The browser may read and maintain its own agency membership.
+    // The browser may read and maintain its own membership
     match /agencies/{agencyId}/memberships/{uid} {
       allow read, write: if isUser(uid);
-    }
-
-    // Provider membership is server-managed, but a signed-in user may read their
-    // own record so the web shell can recognise an explicitly provisioned
-    // ProInspect super administrator without granting browser write access.
-    match /serviceProviders/{providerId}/memberships/{uid} {
-      allow read: if isUser(uid);
-      allow write: if false;
     }
 
     // Operational data is server-authoritative. Browser access goes through the
