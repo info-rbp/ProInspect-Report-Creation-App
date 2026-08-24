@@ -34,7 +34,26 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ['scripts/**/*.mjs', 'eslint.config.js'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['cloudflare/**/*.js'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        URL: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        fetch: 'readonly',
+      },
+    },
   },
   {
     files: ['**/*.{ts,tsx}'],
