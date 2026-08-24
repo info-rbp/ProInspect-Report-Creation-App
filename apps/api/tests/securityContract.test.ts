@@ -25,7 +25,7 @@ function dependencies(input: { agencyId?: string; membership?: 'active' | 'missi
 
 describe('authorization contracts',()=>{
   it('does not invent agency-1 when neither identity nor request supplies an agency',async()=>{
-    await expect(authenticateAndAuthorise(request({authorization:'Bearer token'}), dependencies({membership:'active'}), 'agency.read', {}, 'correlation-1'))
+    await expect(authenticateAndAuthorise(request({authorization:'Bearer token'}), dependencies({membership:'active'}), 'agency.read', {agencyId:''}, 'correlation-1'))
       .rejects.toMatchObject({code:'AGENCY_REQUIRED',status:403});
   });
 
