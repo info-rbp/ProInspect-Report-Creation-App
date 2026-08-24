@@ -4,6 +4,7 @@ import type { UserProfile, UserRole } from '../../types/platform';
 import { getFirestoreDb, isFirebaseConfigured } from '../storageService';
 
 const validRoles = new Set<UserRole>(['super_admin','proinspect_admin','operations','inspector','analyst','reviewer','tenant','landlord','shopify_customer']);
+const PROVIDER_ID = 'proinspect';
 export const DEFAULT_AGENCY_ID = 'unprovisioned-agency';
 
 function storeAgency(profile: UserProfile): UserProfile {
@@ -30,9 +31,22 @@ export const getOrCreateUserProfile = async (user: User): Promise<UserProfile> =
   const agencyId = tokenAgencyId || profileAgencyId;
   if (!agencyId) throw new Error('Your account has not been provisioned with a ProInspect or agency workspace.');
 
-  const membershipSnapshot = await getDoc(doc(db, 'agencies', agencyId, 'memberships', user.uid));
-  if (!membershipSnapshot.exists()) throw new Error('Your agency membership has not been provisioned.');
-  const membership = membershipSnapshot.data() as { role?: string; status?: string; displayName?: string; createdAt?: string; updatedAt?: string };
+  const [membershipSnapshot, providerMembershipSnapshot] = await Promise.all([
+    getDoc(doc(db, 'agencies', agencyId, 'memberships', user.uid)),
+    getDoc(doc(db, 'serviceProviders', PROVIDER_ID, 'memberships', user.uid)),
+  ]);
+
+  const agencyMembership = membershipSnapshot.exists()
+    ? membershipSnapshot.data() as { role?: string; status?: string; displayName?: string; createdAt?: string; updatedAt?: string }
+    : undefined;
+  const providerMembership = providerMembershipSnapshot.exists()
+    ? providerMembershipSnapshot.data() as { role?: string; status?: string; displayName?: string; createdAt?: string; updatedAt?: string }
+    : undefined;
+
+  const providerSuperAdmin = providerMembership?.status === 'active' && providerMembership.role === 'super_admin';
+  const membership = agencyMembership?.status === 'active' ? agencyMembership : providerSuperAdmin ? providerMembership : agencyMembership;
+
+  if (!membership) throw new Error('Your agency membership has not been provisioned.');
   if (membership.status !== 'active') throw new Error('Your agency membership is not active.');
   if (!membership.role || !validRoles.has(membership.role as UserRole)) throw new Error('Your agency role is invalid.');
 
