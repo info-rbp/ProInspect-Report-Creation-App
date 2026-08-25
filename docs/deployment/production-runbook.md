@@ -4,7 +4,7 @@
 
 Production traffic is `browser -> Cloudflare Worker/assets -> Cloud Run API -> named Firestore, Cloud Storage and Pub/Sub workers`. Cloudflare is the only public API edge. The API verifies the shared edge secret before protected-route identity, membership, agency and capability checks. Firestore rules remain deny-by-default for browser writes.
 
-Do not merge or deploy until the repository CI validation and browser jobs are green, the secret scan is clean, and the pull-request diff has been reviewed. A local or Cloud Build pass is useful evidence but does not replace a required GitHub status. Deploy only an immutable commit from `main`.
+Do not merge or deploy until the repository CI validation and browser jobs are green, the secret scan is clean, and the pull-request diff has been reviewed. A local or Cloud Build pass is useful evidence but does not replace a required GitHub status unless an explicit, candidate-specific repository-owner infrastructure waiver records why hosted checks could not execute and equivalent validation has passed. Deploy only an immutable commit from `main`.
 
 The application excludes trust accounting, payment processing, rent collection and all other money handling.
 
@@ -38,7 +38,7 @@ curl --fail-with-body --silent --show-error \
 
 The returned configuration must show TOTP enabled, anonymous sign-in disabled and user sign-up disabled. Terraform declares the same controls in `google_identity_platform_config.this`.
 
-Add the Cloudflare production host `proinspect-property-inspection-platform.delicate-dream-e4c9.workers.dev` and every final custom domain to Firebase Authentication authorised domains. For Google sign-in, register the Cloudflare/custom origin and the Firebase handler URI `https://business-plan-applicatio-17047.firebaseapp.com/__/auth/handler` in the OAuth client. If `authDomain` changes to a custom domain, register its `/__/auth/handler` URI as well.
+Add the canonical Cloudflare production host `proinspect.delicate-dream-e4c9.workers.dev` and every final custom domain to Firebase Authentication authorised domains. The older `proinspect-property-inspection-platform.delicate-dream-e4c9.workers.dev` hostname is legacy and should be retired or redirected after canonical acceptance. For Google sign-in, register the Cloudflare/custom origin and the Firebase handler URI `https://business-plan-applicatio-17047.firebaseapp.com/__/auth/handler` in the OAuth client. If `authDomain` changes to a custom domain, register its `/__/auth/handler` URI as well.
 
 ## App Check activation
 
@@ -100,11 +100,12 @@ Its minimum access, based on current API calls, is:
 
 - project `roles/datastore.user`;
 - project `roles/pubsub.publisher`;
+- project `roles/identityplatform.viewer` so Firebase Admin can perform ID-token revocation/user-state checks without Identity Platform administration rights;
 - `roles/storage.objectAdmin` on the upload and report buckets (the API creates, reads and deletes governed objects);
 - `roles/secretmanager.secretAccessor` only on `cloudflare-origin-secret` and `email-provider-config`;
 - `roles/iam.serviceAccountTokenCreator` on itself for V4 signed URLs.
 
-The API does not directly enqueue Cloud Tasks and does not require `roles/cloudtasks.enqueuer`. It must not receive Owner or Editor.
+The API does not directly enqueue Cloud Tasks and does not require `roles/cloudtasks.enqueuer`. It must not receive Owner, Editor or `roles/identityplatform.admin`.
 
 Add or verify the dedicated account's unconditional bindings with:
 
@@ -112,7 +113,7 @@ Add or verify the dedicated account's unconditional bindings with:
 PROJECT_ID=business-plan-applicatio-17047
 API_SA="proinspect-api@$PROJECT_ID.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$API_SA" --project="$PROJECT_ID"
-for ROLE in roles/datastore.user roles/pubsub.publisher; do
+for ROLE in roles/datastore.user roles/pubsub.publisher roles/identityplatform.viewer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$API_SA" --role="$ROLE" --condition=None
 done
@@ -145,7 +146,7 @@ gcloud run services update api --project="$PROJECT_ID" \
   --region=australia-southeast1 --service-account="$API_SA"
 ```
 
-Confirm health, signed uploads, report/archive operations, notification callbacks and Pub/Sub dispatch before removing any role from the temporary broad runtime account. Terraform declares `proinspect-api`; if an older Terraform state contains `api@...`, import/move the existing dedicated account only after reviewing `terraform plan`.
+Confirm health, authenticated token verification, signed uploads, report/archive operations, notification callbacks and Pub/Sub dispatch before removing any role from the temporary broad runtime account. Terraform declares `proinspect-api` and its read-only Identity Platform viewer binding; if an older Terraform state contains `api@...`, import/move the existing dedicated account only after reviewing `terraform plan`.
 
 For the known existing production account and edge secret, first back up remote state, then reconcile their addresses before applying:
 
@@ -202,7 +203,7 @@ Cloudflare runtime requires `GOOGLE_API_ORIGIN` and secret `CLOUDFLARE_ORIGIN_SE
 
 ## Post-merge release
 
-Run only after PR #53 is merged and required CI is green:
+Run only after the release PR is merged and its required validation is green, or a candidate-specific owner infrastructure waiver has been recorded for demonstrably unavailable hosted runners after equivalent validation is green:
 
 ```bash
 git checkout main
@@ -222,7 +223,7 @@ gcloud run services describe api --project=business-plan-applicatio-17047 \
   --region=australia-southeast1 --format='value(status.latestReadyRevisionName)'
 curl --fail-with-body --silent --show-error "$GOOGLE_API_ORIGIN/health"
 curl --fail-with-body --silent --show-error \
-  'https://proinspect-property-inspection-platform.delicate-dream-e4c9.workers.dev/health'
+  'https://proinspect.delicate-dream-e4c9.workers.dev/health'
 ```
 
 ## Production smoke checks
@@ -258,6 +259,10 @@ Rollback application images/traffic first. Do not roll back membership enforceme
 
 ## Current activation blockers
 
-At the time this runbook was written, the known production API revision was `api-00004-62r`, containing an earlier branch state. The repository MFA/frontend and complete named-Firestore worker changes are not proven deployed. Identity Platform TOTP, App Check/reCAPTCHA, authorised domains/OAuth, dedicated-account IAM, Firebase password rotation, GitHub CI and final production smoke evidence must be confirmed externally before declaring production ready.
+The last accepted production release before the functional-QA remediation branch is based on `main` commit `dba7798af828ed387d59d0afaa5240d387303dc3`, with API revision `api-00007-nq9` and the canonical Cloudflare Worker `proinspect.delicate-dream-e4c9.workers.dev`. Edge health and bypass protection, TOTP MFA and the API's read-only Identity Platform access have been proven in production.
+
+PR #57 (`fix/qa-operational-readiness`) contains the functional remediation identified by the 25 August 2026 browser QA pass. It must not be merged or deployed until the exact candidate passes the repository validation suite and the focused synthetic-data browser re-test documented in `docs/product/qa-operational-readiness-remediation.md`. GitHub-hosted Actions were still unable to start jobs when the PR was opened; red no-step statuses are infrastructure evidence, not test passes or code-test failures.
+
+App Check/reCAPTCHA activation, rotation/revocation for the historically exposed Firebase credential, retirement/redirect of the legacy Cloudflare hostname, normal GitHub Actions capacity and branch protection remain separate production-closeout actions.
 
 The direct `xlsx` dependency was removed because its high-severity advisories have no npm fix; client and price-book imports now use a current XLSX reader plus a bounded CSV parser and reject legacy XLS input. `npm audit --omit=dev --audit-level=high` is a release gate. A remaining moderate `uuid` advisory is transitive through Firebase Admin's optional Google Storage 7.x dependency. The affected v3/v5/v6 buffer APIs are not called by ProInspect or the `teeny-request` path, which uses UUID v4. Do not force npm's suggested Firebase Admin downgrade; monitor Firebase Admin/Google Storage for a compatible upstream resolution.
