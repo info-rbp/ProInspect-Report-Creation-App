@@ -150,10 +150,13 @@ export function buildReportPresentationViewModel(input: PresentationReportInput)
     photoReferenceCount += areaPhotos.length;
     const components = area.components.map((component): PresentationComponentView => {
       componentCount += 1;
-      const condition = text(component.conditionCategory, 'unable_to_confirm');
-      const cleanliness = text(component.cleanlinessCategory, 'unable_to_confirm');
-      const working = text(component.workingStatus, 'unable_to_confirm');
-      const test = text(component.testStatus, 'unable_to_confirm');
+      // Missing assessment fields mean the inspector has not assessed the component yet.
+      // They are deliberately distinct from an explicit "unable_to_confirm" judgement,
+      // which is a completed assessment state and therefore a report exception.
+      const condition = text(component.conditionCategory, 'unassessed');
+      const cleanliness = text(component.cleanlinessCategory, 'unassessed');
+      const working = text(component.workingStatus, 'unassessed');
+      const test = text(component.testStatus, 'unassessed');
       const conditionException = isConditionException(condition);
       const cleaningException = isCleaningException(cleanliness);
       const operationalException = isOperationalException(working, test);
