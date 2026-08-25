@@ -13,4 +13,6 @@ COPY --from=build /workspace/package.json ./package.json
 COPY --from=build /workspace/node_modules ./node_modules
 COPY --from=build /workspace/apps/document-worker/package.json ./apps/document-worker/package.json
 COPY --from=build /workspace/apps/document-worker/dist ./apps/document-worker/dist
+COPY --from=build /workspace/packages ./packages
+USER node
 CMD ["node", "apps/document-worker/dist/index.js"]

@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 const requiredArtifacts = [
@@ -19,6 +19,17 @@ const requiredArtifacts = [
 ];
 
 for (const artifact of requiredArtifacts) await access(artifact);
+
+const containerApps = ['api', 'pdf-worker', 'notification-worker', 'dashboard-worker', 'document-worker', 'integration-worker'];
+for (const appName of containerApps) {
+  const manifest = JSON.parse(await readFile(`apps/${appName}/package.json`, 'utf8'));
+  const internalDependencies = Object.keys(manifest.dependencies ?? {}).filter((name) => name.startsWith('@pcr/'));
+  const dockerfile = await readFile(`apps/${appName}/Dockerfile`, 'utf8');
+  if (internalDependencies.length && !dockerfile.includes('COPY --from=build /workspace/packages ./packages')) {
+    throw new Error(`${appName} runtime image omits workspace packages required by ${internalDependencies.join(', ')}.`);
+  }
+  if (!dockerfile.includes('USER node')) throw new Error(`${appName} runtime image must not run as root.`);
+}
 
 const config = await import(pathToFileURL('packages/config/dist/index.js').href);
 const domain = await import(pathToFileURL('packages/domain/dist/index.js').href);
