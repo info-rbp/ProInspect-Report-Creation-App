@@ -46,9 +46,14 @@ function fieldClass(): string {
   return 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-400';
 }
 
+function validEmail(value: string): boolean {
+  return !value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
+}
+
 const ClientOnboardingPage: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [highestCompletedStep, setHighestCompletedStep] = useState(0);
   const [properties, setProperties] = useState<PropertyRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -96,16 +101,86 @@ const ClientOnboardingPage: React.FC = () => {
   const previewEngagements = useMemo<ClientEngagement[]>(() => selectedServices.length ? [{ id: 'preview-engagement', agencyId: '', clientAccountId: 'preview', name: form.engagementName, status: 'draft', services: selectedServices.map((serviceCode) => ({ serviceCode, active: true })), createdAt: '', updatedAt: '' }] : [], [form.engagementName, selectedServices]);
   const readiness = evaluateClientOnboarding(previewAccount, previewContacts, previewEngagements);
 
-  const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
-  const toggleService = (service: ClientServiceCode) => setSelectedServices((current) => current.includes(service) ? current.filter((value) => value !== service) : [...current, service]);
-  const togglePortalPermission = (permission: ClientPortalPermission) => setPortalPermissions((current) => current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
-  const toggleProperty = (propertyId: string) => setSelectedPropertyIds((current) => current.includes(propertyId) ? current.filter((value) => value !== propertyId) : [...current, propertyId]);
+  const set = (key: keyof typeof form, value: string | boolean) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    if (error) setError('');
+  };
+  const toggleService = (service: ClientServiceCode) => {
+    setSelectedServices((current) => current.includes(service) ? current.filter((value) => value !== service) : [...current, service]);
+    if (error) setError('');
+  };
+  const togglePortalPermission = (permission: ClientPortalPermission) => {
+    setPortalPermissions((current) => current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
+    if (error) setError('');
+  };
+  const toggleProperty = (propertyId: string) => {
+    setSelectedPropertyIds((current) => current.includes(propertyId) ? current.filter((value) => value !== propertyId) : [...current, propertyId]);
+    if (error) setError('');
+  };
+
+  const validateStep = (index: number): string | undefined => {
+    if (index === 0 && !form.legalName.trim()) return 'Legal name is required before continuing.';
+    if (index === 1) {
+      if (!form.contactName.trim()) return 'A primary contact name is required before continuing.';
+      if (!validEmail(form.contactEmail)) return 'Enter a valid primary contact email address.';
+      if (!validEmail(form.generalEmail) || !validEmail(form.accountsEmail) || !validEmail(form.maintenanceEmail)) return 'One or more contact email addresses are invalid.';
+    }
+    if (index === 2) {
+      if (!form.engagementName.trim()) return 'Engagement or service-agreement name is required.';
+      if (!selectedServices.length) return 'Select at least one active service before continuing.';
+    }
+    if (index === 3) {
+      if (!validEmail(form.invoiceRecipientEmail)) return 'Enter a valid invoice recipient email address.';
+      if (Number(form.paymentTermsDays) < 0) return 'Payment terms cannot be negative.';
+    }
+    if (index === 4) {
+      if (Number(form.minimumBookingNoticeHours) < 0) return 'Minimum booking notice cannot be negative.';
+      if (Number(form.defaultAppointmentDurationMinutes) <= 0) return 'Default appointment duration must be greater than zero.';
+      if (Number(form.routineFrequencyMonths) <= 0) return 'Routine inspection frequency must be greater than zero.';
+    }
+    if (index === 5) {
+      const values = [form.propertyManagerApprovalLimit, form.landlordApprovalThreshold, form.emergencyAuthorisationLimit, form.secondApprovalThreshold].filter((value) => value.trim());
+      if (values.some((value) => Number(value) < 0)) return 'Maintenance approval thresholds cannot be negative.';
+    }
+    if (index === 8 && form.portalEmail.trim()) {
+      if (!validEmail(form.portalEmail)) return 'Enter a valid portal-user email address.';
+      if (!form.portalName.trim() && !form.contactName.trim()) return 'Provide a display name for the initial portal user.';
+    }
+    return undefined;
+  };
+
+  const nextStep = () => {
+    const validationError = validateStep(step);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
+    setHighestCompletedStep((current) => Math.max(current, step + 1));
+    setStep((current) => Math.min(STEPS.length - 1, current + 1));
+  };
+
+  const goToStep = (index: number) => {
+    // Future steps are reached sequentially so required inputs cannot be skipped.
+    if (index > highestCompletedStep || index > step + 1) return;
+    if (index === step + 1) {
+      nextStep();
+      return;
+    }
+    setError('');
+    setStep(index);
+  };
 
   const save = async () => {
     setBusy(true); setError('');
     try {
-      if (!form.legalName.trim()) throw new Error('Legal name is required.');
-      if (!form.contactName.trim()) throw new Error('A primary contact is required.');
+      for (let index = 0; index < STEPS.length - 1; index += 1) {
+        const validationError = validateStep(index);
+        if (validationError) {
+          setStep(index);
+          throw new Error(validationError);
+        }
+      }
       const account = await createClientAccount({
         legalName: form.legalName.trim(), tradingName: form.tradingName.trim() || undefined, clientType: form.clientType,
         entityType: form.entityType, abn: form.abn.trim() || undefined, acn: form.acn.trim() || undefined,
@@ -177,25 +252,25 @@ const ClientOnboardingPage: React.FC = () => {
 
   return <div className="space-y-6">
     <div className="flex items-center gap-3"><Link to="/app/admin/clients" className="rounded-lg border border-slate-200 p-2 text-slate-600"><ArrowLeft size={16} /></Link><div><div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Client onboarding</div><h1 className="text-3xl font-black text-slate-950">New Client Account</h1></div></div>
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3"><div className="flex min-w-[900px] gap-2">{STEPS.map((name, index) => <button key={name} onClick={() => setStep(index)} className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold ${step === index ? 'bg-slate-950 text-white' : index < step ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-500'}`}>{index + 1}. {name}</button>)}</div></div>
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3"><div className="flex min-w-[900px] gap-2">{STEPS.map((name, index) => <button key={name} type="button" disabled={index > highestCompletedStep && index > step} onClick={() => goToStep(index)} className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${step === index ? 'bg-slate-950 text-white' : index < step || index <= highestCompletedStep ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-500'}`}>{index + 1}. {name}</button>)}</div></div>
     {error && <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>}
     {duplicateWarning && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{duplicateWarning}</div>}
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-black text-slate-950">{STEPS[step]}</h2>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        {step === 0 && <>{input('Legal name', 'legalName')}{input('Trading name', 'tradingName')}<label className="grid gap-1 text-sm"><span className="font-semibold">Client type</span><select value={form.clientType} onChange={(event) => setForm((current) => ({ ...current, clientType: event.target.value as ClientAccountType }))} className={fieldClass()}>{['private_landlord','property_management_firm','commercial_property_owner','strata_owners_corporation','strata_manager','corporate_client','other'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label><label className="grid gap-1 text-sm"><span className="font-semibold">Entity type</span><select value={form.entityType} onChange={(event) => setForm((current) => ({ ...current, entityType: event.target.value as ClientEntityType }))} className={fieldClass()}>{['individual','joint_owners','company','trust','partnership','property_management_agency','strata_owners_corporation','other'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label>{input('ABN', 'abn')}{input('ACN', 'acn')}{input('Website', 'website')}{input('Timezone', 'timezone')}{input('Business address', 'businessAddress')}{input('Postal address', 'postalAddress')}</>}
+        {step === 0 && <>{input('Legal name', 'legalName')}{input('Trading name', 'tradingName')}<label className="grid gap-1 text-sm"><span className="font-semibold">Client type</span><select value={form.clientType} onChange={(event) => { setForm((current) => ({ ...current, clientType: event.target.value as ClientAccountType })); setError(''); }} className={fieldClass()}>{['private_landlord','property_management_firm','commercial_property_owner','strata_owners_corporation','strata_manager','corporate_client','other'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label><label className="grid gap-1 text-sm"><span className="font-semibold">Entity type</span><select value={form.entityType} onChange={(event) => { setForm((current) => ({ ...current, entityType: event.target.value as ClientEntityType })); setError(''); }} className={fieldClass()}>{['individual','joint_owners','company','trust','partnership','property_management_agency','strata_owners_corporation','other'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label>{input('ABN', 'abn')}{input('ACN', 'acn')}{input('Website', 'website')}{input('Timezone', 'timezone')}{input('Business address', 'businessAddress')}{input('Postal address', 'postalAddress')}</>}
         {step === 1 && <>{input('Primary contact name', 'contactName')}{input('Job title', 'contactJobTitle')}{input('Primary contact email', 'contactEmail','email')}{input('Primary contact phone', 'contactPhone')}{input('General email', 'generalEmail','email')}{input('Main phone', 'mainPhone')}{input('Accounts email', 'accountsEmail','email')}{input('Maintenance email', 'maintenanceEmail','email')}{input('Emergency phone', 'emergencyPhone')}</>}
         {step === 2 && <div className="lg:col-span-2 space-y-4">{input('Engagement / agreement name','engagementName')}{input('Effective from','effectiveFrom','date')}<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{SERVICE_OPTIONS.map(([code,name]) => <label key={code} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm"><input type="checkbox" checked={selectedServices.includes(code)} onChange={() => toggleService(code)} />{name}</label>)}</div></div>}
         {step === 3 && <><label className="grid gap-1 text-sm"><span className="font-semibold">Billing method</span><select value={form.billingMethod} onChange={(event) => set('billingMethod',event.target.value)} className={fieldClass()}>{['shopify_prepaid','account','invoice_per_inspection','monthly_consolidated_invoice','other'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label>{input('Invoice recipient email','invoiceRecipientEmail','email')}{input('Payment terms (days)','paymentTermsDays','number')}{input('Pricing profile','pricingProfile')}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.purchaseOrderRequired} onChange={(event) => set('purchaseOrderRequired',event.target.checked)} /> Purchase order required</label></>}
         {step === 4 && <>{input('Minimum booking notice (hours)','minimumBookingNoticeHours','number')}{input('Default appointment duration (minutes)','defaultAppointmentDurationMinutes','number')}<label className="grid gap-1 text-sm"><span className="font-semibold">Preferred time window</span><select value={form.preferredTimeWindow} onChange={(event) => set('preferredTimeWindow',event.target.value)} className={fieldClass()}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="business_hours">Business hours</option><option value="any">Any</option></select></label>{input('Routine frequency (months)','routineFrequencyMonths','number')}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.directBookingAllowed} onChange={(event) => set('directBookingAllowed',event.target.checked)} /> Client may book directly</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.tenantNotificationRequired} onChange={(event) => set('tenantNotificationRequired',event.target.checked)} /> Tenant notification required</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.autoScheduleRecurringInspections} onChange={(event) => set('autoScheduleRecurringInspections',event.target.checked)} /> Auto-schedule recurring inspections</label><label className="grid gap-1 text-sm lg:col-span-2"><span className="font-semibold">Booking notes</span><textarea value={form.bookingNotes} onChange={(event) => set('bookingNotes',event.target.value)} className={fieldClass()} rows={3} /></label></>}
         {step === 5 && <>{input('Property Manager delegated limit','propertyManagerApprovalLimit','number')}{input('Landlord approval threshold','landlordApprovalThreshold','number')}{input('Emergency authorisation limit','emergencyAuthorisationLimit','number')}{input('Second approval threshold','secondApprovalThreshold','number')}<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.replacementOwnerApproval} onChange={(event) => set('replacementOwnerApproval',event.target.checked)} /> Replacement always requires owner approval</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.capitalOwnerApproval} onChange={(event) => set('capitalOwnerApproval',event.target.checked)} /> Capital works always require owner approval</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.cosmeticOwnerApproval} onChange={(event) => set('cosmeticOwnerApproval',event.target.checked)} /> Cosmetic work always requires owner approval</label></>}
-        {step === 6 && <div className="lg:col-span-2 space-y-4"><div className="grid gap-4 md:grid-cols-2"><label className="grid gap-1 text-sm"><span className="font-semibold">Relationship type for selected Properties</span><select value={form.relationshipType} onChange={(event) => setForm((current) => ({...current,relationshipType:event.target.value as PropertyClientRelationshipType}))} className={fieldClass()}>{['owner','managing_agent','engaging_client','billing_party','report_recipient','maintenance_authority','strata_manager','owner_representative'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label>{input('Property-specific approval limit','propertyApprovalLimit','number')}</div><div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 divide-y">{properties.map((property) => <label key={property.id} className="flex items-center gap-3 p-3 text-sm"><input type="checkbox" checked={selectedPropertyIds.includes(property.id)} onChange={() => toggleProperty(property.id)} /><span className="font-semibold">{property.address}</span><span className="text-slate-400">{property.suburb} {property.postcode}</span></label>)}</div></div>}
-        {step === 7 && <div className="lg:col-span-2 space-y-4"><label className="grid gap-1 text-sm"><span className="font-semibold">Add onboarding documents</span><input type="file" multiple onChange={(event) => { const selected = Array.from(event.target.files || []); setFiles(selected.map((file) => ({file,type:'engagement_agreement'}))); }} className={fieldClass()} /></label>{files.map((entry,index) => <div key={`${entry.file.name}-${index}`} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-[1fr_260px]"><div><div className="font-semibold">{entry.file.name}</div><div className="text-xs text-slate-400">{Math.round(entry.file.size/1024)} KB</div></div><select value={entry.type} onChange={(event) => setFiles((current) => current.map((value,i) => i===index ? {...value,type:event.target.value as ClientDocumentType}:value))} className={fieldClass()}>{CLIENT_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></div>)}</div>}
+        {step === 6 && <div className="lg:col-span-2 space-y-4"><div className="grid gap-4 md:grid-cols-2"><label className="grid gap-1 text-sm"><span className="font-semibold">Relationship type for selected Properties</span><select value={form.relationshipType} onChange={(event) => { setForm((current) => ({...current,relationshipType:event.target.value as PropertyClientRelationshipType})); setError(''); }} className={fieldClass()}>{['owner','managing_agent','engaging_client','billing_party','report_recipient','maintenance_authority','strata_manager','owner_representative'].map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></label>{input('Property-specific approval limit','propertyApprovalLimit','number')}</div><div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 divide-y">{properties.map((property) => <label key={property.id} className="flex items-center gap-3 p-3 text-sm"><input type="checkbox" checked={selectedPropertyIds.includes(property.id)} onChange={() => toggleProperty(property.id)} /><span className="font-semibold">{property.address}</span><span className="text-slate-400">{property.suburb} {property.postcode}</span></label>)}</div></div>}
+        {step === 7 && <div className="lg:col-span-2 space-y-4"><label className="grid gap-1 text-sm"><span className="font-semibold">Add onboarding documents</span><input type="file" multiple onChange={(event) => { const selected = Array.from(event.target.files || []); setFiles(selected.map((file) => ({file,type:'engagement_agreement'}))); setError(''); }} className={fieldClass()} /></label>{files.map((entry,index) => <div key={`${entry.file.name}-${index}`} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-[1fr_260px]"><div><div className="font-semibold">{entry.file.name}</div><div className="text-xs text-slate-400">{Math.round(entry.file.size/1024)} KB</div></div><select value={entry.type} onChange={(event) => setFiles((current) => current.map((value,i) => i===index ? {...value,type:event.target.value as ClientDocumentType}:value))} className={fieldClass()}>{CLIENT_DOCUMENT_TYPES.map((value) => <option key={value} value={value}>{value.replaceAll('_',' ')}</option>)}</select></div>)}</div>}
         {step === 8 && <div className="lg:col-span-2 space-y-4"><div className="grid gap-4 md:grid-cols-2">{input('Initial portal user name','portalName')}{input('Initial portal user email','portalEmail','email')}</div><div className="grid gap-2 md:grid-cols-2">{CLIENT_PORTAL_PERMISSIONS.map((permission) => <label key={permission} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm"><input type="checkbox" checked={portalPermissions.includes(permission)} onChange={() => togglePortalPermission(permission)} />{permission}</label>)}</div></div>}
         {step === 9 && <div className="lg:col-span-2 space-y-4"><div className={`rounded-xl border p-4 ${readiness.readyForActivation ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}><div className="flex items-center gap-2 font-black"><CheckCircle2 size={18}/>{readiness.readyForActivation ? 'Ready for activation' : 'Will be saved in onboarding'}</div>{readiness.blockers.map((blocker) => <div key={blocker} className="mt-2 text-sm">• {blocker}</div>)}{readiness.warnings.map((warning) => <div key={warning} className="mt-2 text-sm text-slate-600">• {warning}</div>)}</div><div className="grid gap-3 md:grid-cols-3"><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-400">Client</div><div className="font-bold">{form.tradingName || form.legalName || 'Unnamed'}</div></div><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-400">Properties</div><div className="font-bold">{selectedPropertyIds.length}</div></div><div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-400">Services</div><div className="font-bold">{selectedServices.length}</div></div></div><label className="grid gap-1 text-sm"><span className="font-semibold">Internal notes</span><textarea rows={4} value={form.notes} onChange={(event) => set('notes',event.target.value)} className={fieldClass()} /></label></div>}
       </div>
     </section>
-    <div className="flex justify-between"><button disabled={step===0||busy} onClick={() => setStep((current)=>Math.max(0,current-1))} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40"><ArrowLeft size={16}/> Previous</button>{step < STEPS.length-1 ? <button disabled={busy} onClick={() => setStep((current)=>Math.min(STEPS.length-1,current+1))} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">Next <ArrowRight size={16}/></button> : <button disabled={busy} onClick={() => void save()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? <FileText size={16}/> : <Save size={16}/>} Complete onboarding</button>}</div>
+    <div className="flex justify-between"><button disabled={step===0||busy} onClick={() => { setError(''); setStep((current)=>Math.max(0,current-1)); }} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40"><ArrowLeft size={16}/> Previous</button>{step < STEPS.length-1 ? <button disabled={busy} onClick={nextStep} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">Next <ArrowRight size={16}/></button> : <button disabled={busy} onClick={() => void save()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? <FileText size={16}/> : <Save size={16}/>} Complete onboarding</button>}</div>
   </div>;
 };
 
