@@ -55,9 +55,13 @@ export const createProperty = async (input: CreatePropertyInput): Promise<Proper
   const localProperty = normalisePropertyRecord({ ...input, id: newId, clientIds: input.clientIds || [], status: input.status || 'active', createdAt: timestamp, updatedAt: timestamp });
   if (cloudMode()) {
     // Never convert an authoritative cloud-write failure into a browser-only success.
-    // The caller must see the API error and may retry safely using apiRequest's
-    // idempotency key behaviour.
-    return normalisePropertyRecord(await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', { method: 'POST', body: cloudCreateCommand(localProperty) }));
+    // A successful create is immediately re-read from the server so the wizard only
+    // navigates after persistence has been proven under the generated canonical ID.
+    const created = normalisePropertyRecord(await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', { method: 'POST', body: cloudCreateCommand(localProperty) }));
+    if (!created.id?.trim()) throw new Error('The property API did not return a canonical property ID.');
+    const persisted = normalisePropertyRecord(await apiRequest<PropertyRecord>(input.agencyId, `/api/v1/properties/${encodeURIComponent(created.id)}`));
+    if (persisted.id !== created.id) throw new Error('The property could not be verified after creation.');
+    return persisted;
   }
   await localPut('properties', localProperty); return localProperty;
 };
