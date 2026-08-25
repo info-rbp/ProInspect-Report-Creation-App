@@ -17,4 +17,34 @@ describe('report presentation view model', () => {
     expect(view.maintenanceFindings).toHaveLength(1);
     expect(view.areas[0]?.components[0]?.photos.map((photo) => photo.photoId)).toEqual(['photo-1', 'photo-2']);
   });
+
+  it('keeps unassessed components distinct from explicit unable-to-confirm exceptions', () => {
+    const view = buildReportPresentationViewModel({
+      reportId: 'report-unassessed',
+      reportType: 'Routine Inspection',
+      propertyAddress: '2 Example Street',
+      areas: [{
+        id: 'bedroom',
+        name: 'Bedroom',
+        components: [
+          { id: 'wall', component: 'Wall' },
+          { id: 'window', component: 'Window', conditionCategory: 'unable_to_confirm', cleanlinessCategory: 'clean', workingStatus: 'not_applicable', testStatus: 'not_applicable' },
+        ],
+      }],
+    });
+
+    expect(view.summary.componentCount).toBe(2);
+    expect(view.summary.exceptionCount).toBe(1);
+    expect(view.summary.conditionExceptionCount).toBe(1);
+    expect(view.summary.cleaningExceptionCount).toBe(0);
+    expect(view.summary.operationalExceptionCount).toBe(0);
+    expect(view.summary.unableToConfirmCount).toBe(1);
+    expect(view.areas[0]?.components[0]).toMatchObject({
+      condition: 'unassessed',
+      cleanliness: 'unassessed',
+      working: 'unassessed',
+      test: 'unassessed',
+      exception: false,
+    });
+  });
 });
