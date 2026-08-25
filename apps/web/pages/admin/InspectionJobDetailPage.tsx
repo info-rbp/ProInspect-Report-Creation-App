@@ -76,28 +76,56 @@ export const InspectionJobDetailPage: React.FC = () => {
   const loadJobData = async () => {
     if (!jobId) return;
     setLoading(true);
+    setErrorMessage(null);
+    setAuditEvents([]);
+    setWorkflowInfo(null);
+
+    let nextJob: InspectionJob;
     try {
-      const nextJob = await getInspectionJob(jobId);
-      if (!nextJob) {
+      const loadedJob = await getInspectionJob(jobId);
+      if (!loadedJob) {
         setJob(null);
+        setProperty(null);
+        setPropertiesList([]);
         return;
       }
+      nextJob = loadedJob;
       setJob(nextJob);
       setNotesText(nextJob.notes || '');
-      const nextProperty = await getProperty(nextJob.propertyId);
-      setProperty(nextProperty || null);
-      setPropertiesList(nextProperty ? [nextProperty] : []);
-      const [events, workflow] = await Promise.all([
-        listAuditEventsForEntity('inspection_job', jobId),
-        getInspectionJobWorkflow(jobId),
-      ]);
-      setAuditEvents(events);
-      setWorkflowInfo(workflow ?? null);
+
+      try {
+        const nextProperty = await getProperty(nextJob.propertyId);
+        setProperty(nextProperty || null);
+        setPropertiesList(nextProperty ? [nextProperty] : []);
+      } catch (error) {
+        setProperty(null);
+        setPropertiesList([]);
+        setErrorMessage(errorText(error, 'The linked property could not be loaded.'));
+      }
     } catch (error) {
       console.error('Failed to load inspection job detail:', error);
+      setJob(null);
+      setProperty(null);
+      setPropertiesList([]);
       setErrorMessage(errorText(error, 'Inspection job details could not be loaded.'));
+      return;
     } finally {
+      // The primary job and property determine whether the console can render.
+      // Audit history and workflow-gate metadata are secondary and must never
+      // leave a fully rendered job hidden behind a permanent global spinner.
       setLoading(false);
+    }
+
+    const [eventsResult, workflowResult] = await Promise.allSettled([
+      listAuditEventsForEntity('inspection_job', jobId),
+      getInspectionJobWorkflow(jobId),
+    ]);
+    if (eventsResult.status === 'fulfilled') setAuditEvents(eventsResult.value);
+    else console.warn('Inspection job audit history could not be loaded:', eventsResult.reason);
+    if (workflowResult.status === 'fulfilled') setWorkflowInfo(workflowResult.value ?? null);
+    else {
+      console.warn('Inspection job workflow metadata could not be loaded:', workflowResult.reason);
+      setErrorMessage((current) => current || errorText(workflowResult.reason, 'Workflow actions could not be loaded. Refresh to retry.'));
     }
   };
 
