@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { CommunicationChannel, CommunicationMessage, CommunicationThread } from '@pcr/domain';
+import type { CommunicationMessage, CommunicationThread } from '@pcr/domain';
 import { createCommunicationThread, listCommunicationMessages, listCommunicationThreads, sendThreadMessage } from '../../services/platform/enhancementService';
 
 const CommunicationsPage: React.FC = () => {
