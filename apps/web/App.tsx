@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AuthRedirect from './components/auth/AuthRedirect';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -8,51 +8,54 @@ import NotFound from './components/layout/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import LoginRoutePage from './pages/LoginRoutePage';
-import AdminHomePage from './pages/admin/AdminHomePage';
-import AnalyticsPage from './pages/admin/AnalyticsPage';
-import ClientBulkImportPage from './pages/admin/ClientBulkImportPage';
-import ClientOnboardingPage from './pages/admin/ClientOnboardingPage';
-import ClientWorkspacePage from './pages/admin/ClientWorkspacePage';
-import ClientsPage from './pages/admin/ClientsPage';
-import InspectionJobConsolePage from './pages/admin/InspectionJobConsolePage';
-import InspectionJobsPage from './pages/admin/InspectionJobsPage';
-import InspectionOperationsConfigurationPage from './pages/admin/InspectionOperationsConfigurationPage';
-import InspectionPlannerPage from './pages/admin/InspectionPlannerPage';
-import PropertiesPage from './pages/admin/PropertiesPage';
-import PropertyBulkImportPage from './pages/admin/PropertyBulkImportPage';
-import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
-import PropertyDetailWithHistoryPage from './pages/admin/PropertyDetailWithHistoryPage';
-import ReportDetailPage from './pages/admin/ReportDetailPage';
-import ReportsPage from './pages/admin/ReportsPage';
-import SettingsPage from './pages/admin/SettingsPage';
-import TemplatesPage from './pages/admin/TemplatesPage';
-import UsersPage from './pages/admin/UsersPage';
-import UserWorkspacePage from './pages/admin/UserWorkspacePage';
-import MaintenancePage from './pages/admin/MaintenancePage';
-import MaintenanceConfigurationPage from './pages/admin/MaintenanceConfigurationPage';
-import MaintenanceItemConsolePage from './pages/admin/MaintenanceItemConsolePage';
-import TenantFollowUpPage from './pages/admin/TenantFollowUpPage';
-import TenantsPage from './pages/admin/TenantsPage';
-import TenantWorkspacePage from './pages/admin/TenantWorkspacePage';
-import TenantPortalAccessPage from './pages/admin/TenantPortalAccessPage';
-import DocumentOperationsPage from './pages/admin/DocumentOperationsPage';
-import CommunicationsPage from './pages/admin/CommunicationsPage';
-import CompliancePage from './pages/admin/CompliancePage';
-import KeyRegisterPage from './pages/admin/KeyRegisterPage';
-import IntegrationConnectionsPage from './pages/admin/IntegrationConnectionsPage';
-import ExternalWorkRequestPage from './pages/external/ExternalWorkRequestPage';
-import ExternalTenantInstructionPage from './pages/external/ExternalTenantInstructionPage';
-import ExternalClientApprovalPage from './pages/external/ExternalClientApprovalPage';
-import ExternalMaintenanceQuotePage from './pages/external/ExternalMaintenanceQuotePage';
-import TenantPortalPage from './pages/external/TenantPortalPage';
-import ClientPortalPage from './pages/external/ClientPortalPage';
-import RemoteInspectionPage from './pages/external/RemoteInspectionPage';
-import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPage';
-import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
-import ReportPreviewPage from './pages/reports/ReportPreviewPage';
+
+const AdminHomePage = lazy(() => import('./pages/admin/AdminHomePage'));
+const AnalyticsPage = lazy(() => import('./pages/admin/AnalyticsPage'));
+const ClientBulkImportPage = lazy(() => import('./pages/admin/ClientBulkImportPage'));
+const ClientOnboardingPage = lazy(() => import('./pages/admin/ClientOnboardingPage'));
+const ClientWorkspacePage = lazy(() => import('./pages/admin/ClientWorkspacePage'));
+const ClientsPage = lazy(() => import('./pages/admin/ClientsPage'));
+const InspectionJobConsolePage = lazy(() => import('./pages/admin/InspectionJobConsolePage'));
+const InspectionJobsPage = lazy(() => import('./pages/admin/InspectionJobsPage'));
+const InspectionOperationsConfigurationPage = lazy(() => import('./pages/admin/InspectionOperationsConfigurationPage'));
+const InspectionPlannerPage = lazy(() => import('./pages/admin/InspectionPlannerPage'));
+const PropertiesPage = lazy(() => import('./pages/admin/PropertiesPage'));
+const PropertyBulkImportPage = lazy(() => import('./pages/admin/PropertyBulkImportPage'));
+const PropertyOnboardingPage = lazy(() => import('./pages/admin/PropertyOnboardingPage'));
+const PropertyDetailWithHistoryPage = lazy(() => import('./pages/admin/PropertyDetailWithHistoryPage'));
+const ReportDetailPage = lazy(() => import('./pages/admin/ReportDetailPage'));
+const ReportsPage = lazy(() => import('./pages/admin/ReportsPage'));
+const SettingsPage = lazy(() => import('./pages/admin/SettingsPage'));
+const TemplatesPage = lazy(() => import('./pages/admin/TemplatesPage'));
+const UsersPage = lazy(() => import('./pages/admin/UsersPage'));
+const UserWorkspacePage = lazy(() => import('./pages/admin/UserWorkspacePage'));
+const MaintenancePage = lazy(() => import('./pages/admin/MaintenancePage'));
+const MaintenanceConfigurationPage = lazy(() => import('./pages/admin/MaintenanceConfigurationPage'));
+const MaintenanceItemConsolePage = lazy(() => import('./pages/admin/MaintenanceItemConsolePage'));
+const TenantFollowUpPage = lazy(() => import('./pages/admin/TenantFollowUpPage'));
+const TenantsPage = lazy(() => import('./pages/admin/TenantsPage'));
+const TenantWorkspacePage = lazy(() => import('./pages/admin/TenantWorkspacePage'));
+const TenantPortalAccessPage = lazy(() => import('./pages/admin/TenantPortalAccessPage'));
+const DocumentOperationsPage = lazy(() => import('./pages/admin/DocumentOperationsPage'));
+const CommunicationsPage = lazy(() => import('./pages/admin/CommunicationsPage'));
+const CompliancePage = lazy(() => import('./pages/admin/CompliancePage'));
+const KeyRegisterPage = lazy(() => import('./pages/admin/KeyRegisterPage'));
+const IntegrationConnectionsPage = lazy(() => import('./pages/admin/IntegrationConnectionsPage'));
+const ExternalWorkRequestPage = lazy(() => import('./pages/external/ExternalWorkRequestPage'));
+const ExternalTenantInstructionPage = lazy(() => import('./pages/external/ExternalTenantInstructionPage'));
+const ExternalClientApprovalPage = lazy(() => import('./pages/external/ExternalClientApprovalPage'));
+const ExternalMaintenanceQuotePage = lazy(() => import('./pages/external/ExternalMaintenanceQuotePage'));
+const TenantPortalPage = lazy(() => import('./pages/external/TenantPortalPage'));
+const ClientPortalPage = lazy(() => import('./pages/external/ClientPortalPage'));
+const RemoteInspectionPage = lazy(() => import('./pages/external/RemoteInspectionPage'));
+const ReportRecipientPortalPage = lazy(() => import('./pages/external/ReportRecipientPortalPage'));
+const ReportEditWithLegacyBaselinePage = lazy(() => import('./pages/reports/ReportEditWithLegacyBaselinePage'));
+const ReportPreviewPage = lazy(() => import('./pages/reports/ReportPreviewPage'));
+
+const RouteLoading = () => <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm text-gray-500">Loading workspace…</div>;
 
 const App: React.FC = () => (
-  <AuthProvider><BrowserRouter><Routes>
+  <AuthProvider><BrowserRouter><Suspense fallback={<RouteLoading />}><Routes>
     <Route path="/" element={<AuthRedirect />} /><Route path="/auth/login" element={<LoginRoutePage />} />
     <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} /><Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} /><Route path="/tenant-portal/:grantToken" element={<TenantPortalPage />} /><Route path="/tenant-portal/:grantToken/inspection/:assignmentId" element={<RemoteInspectionPage />} /><Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} /><Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} /><Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
     <Route element={<ProtectedRoute />}><Route path="/client-portal/:clientAccountId" element={<ClientPortalPage />} /></Route>
@@ -71,6 +74,6 @@ const App: React.FC = () => (
       <Route element={<RoleProtectedRoute section="templates" />}><Route path="admin/templates" element={<TemplatesPage />} /></Route>
       <Route element={<RoleProtectedRoute section="settings" />}><Route path="admin/settings" element={<SettingsPage />} /><Route path="admin/settings/integrations" element={<IntegrationConnectionsPage />} /></Route>
     </Route></Route><Route path="*" element={<NotFound />} />
-  </Routes></BrowserRouter></AuthProvider>
+  </Routes></Suspense></BrowserRouter></AuthProvider>
 );
 export default App;
