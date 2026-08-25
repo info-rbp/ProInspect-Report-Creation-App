@@ -67,16 +67,21 @@ Set `FIRESTORE_DATABASE_ID` on the API, PDF, notification, dashboard, document a
 Terraform now declares the named database instead of `(default)`. Before the first apply against an existing project, import the existing database into the module address and inspect the plan; never allow Terraform to create, replace or delete a production database:
 
 ```bash
-cd infrastructure/terraform/environments/production
-terraform init -backend-config='<approved backend configuration>'
-terraform import \
+TERRAFORM_ROOT=infrastructure/terraform/environments/production
+TERRAFORM_AUDIT_DIR="$(mktemp -d /tmp/proinspect-terraform-audit.XXXXXX)"
+chmod 700 "$TERRAFORM_AUDIT_DIR"
+terraform -chdir="$TERRAFORM_ROOT" init \
+  -backend-config='<approved backend configuration>'
+terraform -chdir="$TERRAFORM_ROOT" import \
   'module.environment.google_firestore_database.default' \
   'projects/business-plan-applicatio-17047/databases/ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60'
-terraform plan -out=production.tfplan
-terraform show production.tfplan
+terraform -chdir="$TERRAFORM_ROOT" plan \
+  -out="$TERRAFORM_AUDIT_DIR/production.tfplan"
+terraform -chdir="$TERRAFORM_ROOT" show \
+  "$TERRAFORM_AUDIT_DIR/production.tfplan"
 ```
 
-Stop if the plan proposes replacing or deleting Firestore, a service account, a secret, a bucket or a production Cloud Run service.
+Treat the plan as sensitive and move required evidence to the owner's approved restricted store before removing the temporary directory. Stop if the plan proposes replacing or deleting Firestore, a service account, a secret, a bucket or a production Cloud Run service.
 
 ## Dedicated API service account and IAM
 

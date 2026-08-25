@@ -38,11 +38,17 @@ Terraform cannot use a state bucket before that bucket exists, because time rema
 2. Run the bootstrap root with local state:
 
    ```bash
-   cd infrastructure/terraform/bootstrap
-   terraform init
-   terraform plan -out bootstrap.tfplan
-   terraform apply bootstrap.tfplan
+   TERRAFORM_BOOTSTRAP_ROOT=infrastructure/terraform/bootstrap
+   TERRAFORM_AUDIT_DIR="$(mktemp -d /tmp/proinspect-terraform-bootstrap.XXXXXX)"
+   chmod 700 "$TERRAFORM_AUDIT_DIR"
+   terraform -chdir="$TERRAFORM_BOOTSTRAP_ROOT" init
+   terraform -chdir="$TERRAFORM_BOOTSTRAP_ROOT" plan \
+     -out="$TERRAFORM_AUDIT_DIR/bootstrap.tfplan"
+   terraform -chdir="$TERRAFORM_BOOTSTRAP_ROOT" apply \
+     "$TERRAFORM_AUDIT_DIR/bootstrap.tfplan"
    ```
+
+   Treat the plan and local bootstrap state as sensitive. Move required evidence and state to the owner's approved restricted store, then remove temporary copies; never add either artifact to the repository.
 
 3. Copy each environment example file to `terraform.tfvars` and replace its backend bucket placeholder with the corresponding bootstrap output.
 4. Initialise and apply development, then staging.
