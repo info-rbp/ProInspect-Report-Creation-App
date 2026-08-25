@@ -140,7 +140,11 @@ const PropertyOnboardingPage: React.FC = () => {
   };
 
   const addAsset = () => {
-    if (!newAssetName.trim()) return;
+    if (!newAssetName.trim()) {
+      setError('Enter an asset or appliance name before adding it.');
+      return;
+    }
+    setError(null);
     setAssets((items) => [...items, {
       id: `asset-${generateId()}`,
       name: newAssetName.trim(),
@@ -151,7 +155,11 @@ const PropertyOnboardingPage: React.FC = () => {
   };
 
   const addAccessDevice = () => {
-    if (!newAccessName.trim()) return;
+    if (!newAccessName.trim()) {
+      setError('Enter a key or access-device name before adding it.');
+      return;
+    }
+    setError(null);
     setAccessDevices((items) => [...items, {
       id: `access-${generateId()}`,
       type: newAccessType,
@@ -163,7 +171,11 @@ const PropertyOnboardingPage: React.FC = () => {
   };
 
   const addAlert = () => {
-    if (!newAlert.trim()) return;
+    if (!newAlert.trim()) {
+      setError('Enter an alert message before adding it.');
+      return;
+    }
+    setError(null);
     setAlerts((items) => [...items, {
       id: `alert-${generateId()}`,
       type: 'general',
@@ -177,6 +189,7 @@ const PropertyOnboardingPage: React.FC = () => {
 
   const handleDocumentFiles = (files: FileList | null) => {
     if (!files) return;
+    setError(null);
     setPendingDocuments((current) => [
       ...current,
       ...Array.from(files).map((file) => ({
@@ -199,6 +212,7 @@ const PropertyOnboardingPage: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
+      if (!address.trim()) throw new Error('Property address is required.');
       const now = new Date().toISOString();
       const draftProperty: PropertyRecord = {
         id: 'onboarding-draft',
@@ -329,7 +343,7 @@ const PropertyOnboardingPage: React.FC = () => {
       {step === 0 && <div className={card}>
         <h2 className="font-bold">1. Property Identity</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="text-xs font-semibold">Street / Unit Address<input value={address} onChange={(e) => setAddress(e.target.value)} className={field} placeholder="46 Maamba Road" /></label>
+          <label className="text-xs font-semibold">Street / Unit Address<input value={address} onChange={(e) => { setAddress(e.target.value); setError(null); }} className={field} placeholder="46 Maamba Road" /></label>
           <label className="text-xs font-semibold">Suburb<input value={suburb} onChange={(e) => setSuburb(e.target.value)} className={field} /></label>
           <label className="text-xs font-semibold">State<input value={state} onChange={(e) => setState(e.target.value)} className={field} /></label>
           <label className="text-xs font-semibold">Postcode<input value={postcode} onChange={(e) => setPostcode(e.target.value)} className={field} /></label>
@@ -379,13 +393,13 @@ const PropertyOnboardingPage: React.FC = () => {
       </div>}
 
       {step === 4 && <div className="grid gap-5 lg:grid-cols-2">
-        <div className={card}><h2 className="font-bold">5A. Assets & Appliances</h2><div className="mt-4 flex gap-2"><input className={field} value={newAssetName} onChange={(e) => setNewAssetName(e.target.value)} placeholder="e.g. Kitchen Dishwasher" /><select className={field} value={newAssetCategory} onChange={(e) => setNewAssetCategory(e.target.value as PropertyAssetCategory)}><option value="appliance">Appliance</option><option value="hvac">HVAC</option><option value="hot_water">Hot Water</option><option value="solar">Solar</option><option value="security">Security</option><option value="fire_safety">Fire Safety</option><option value="commercial_equipment">Commercial Equipment</option><option value="other">Other</option></select><button onClick={addAsset} className="rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white">Add</button></div><div className="mt-3 space-y-2">{assets.map((item) => <div key={item.id} className="rounded-lg bg-slate-50 p-3 text-xs"><b>{item.name}</b> · {item.category.replaceAll('_', ' ')}</div>)}</div></div>
-        <div className={card}><h2 className="font-bold">5B. Keys & Access Devices</h2><div className="mt-4 flex gap-2"><input className={field} value={newAccessName} onChange={(e) => setNewAccessName(e.target.value)} placeholder="e.g. Front Door Key" /><select className={field} value={newAccessType} onChange={(e) => setNewAccessType(e.target.value as AccessDeviceType)}><option value="key">Key</option><option value="garage_remote">Garage Remote</option><option value="security_fob">Security Fob</option><option value="access_card">Access Card</option><option value="gate_remote">Gate Remote</option><option value="other">Other</option></select><button onClick={addAccessDevice} className="rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white">Add</button></div><div className="mt-3 space-y-2">{accessDevices.map((item) => <div key={item.id} className="rounded-lg bg-slate-50 p-3 text-xs"><b>{item.name}</b> · {item.type.replaceAll('_', ' ')}</div>)}</div></div>
+        <div className={card}><h2 className="font-bold">5A. Assets & Appliances</h2><div className="mt-4 flex gap-2"><input className={field} value={newAssetName} onChange={(e) => { setNewAssetName(e.target.value); if (error) setError(null); }} placeholder="e.g. Kitchen Dishwasher" /><select className={field} value={newAssetCategory} onChange={(e) => setNewAssetCategory(e.target.value as PropertyAssetCategory)}><option value="appliance">Appliance</option><option value="hvac">HVAC</option><option value="hot_water">Hot Water</option><option value="solar">Solar</option><option value="security">Security</option><option value="fire_safety">Fire Safety</option><option value="commercial_equipment">Commercial Equipment</option><option value="other">Other</option></select><button type="button" onClick={addAsset} className="rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white">Add</button></div><div className="mt-3 space-y-2">{assets.map((item) => <div key={item.id} className="rounded-lg bg-slate-50 p-3 text-xs"><b>{item.name}</b> · {item.category.replaceAll('_', ' ')}</div>)}</div></div>
+        <div className={card}><h2 className="font-bold">5B. Keys & Access Devices</h2><div className="mt-4 flex gap-2"><input className={field} value={newAccessName} onChange={(e) => { setNewAccessName(e.target.value); if (error) setError(null); }} placeholder="e.g. Front Door Key" /><select className={field} value={newAccessType} onChange={(e) => setNewAccessType(e.target.value as AccessDeviceType)}><option value="key">Key</option><option value="garage_remote">Garage Remote</option><option value="security_fob">Security Fob</option><option value="access_card">Access Card</option><option value="gate_remote">Gate Remote</option><option value="other">Other</option></select><button type="button" onClick={addAccessDevice} className="rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white">Add</button></div><div className="mt-3 space-y-2">{accessDevices.map((item) => <div key={item.id} className="rounded-lg bg-slate-50 p-3 text-xs"><b>{item.name}</b> · {item.type.replaceAll('_', ' ')}</div>)}</div></div>
       </div>}
 
       {step === 5 && <div className="grid gap-5 lg:grid-cols-2">
         <div className={card}><h2 className="font-bold">6A. Owner & Current Tenancy</h2><div className="mt-4 grid gap-3"><input className={field} value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Owner / landlord name" /><input className={field} type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="Owner email" /><input className={field} value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Current tenant name" /><input className={field} type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} placeholder="Tenant email" /><div className="grid grid-cols-2 gap-2"><input className={field} type="date" value={leaseStart} onChange={(e) => setLeaseStart(e.target.value)} /><input className={field} type="date" value={leaseEnd} onChange={(e) => setLeaseEnd(e.target.value)} /></div></div></div>
-        <div className={card}><h2 className="font-bold">6B. Persistent Property Alerts</h2><div className="mt-4 flex gap-2"><input className={field} value={newAlert} onChange={(e) => setNewAlert(e.target.value)} placeholder="e.g. Strata access requires concierge" /><button onClick={addAlert} className="rounded-xl bg-amber-600 px-4 text-xs font-semibold text-white">Add</button></div><div className="mt-3 space-y-2">{alerts.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">⚠ {item.message}</div>)}</div></div>
+        <div className={card}><h2 className="font-bold">6B. Persistent Property Alerts</h2><div className="mt-4 flex gap-2"><input className={field} value={newAlert} onChange={(e) => { setNewAlert(e.target.value); if (error) setError(null); }} placeholder="e.g. Strata access requires concierge" /><button type="button" onClick={addAlert} className="rounded-xl bg-amber-600 px-4 text-xs font-semibold text-white">Add</button></div><div className="mt-3 space-y-2">{alerts.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">⚠ {item.message}</div>)}</div></div>
       </div>}
 
       {step === 6 && <div className={card}>
