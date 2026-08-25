@@ -28,7 +28,7 @@ Use these build settings:
 
 `SKIP_DEPENDENCY_INSTALL=1` is recommended because Workers Builds may otherwise perform an automatic dependency install before the repository-controlled install. The build verifier treats a missing skip flag as a warning rather than a deployment blocker. This keeps preview builds functional even when Cloudflare applies trigger-specific build variables inconsistently.
 
-If a previous Cloudflare build was created from an older branch containing `package-lock.json` or `packages/migrations`, clear the Cloudflare build cache after switching the production branch. The current source tree does not contain `packages/migrations`.
+If a previous Cloudflare build was created from an older branch or referenced the removed `packages/migrations` workspace, clear the Cloudflare build cache after switching the production branch.
 
 ## Firebase web configuration
 
@@ -63,7 +63,7 @@ The six core Firebase build variables are no longer required for Cloudflare to c
 
 The Cloudflare build forces `VITE_API_BASE_URL=/` so browser API calls remain same-origin and are proxied by the Worker.
 
-The repository pins npm 10.9.2 and Wrangler 4.120.0. Do not replace the build command with `npm ci` unless and until a newly generated, reviewed `package-lock.json` for the current complete workspace graph is committed.
+The repository pins npm 10.9.2 and Wrangler 4.120.0. `package-lock.json` is committed and the controlled build uses `npm ci`; manifest changes must update the lockfile in the same review.
 
 ## Cloudflare runtime configuration
 
