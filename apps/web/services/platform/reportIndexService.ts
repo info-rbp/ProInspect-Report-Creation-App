@@ -11,7 +11,7 @@ function cloudMode(): boolean {
   return Boolean(isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim());
 }
 
-function normaliseReportIndex(report: ReportIndex): ReportIndex {
+export function normaliseReportIndex(report: ReportIndex): ReportIndex {
   const record = report as ReportIndex & { id?: string; reportId?: string };
   const reportId = record.reportId?.trim() || record.id?.trim();
   if (!reportId) throw new Error('The report register returned a record without a stable report identifier.');
