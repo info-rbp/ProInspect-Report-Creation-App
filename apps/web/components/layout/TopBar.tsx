@@ -2,33 +2,46 @@ import React from 'react';
 import { LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const TopBar: React.FC = () => {
+interface TopBarProps {
+  navigationOpen: boolean;
+  onOpenNavigation: () => void;
+}
+
+const TopBar: React.FC<TopBarProps> = ({ navigationOpen, onOpenNavigation }) => {
   const { logout, userProfile } = useAuth();
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-gray-200 bg-white/95 px-4 backdrop-blur lg:px-6">
-      <div className="flex items-center gap-3">
-        <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden" type="button" aria-label="Open navigation">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          className="shrink-0 rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
+          type="button"
+          aria-label="Open navigation"
+          aria-controls="primary-navigation"
+          aria-expanded={navigationOpen}
+          onClick={onOpenNavigation}
+        >
           <Menu size={20} />
         </button>
-        <div>
-          <div className="text-sm font-semibold text-gray-950">Platform workspace</div>
-          <div className="text-xs text-gray-500">Properties, inspection jobs and reports</div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-gray-950">Platform workspace</div>
+          <div className="hidden truncate text-xs text-gray-500 sm:block">Properties, inspection jobs and reports</div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="hidden text-right sm:block">
-          <div className="text-sm font-semibold text-gray-950">{userProfile?.displayName || userProfile?.email || 'Operator'}</div>
+          <div className="max-w-48 truncate text-sm font-semibold text-gray-950">{userProfile?.displayName || userProfile?.email || 'Operator'}</div>
           <div className="text-xs capitalize text-gray-500">{(userProfile?.role || 'inspector').replaceAll('_', ' ')}</div>
         </div>
         <button
           type="button"
           onClick={() => logout()}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          aria-label="Logout"
         >
           <LogOut size={16} />
-          Logout
+          <span className="hidden sm:inline">Logout</span>
         </button>
       </div>
     </header>
