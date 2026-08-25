@@ -71,6 +71,7 @@ locals {
   services = toset([
     "aiplatform.googleapis.com",
     "artifactregistry.googleapis.com",
+    "billingbudgets.googleapis.com",
     "cloudbilling.googleapis.com",
     "cloudbuild.googleapis.com",
     "clouddeploy.googleapis.com",
