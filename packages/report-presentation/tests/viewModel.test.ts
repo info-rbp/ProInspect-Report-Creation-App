@@ -17,4 +17,44 @@ describe('report presentation view model', () => {
     expect(view.maintenanceFindings).toHaveLength(1);
     expect(view.areas[0]?.components[0]?.photos.map((photo) => photo.photoId)).toEqual(['photo-1', 'photo-2']);
   });
+
+  it('does not turn missing assessment fields into confirmed exceptions', () => {
+    const view = buildReportPresentationViewModel({
+      reportId: 'report-unassessed',
+      reportType: 'Property Condition Report',
+      propertyAddress: '2 Example Street',
+      areas: [{
+        id: 'kitchen',
+        name: 'Kitchen',
+        components: Array.from({ length: 12 }, (_, index) => ({ id: `component-${index + 1}`, component: `Component ${index + 1}` })),
+      }],
+    });
+
+    expect(view.summary.componentCount).toBe(12);
+    expect(view.summary.exceptionCount).toBe(0);
+    expect(view.summary.conditionExceptionCount).toBe(0);
+    expect(view.summary.cleaningExceptionCount).toBe(0);
+    expect(view.summary.operationalExceptionCount).toBe(0);
+    expect(view.summary.unableToConfirmCount).toBe(0);
+    expect(view.areas[0]?.components[0]).toMatchObject({
+      condition: 'unassessed',
+      cleanliness: 'unassessed',
+      working: 'unassessed',
+      test: 'unassessed',
+      exception: false,
+    });
+  });
+
+  it('still counts an explicit unable-to-confirm assessment as an exception', () => {
+    const view = buildReportPresentationViewModel({
+      reportId: 'report-unable',
+      reportType: 'Routine Inspection',
+      propertyAddress: '3 Example Street',
+      areas: [{ id: 'external', name: 'External', components: [{ id: 'roof', component: 'Roof', conditionCategory: 'unable_to_confirm' }] }],
+    });
+
+    expect(view.summary.exceptionCount).toBe(1);
+    expect(view.summary.conditionExceptionCount).toBe(1);
+    expect(view.summary.unableToConfirmCount).toBe(1);
+  });
 });
