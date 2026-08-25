@@ -7,6 +7,7 @@ import { listPeople } from '../../services/platform/peopleService';
 import { listProperties } from '../../services/platform/propertyService';
 
 const TERMINAL_JOB_STATUSES = new Set(['finalised', 'archived', 'cancelled']);
+const DEFAULT_INSPECTION_DURATION_MINUTES = 60;
 
 function propertyLabel(property: PropertyRecord | undefined, fallback: string): string {
   if (!property) return fallback;
@@ -16,6 +17,13 @@ function propertyLabel(property: PropertyRecord | undefined, fallback: string): 
 function personLabel(person: PeopleDirectoryEntry | undefined, fallback: string): string {
   if (!person) return fallback || 'Inspector not assigned';
   return person.displayName || person.identity?.displayName || person.email || fallback;
+}
+
+function inferredScheduledEnd(startAt: string | undefined): string | undefined {
+  if (!startAt) return undefined;
+  const start = Date.parse(startAt);
+  if (!Number.isFinite(start)) return undefined;
+  return new Date(start + DEFAULT_INSPECTION_DURATION_MINUTES * 60_000).toISOString();
 }
 
 const InspectionPlannerPage: React.FC = () => {
@@ -98,14 +106,15 @@ const InspectionPlannerPage: React.FC = () => {
     const selectedJobs = eligibleJobs.filter((job) => selectedJobIds.includes(job.id));
     const stops = selectedJobs.map((job) => {
       const property = propertyById.get(job.propertyId);
+      const scheduledEndAt = inferredScheduledEnd(job.scheduledAt);
       return {
         id: `route-stop-${job.id}`,
         inspectionJobId: job.id,
         propertyId: job.propertyId,
         address: propertyLabel(property, job.propertyId),
-        durationMinutes: Math.max(1, job.durationMinutes || 60),
+        durationMinutes: DEFAULT_INSPECTION_DURATION_MINUTES,
         ...(job.scheduledAt ? { scheduledStartAt: job.scheduledAt } : {}),
-        ...(job.scheduledEndAt ? { scheduledEndAt: job.scheduledEndAt } : {}),
+        ...(scheduledEndAt ? { scheduledEndAt } : {}),
         ...(property?.accessDetails?.accessNotes ? { accessNotes: property.accessDetails.accessNotes } : {}),
         ...(property?.accessDetails?.keyNumbers ? { keyRequired: true } : {}),
       };
