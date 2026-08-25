@@ -334,6 +334,7 @@ resource "google_identity_platform_config" "this" {
       password_required = true
     }
     anonymous { enabled = false }
+    phone_number { enabled = false }
   }
 
   client {
