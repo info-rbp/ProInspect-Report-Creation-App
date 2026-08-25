@@ -5,6 +5,8 @@ import { apiBaseUrl } from './runtimeConfig';
 interface ApiEnvelope<T> { data: T; meta?: Record<string, unknown>; }
 interface ApiErrorEnvelope { error?: { code?: string; message?: string; status?: number; correlationId?: string; details?: Record<string, unknown>; }; }
 
+const API_TIMEOUT_MS = 15_000;
+
 function newIdempotencyKey(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -89,7 +91,27 @@ export async function apiRequest<T>(agencyId: string | undefined, path: string, 
   if (method !== 'GET') headers['idempotency-key'] = init.idempotencyKey ?? newIdempotencyKey();
 
   const execute = async (body: unknown): Promise<{ response: Response; payload: ApiEnvelope<T> & ApiErrorEnvelope }> => {
-    const response = await fetch(`${baseUrl}${path}`, { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers,
+        signal: controller.signal,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        const timeoutError = new Error(`The request to ${path} timed out after ${Math.round(API_TIMEOUT_MS / 1000)} seconds. Retry the operation.`);
+        Object.assign(timeoutError, { code: 'REQUEST_TIMEOUT', status: 408 });
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
+
     const rawText = await response.text();
     let payload: (ApiEnvelope<T> & ApiErrorEnvelope) | undefined;
     if (rawText.trim()) {
