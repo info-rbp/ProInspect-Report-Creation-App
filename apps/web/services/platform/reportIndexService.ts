@@ -11,10 +11,22 @@ function cloudMode(): boolean {
   return Boolean(isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim());
 }
 
+/**
+ * The authoritative /api/v1/reports resource returns report aggregate metadata
+ * whose stable identifier is `id`. Legacy/local report-index records also expose
+ * that identifier as `reportId`. Normalise the two shapes at the service boundary
+ * so register links can never accidentally render `/reports/undefined`.
+ */
+export function normaliseReportIndex(record: ReportIndex): ReportIndex {
+  const stableId = String(record.reportId || record.id || '').trim();
+  if (!stableId) throw new Error('A report register record is missing its stable report ID.');
+  return { ...record, id: record.id || stableId, reportId: stableId };
+}
+
 export const upsertReportIndexFromReport = async (report: ReportData): Promise<ReportIndex> => {
   if (cloudMode()) {
     const authoritative = await apiRequest<ReportIndex>(report.agencyId, `/api/v1/reports/${encodeURIComponent(report.id)}`);
-    return authoritative;
+    return normaliseReportIndex(authoritative);
   }
 
   const timestamp = new Date().toISOString();
@@ -72,18 +84,19 @@ export const createReportForInspectionJob = async (
 export const getReportIndex = async (reportId: string): Promise<ReportIndex | undefined> => {
   if (cloudMode()) {
     try {
-      return await apiRequest<ReportIndex>(undefined, `/api/v1/reports/${encodeURIComponent(reportId)}`);
+      return normaliseReportIndex(await apiRequest<ReportIndex>(undefined, `/api/v1/reports/${encodeURIComponent(reportId)}`));
     } catch (error) {
       if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
       throw error;
     }
   }
-  return localGet<ReportIndex>('reportIndexes', reportId);
+  const local = await localGet<ReportIndex>('reportIndexes', reportId);
+  return local ? normaliseReportIndex(local) : undefined;
 };
 
 export const listReportIndexes = async (): Promise<ReportIndex[]> => {
-  if (cloudMode()) return apiRequest<ReportIndex[]>(undefined, '/api/v1/reports');
-  return localList<ReportIndex>('reportIndexes');
+  if (cloudMode()) return (await apiRequest<ReportIndex[]>(undefined, '/api/v1/reports')).map(normaliseReportIndex);
+  return (await localList<ReportIndex>('reportIndexes')).map(normaliseReportIndex);
 };
 
 export const updateReportLifecycleStatus = async (
@@ -99,7 +112,7 @@ export const updateReportLifecycleStatus = async (
       lifecycleStatus,
       (existing as ReportIndex & { version?: number }).version ?? 1,
     );
-    return transitioned as unknown as ReportIndex;
+    return normaliseReportIndex(transitioned as unknown as ReportIndex);
   }
   const updatedReportIndex: ReportIndex = { ...existing, lifecycleStatus, updatedAt: new Date().toISOString() };
   await localPut('reportIndexes', updatedReportIndex);
