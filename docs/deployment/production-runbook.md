@@ -140,22 +140,35 @@ Confirm health, signed uploads, report/archive operations, notification callback
 For the known existing production account and edge secret, first back up remote state, then reconcile their addresses before applying:
 
 ```bash
-cd infrastructure/terraform/environments/production
-terraform state pull > "terraform-state-before-proinspect-api-$(date +%Y%m%d%H%M%S).json"
-terraform state show 'module.environment.google_service_account.runtime["api"]'
-terraform state show 'module.environment.google_secret_manager_secret.runtime["cloudflare-origin-secret"]' || true
+TERRAFORM_ROOT=infrastructure/terraform/environments/production
+TERRAFORM_AUDIT_DIR="$(mktemp -d /tmp/proinspect-terraform-audit.XXXXXX)"
+chmod 700 "$TERRAFORM_AUDIT_DIR"
+terraform -chdir="$TERRAFORM_ROOT" state pull \
+  > "$TERRAFORM_AUDIT_DIR/state-before-proinspect-api.json"
+chmod 600 "$TERRAFORM_AUDIT_DIR/state-before-proinspect-api.json"
+terraform -chdir="$TERRAFORM_ROOT" state show \
+  'module.environment.google_service_account.runtime["api"]'
+terraform -chdir="$TERRAFORM_ROOT" state show \
+  'module.environment.google_secret_manager_secret.runtime["cloudflare-origin-secret"]' || true
 ```
+
+Treat the audit directory as sensitive, move its required evidence to the owner's approved restricted store, and securely remove the temporary copy after the change window. Never place state or plan files in the repository.
 
 If the API address still records `api@...`, remove only that state address (this does not delete the cloud account) and import the existing dedicated account. If the edge secret is absent from state, import it too:
 
 ```bash
-terraform state rm 'module.environment.google_service_account.runtime["api"]'
-terraform import 'module.environment.google_service_account.runtime["api"]' \
+terraform -chdir="$TERRAFORM_ROOT" state rm \
+  'module.environment.google_service_account.runtime["api"]'
+terraform -chdir="$TERRAFORM_ROOT" import \
+  'module.environment.google_service_account.runtime["api"]' \
   'projects/business-plan-applicatio-17047/serviceAccounts/proinspect-api@business-plan-applicatio-17047.iam.gserviceaccount.com'
-terraform import 'module.environment.google_secret_manager_secret.runtime["cloudflare-origin-secret"]' \
+terraform -chdir="$TERRAFORM_ROOT" import \
+  'module.environment.google_secret_manager_secret.runtime["cloudflare-origin-secret"]' \
   'projects/business-plan-applicatio-17047/secrets/cloudflare-origin-secret'
-terraform plan -out=production.tfplan
-terraform show production.tfplan
+terraform -chdir="$TERRAFORM_ROOT" plan \
+  -out="$TERRAFORM_AUDIT_DIR/production.tfplan"
+terraform -chdir="$TERRAFORM_ROOT" show \
+  "$TERRAFORM_AUDIT_DIR/production.tfplan"
 ```
 
 Do not run `terraform state rm` when the address already records `proinspect-api`, and do not apply a plan that deletes the former account or changes secret versions as a side effect. The old broad runtime identity is retired separately only after the dedicated identity passes production smoke checks.
