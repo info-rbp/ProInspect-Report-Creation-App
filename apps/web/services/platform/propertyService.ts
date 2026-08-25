@@ -40,7 +40,7 @@ export function normalisePropertyRecord(property: PropertyRecord): PropertyRecor
   };
 }
 
-function cloudCreateCommand(property: VersionedProperty): Record<string, unknown> {
+export function propertyCreateCommand(property: VersionedProperty): Record<string, unknown> {
   const command: Record<string, unknown> = { ...property };
   // The server owns the canonical property identifier. A wizard may use a local
   // draft identifier while composing layouts, but it must never become the
@@ -63,86 +63,31 @@ function cloudUpdateCommand(updates: Partial<PropertyRecord>): Record<string, un
 
 const SAMPLE_PROPERTIES: PropertyRecord[] = [
   normalisePropertyRecord({
-    id: 'prop-sample-01',
-    agencyId: 'proinspect-agency',
-    address: '104 Ocean Drive',
-    suburb: 'Scarborough',
-    state: 'WA',
-    postcode: '6019',
-    propertyType: 'house',
-    propertyUse: 'residential',
-    physicalPropertyType: 'house',
-    ownershipStructure: 'freehold',
-    bedrooms: 4,
-    bathrooms: 2,
-    parking: 2,
-    livingAreas: 2,
-    status: 'active',
-    clientIds: ['client-landlord-01'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    id: 'prop-sample-01', agencyId: 'proinspect-agency', address: '104 Ocean Drive', suburb: 'Scarborough', state: 'WA', postcode: '6019', propertyType: 'house', propertyUse: 'residential', physicalPropertyType: 'house', ownershipStructure: 'freehold', bedrooms: 4, bathrooms: 2, parking: 2, livingAreas: 2, status: 'active', clientIds: ['client-landlord-01'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   } as PropertyRecord),
   normalisePropertyRecord({
-    id: 'prop-sample-02',
-    agencyId: 'proinspect-agency',
-    address: '15/88 Beaufort Street',
-    suburb: 'Highgate',
-    state: 'WA',
-    postcode: '6003',
-    propertyType: 'apartment',
-    propertyUse: 'residential',
-    physicalPropertyType: 'apartment',
-    ownershipStructure: 'strata',
-    bedrooms: 2,
-    bathrooms: 1,
-    parking: 1,
-    livingAreas: 1,
-    status: 'active',
-    clientIds: ['client-landlord-02'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    id: 'prop-sample-02', agencyId: 'proinspect-agency', address: '15/88 Beaufort Street', suburb: 'Highgate', state: 'WA', postcode: '6003', propertyType: 'apartment', propertyUse: 'residential', physicalPropertyType: 'apartment', ownershipStructure: 'strata', bedrooms: 2, bathrooms: 1, parking: 1, livingAreas: 1, status: 'active', clientIds: ['client-landlord-02'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   } as PropertyRecord),
 ];
 
-/**
- * Cloud deployments are server-authoritative. They never silently fall back to
- * IndexedDB after a failed write, because doing so presents a false success to
- * the operator and creates records that disappear on another device/refresh.
- */
+/** Cloud deployments are server-authoritative and never silently fall back to local persistence after a failed write. */
 export const createProperty = async (input: CreatePropertyInput): Promise<PropertyRecord> => {
   const timestamp = new Date().toISOString();
-  const localProperty = normalisePropertyRecord({
-    ...input,
-    id: input.id?.trim() || generateId(),
-    clientIds: input.clientIds || [],
-    status: input.status || 'active',
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  });
-
+  const localProperty = normalisePropertyRecord({ ...input, id: input.id?.trim() || generateId(), clientIds: input.clientIds || [], status: input.status || 'active', createdAt: timestamp, updatedAt: timestamp });
   if (isFirebaseConfigured()) {
-    const created = await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', {
-      method: 'POST',
-      body: cloudCreateCommand(localProperty),
-    });
+    const created = await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', { method: 'POST', body: propertyCreateCommand(localProperty) });
     if (!created?.id?.trim()) throw new Error('The property API did not return a canonical property identifier.');
     return normalisePropertyRecord(created);
   }
-
   await localPut('properties', localProperty);
   return localProperty;
 };
 
 export const getProperty = async (propertyId: string): Promise<PropertyRecord | undefined> => {
   if (isFirebaseConfigured()) {
-    try {
-      return normalisePropertyRecord(await apiRequest<PropertyRecord>(undefined, `/api/v1/properties/${encodeURIComponent(propertyId)}`));
-    } catch (error) {
-      if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
-      throw error;
-    }
+    try { return normalisePropertyRecord(await apiRequest<PropertyRecord>(undefined, `/api/v1/properties/${encodeURIComponent(propertyId)}`)); }
+    catch (error) { if ((error as { code?: string }).code === 'NOT_FOUND') return undefined; throw error; }
   }
-
   const localRecord = await localGet<PropertyRecord>('properties', propertyId);
   if (localRecord) return normalisePropertyRecord(localRecord);
   const sample = SAMPLE_PROPERTIES.find((property) => property.id === propertyId);
@@ -150,30 +95,17 @@ export const getProperty = async (propertyId: string): Promise<PropertyRecord | 
 };
 
 export const listProperties = async (): Promise<PropertyRecord[]> => {
-  if (isFirebaseConfigured()) {
-    return (await apiRequest<PropertyRecord[]>(undefined, '/api/v1/properties?limit=100')).map(normalisePropertyRecord);
-  }
-
+  if (isFirebaseConfigured()) return (await apiRequest<PropertyRecord[]>(undefined, '/api/v1/properties?limit=100')).map(normalisePropertyRecord);
   const localItems = await localList<PropertyRecord>('properties');
   if (localItems.length > 0) return localItems.map(normalisePropertyRecord);
   for (const sample of SAMPLE_PROPERTIES) await localPut('properties', sample);
   return SAMPLE_PROPERTIES.map(normalisePropertyRecord);
 };
 
-export const updateProperty = async (
-  propertyId: string,
-  updates: Partial<Omit<PropertyRecord, 'id' | 'createdAt'>>,
-): Promise<PropertyRecord> => {
+export const updateProperty = async (propertyId: string, updates: Partial<Omit<PropertyRecord, 'id' | 'createdAt'>>): Promise<PropertyRecord> => {
   const existing = await getProperty(propertyId);
   if (!existing) throw new Error('Property not found.');
-
-  if (isFirebaseConfigured()) {
-    return normalisePropertyRecord(await apiRequest<PropertyRecord>(existing.agencyId, `/api/v1/properties/${encodeURIComponent(propertyId)}`, {
-      method: 'PATCH',
-      body: { ...cloudUpdateCommand(updates), expectedVersion: (existing as VersionedProperty).version ?? 1 },
-    }));
-  }
-
+  if (isFirebaseConfigured()) return normalisePropertyRecord(await apiRequest<PropertyRecord>(existing.agencyId, `/api/v1/properties/${encodeURIComponent(propertyId)}`, { method: 'PATCH', body: { ...cloudUpdateCommand(updates), expectedVersion: (existing as VersionedProperty).version ?? 1 } }));
   const updatedProperty = normalisePropertyRecord({ ...existing, ...updates, id: propertyId, updatedAt: new Date().toISOString() });
   await localPut('properties', updatedProperty);
   return updatedProperty;
