@@ -32,11 +32,13 @@ fi
 command -v gcloud >/dev/null 2>&1 || { echo 'gcloud is required.' >&2; exit 69; }
 
 BUILD_SERVICE_ACCOUNT="projects/$PROJECT_ID/serviceAccounts/cloud-build@$PROJECT_ID.iam.gserviceaccount.com"
+ARTIFACT_REPOSITORY="pcr-containers"
 
 echo "Validating project, build identity and required Cloud Run services..."
 gcloud projects describe "$PROJECT_ID" --format='value(projectId)' >/dev/null
 gcloud iam service-accounts describe "cloud-build@$PROJECT_ID.iam.gserviceaccount.com" --project="$PROJECT_ID" --format='value(email)' >/dev/null
-for service in api pdf-worker notification-worker dashboard-worker; do
+gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" --project="$PROJECT_ID" --location="$REGION" --format='value(name)' >/dev/null
+for service in api pdf-worker notification-worker dashboard-worker document-worker integration-worker; do
   gcloud run services describe "$service" --project="$PROJECT_ID" --region="$REGION" --format='value(metadata.name)' >/dev/null
 done
 

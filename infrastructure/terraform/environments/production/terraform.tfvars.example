@@ -1,5 +1,6 @@
 project_id            = "business-plan-applicatio-17047"
 firestore_database_id = "ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60"
+firestore_location_id = "asia-southeast1"
 billing_account_id = "000000-000000-000000"
 monthly_budget_aud = 2000
 
@@ -14,6 +15,9 @@ notification_emails = [
 ]
 
 report_retention_days = 365
+
+# Existing Hosting site already linked to the ProInspect Firebase web app.
+firebase_hosting_site_id = "business-plan-applicatio-17047-255b2"
 
 # Do not change to ENFORCED until staging App Check metrics and authentication,
 # Firestore and Storage acceptance pass. The public site key must also be supplied

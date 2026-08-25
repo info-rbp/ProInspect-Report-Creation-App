@@ -28,6 +28,11 @@ provider "google-beta" {
 
 variable "project_id" { type = string }
 variable "firestore_database_id" { type = string }
+variable "firestore_location_id" {
+  type     = string
+  default  = null
+  nullable = true
+}
 variable "billing_account_id" {
   type      = string
   sensitive = true
@@ -72,6 +77,7 @@ module "environment" {
   }
   project_id                              = var.project_id
   firestore_database_id                   = var.firestore_database_id
+  firestore_location_id                   = var.firestore_location_id
   environment                             = "development"
   billing_account_id                      = var.billing_account_id
   region                                  = var.region

@@ -62,6 +62,11 @@ Production uses only:
 ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60
 ```
 
+The existing database is in `asia-southeast1`, independently of the
+`australia-southeast1` Cloud Run region. Set `firestore_location_id` explicitly
+when planning production; changing a Firestore database location requires
+replacement and is forbidden for this database.
+
 Set `FIRESTORE_DATABASE_ID` on the API, PDF, notification, dashboard, document and integration Cloud Run services, and on every migration/provisioning process. Those processes fail during production startup when it is missing. The AI worker does not access Firestore. The browser already uses the same ID through Firebase configuration.
 
 Terraform now declares the named database instead of `(default)`. Before the first apply against an existing project, import the existing database into the module address and inspect the plan; never allow Terraform to create, replace or delete a production database:

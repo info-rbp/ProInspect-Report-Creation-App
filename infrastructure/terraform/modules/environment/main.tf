@@ -14,6 +14,12 @@ variable "firestore_database_id" {
     error_message = "firestore_database_id must name the ProInspect database and cannot be (default)."
   }
 }
+variable "firestore_location_id" {
+  description = "Firestore database location. Existing databases can differ from the primary compute region."
+  type        = string
+  default     = null
+  nullable    = true
+}
 variable "environment" {
   type = string
   validation {
@@ -261,6 +267,14 @@ resource "google_secret_manager_secret" "runtime" {
       }
     }
   }
+
+  # Replication policy is immutable. Preserve the policy of imported production
+  # secrets so state adoption can never replace a container (and its versions)
+  # merely to normalize its replication mode.
+  lifecycle {
+    ignore_changes = [replication]
+  }
+
   depends_on = [google_project_service.required]
 }
 
@@ -275,7 +289,7 @@ resource "google_secret_manager_secret_iam_member" "api_runtime_secret_access" {
 resource "google_firestore_database" "default" {
   project                           = var.project_id
   name                              = var.firestore_database_id
-  location_id                       = var.region
+  location_id                       = coalesce(var.firestore_location_id, var.region)
   type                              = "FIRESTORE_NATIVE"
   concurrency_mode                  = "OPTIMISTIC"
   app_engine_integration_mode       = "DISABLED"
