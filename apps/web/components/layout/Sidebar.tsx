@@ -29,16 +29,17 @@ const NAV_ITEMS: NavItem[] = [
 const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
   const { canAccess } = useAuth();
   const visibleItems = NAV_ITEMS.filter((item) => canAccess(item.section));
-  const navigation = (
+
+  const navigation = (id: string, mobile: boolean) => (
     <aside
-      id="primary-navigation"
+      id={id}
       aria-label="Primary navigation"
       className="flex h-full w-[min(86vw,300px)] flex-col border-r border-gray-200 bg-white lg:w-auto"
     >
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-gray-200 px-5">
         <div className="grid h-9 w-9 place-items-center rounded bg-gray-950 text-sm font-black text-white">PI</div>
         <div className="min-w-0 flex-1"><div className="text-sm font-bold text-gray-950">ProInspect</div><div className="text-xs text-gray-500">Inspection platform</div></div>
-        <button type="button" onClick={onClose} aria-label="Close navigation" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden"><X size={18} /></button>
+        {mobile && <button type="button" onClick={onClose} aria-label="Close navigation" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"><X size={18} /></button>}
       </div>
       <nav className="grid flex-1 content-start gap-1 overflow-y-auto p-3">
         {visibleItems.map((item) => {
@@ -47,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={onClose}
+              onClick={mobile ? onClose : undefined}
               className={({ isActive }) => ['flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition', isActive ? 'bg-gray-950 text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950'].join(' ')}
             >
               <Icon size={18} />{item.label}
@@ -60,10 +61,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
 
   return (
     <>
-      <div className="hidden lg:sticky lg:top-0 lg:block lg:h-screen">{navigation}</div>
+      <div className="hidden lg:sticky lg:top-0 lg:block lg:h-screen">{navigation('desktop-primary-navigation', false)}</div>
       <div className={`fixed inset-0 z-40 lg:hidden ${open ? 'pointer-events-auto' : 'pointer-events-none'}`} aria-hidden={!open}>
         <button type="button" aria-label="Close navigation overlay" onClick={onClose} className={`absolute inset-0 bg-black/40 transition-opacity ${open ? 'opacity-100' : 'opacity-0'}`} />
-        <div className={`relative h-full w-fit transform transition-transform duration-200 ease-out ${open ? 'translate-x-0' : '-translate-x-full'}`}>{navigation}</div>
+        <div className={`relative h-full w-fit transform transition-transform duration-200 ease-out ${open ? 'translate-x-0' : '-translate-x-full'}`}>{navigation('primary-navigation', true)}</div>
       </div>
     </>
   );
