@@ -13,7 +13,7 @@ interface PortalOverview {
   compliance: Array<Record<string, unknown>>;
 }
 
-function agencyId(): string | undefined { if (typeof window === 'undefined') return 'agency-1'; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || 'agency-1'; }
+function agencyId(): string | undefined { if (typeof window === 'undefined') return undefined; return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined; }
 
 const ClientPortalPage: React.FC = () => {
   const { clientAccountId = '' } = useParams(); const [data, setData] = useState<PortalOverview>(); const [error, setError] = useState('');

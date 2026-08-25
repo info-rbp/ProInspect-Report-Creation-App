@@ -5,7 +5,7 @@ import type {
   PropertyRecord,
   RecurringInspectionSchedule,
 } from '../../types/platform';
-import { DEFAULT_AGENCY_ID } from '../../services/platform/userProfileService';
+import { requireSelectedAgencyId } from '../../services/platform/userProfileService';
 import {
   OperationBadge,
   operationDate,
@@ -101,7 +101,7 @@ const RecurringInspectionPanel: React.FC<Props> = ({
               void onCreate({
                 agencyId:
                   properties.find((property) => property.id === propertyId)
-                    ?.agencyId || DEFAULT_AGENCY_ID,
+                    ?.agencyId || requireSelectedAgencyId(),
                 propertyId,
                 reportType,
                 cadence,

@@ -24,7 +24,7 @@ import {
   listAvailableInspectors,
   listAvailableReviewers,
 } from '../../services/platform/userDirectoryService';
-import { DEFAULT_AGENCY_ID } from '../../services/platform/userProfileService';
+import { requireSelectedAgencyId } from '../../services/platform/userProfileService';
 
 interface InspectionJobFormModalProps {
   isOpen: boolean;
@@ -121,7 +121,7 @@ export const InspectionJobFormModal: React.FC<InspectionJobFormModalProps> = ({
         ? new Date(Date.parse(startAt) + Math.max(1, durationMinutes) * 60_000).toISOString()
         : undefined;
       await onSave({
-        agencyId: initialJob?.agencyId || DEFAULT_AGENCY_ID,
+        agencyId: initialJob?.agencyId || requireSelectedAgencyId(),
         propertyId,
         reportType,
         scheduledAt: startAt,

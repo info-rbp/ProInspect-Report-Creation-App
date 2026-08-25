@@ -12,6 +12,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@pcr/config": "*",
     "@pcr/domain": "*",
     "firebase-admin": "^14.2.0",
     "pdf-lib": "^1.17.1"

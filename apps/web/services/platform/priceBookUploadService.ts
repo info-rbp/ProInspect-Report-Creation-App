@@ -1,17 +1,16 @@
-import * as XLSX from 'xlsx';
 import type { PriceBookImport } from '../../types/platform';
 import { apiRequest } from '../apiClient';
+import { readSpreadsheetRows } from '../spreadsheetReader';
 
 const CHUNK_SIZE = 8 * 1024 * 1024;
 const MIME_BY_EXTENSION: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  xls: 'application/vnd.ms-excel',
   csv: 'text/csv',
 };
 
 function agencyId(): string | undefined {
-  if (typeof window === 'undefined') return 'agency-1';
-  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || 'agency-1';
+  if (typeof window === 'undefined') return undefined;
+  return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined;
 }
 
 function mimeType(file: File): string {
@@ -64,18 +63,7 @@ export async function preparePriceBookSpreadsheet(
   file: File,
   preferredSheet?: string,
 ): Promise<PreparedPriceBookSpreadsheet> {
-  const bytes = await file.arrayBuffer();
-  const workbook = XLSX.read(bytes, { type: 'array', cellDates: false, raw: false });
-  const sheetName =
-    (preferredSheet && workbook.SheetNames.includes(preferredSheet) ? preferredSheet : undefined) ||
-    workbook.SheetNames[0];
-  if (!sheetName) throw new Error('Spreadsheet does not contain a worksheet.');
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) throw new Error('Selected worksheet could not be read.');
-  const rows = XLSX.utils.sheet_to_json<Record<string, string | number | boolean | null>>(sheet, {
-    defval: null,
-    raw: false,
-  });
+  const { sheetName, rows } = await readSpreadsheetRows(file, preferredSheet);
   if (!rows.length) throw new Error('Spreadsheet does not contain any data rows.');
   if (rows.length > 20_000) throw new Error('Price-book imports are limited to 20,000 data rows.');
   return {

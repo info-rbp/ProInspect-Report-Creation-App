@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { ArrowLeft, CheckCircle2, FileSpreadsheet, Play, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { bulkImportClients, type ClientBulkImportResult } from '../../services/platform/clientManagementService';
+import { readSpreadsheetRows } from '../../services/spreadsheetReader';
 
 interface PreparedImport {
   fileName: string;
@@ -42,13 +42,9 @@ const ClientBulkImportPage: React.FC = () => {
     setBusy(true); setError(''); setResult(undefined); setCommitted(false);
     try {
       const extension = file.name.toLowerCase().split('.').pop();
-      if (!['xlsx', 'xls', 'csv'].includes(extension || '')) throw new Error('Client imports must be XLSX, XLS or CSV files.');
+      if (!['xlsx', 'csv'].includes(extension || '')) throw new Error('Client imports must be XLSX or CSV files.');
       if (file.size > 25 * 1024 * 1024) throw new Error('Client import files are limited to 25 MB.');
-      const bytes = await file.arrayBuffer();
-      const workbook = XLSX.read(bytes, { type: 'array', cellDates: false, raw: false });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName || !workbook.Sheets[sheetName]) throw new Error('Spreadsheet does not contain a readable worksheet.');
-      const rows = XLSX.utils.sheet_to_json<Record<string, string | number | boolean | null>>(workbook.Sheets[sheetName], { defval: null, raw: false });
+      const { sheetName, rows } = await readSpreadsheetRows(file);
       if (!rows.length) throw new Error('Spreadsheet does not contain any Client rows.');
       if (rows.length > 5_000) throw new Error('Client imports are limited to 5,000 rows per batch.');
       const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
@@ -76,7 +72,7 @@ const ClientBulkImportPage: React.FC = () => {
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center hover:border-blue-300">
-          <Upload size={26} className="text-slate-400"/><div className="mt-3 font-black text-slate-900">Choose XLSX, XLS or CSV</div><div className="mt-1 text-xs text-slate-500">Up to 5,000 rows. Existing Clients are matched before creation.</div><input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={busy} onChange={(event) => void prepare(event.target.files?.[0])}/>
+          <Upload size={26} className="text-slate-400"/><div className="mt-3 font-black text-slate-900">Choose XLSX or CSV</div><div className="mt-1 text-xs text-slate-500">Up to 5,000 rows. Existing Clients are matched before creation.</div><input type="file" accept=".xlsx,.csv" className="hidden" disabled={busy} onChange={(event) => void prepare(event.target.files?.[0])}/>
         </label>
         <div className="rounded-2xl bg-slate-950 p-5 text-white"><div className="flex items-center gap-2 font-black"><FileSpreadsheet size={18}/> Recommended columns</div><div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-300">{EXPECTED_COLUMNS.map((column) => <span key={column}>{column}</span>)}</div></div>
       </div>

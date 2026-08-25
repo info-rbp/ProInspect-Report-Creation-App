@@ -22,9 +22,22 @@ function legacyExitFallback(path: string, body: unknown, error: ApiErrorEnvelope
   return { ...body, allowLegacyBaseline: true };
 }
 
-function storedAgencyId(): string | undefined {
+export function storedAgencyId(): string | undefined {
   if (typeof window === 'undefined') return undefined;
   return window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId') || undefined;
+}
+
+export function resolveRequestAgency(input: {
+  requestedAgency?: string;
+  claimAgency?: string;
+  tenantAgency?: string;
+  storedAgency?: string;
+  providerSuperAdmin: boolean;
+}): string | undefined {
+  const requestedAgency = input.requestedAgency?.trim() || undefined;
+  const signedAgency = input.claimAgency?.trim() || input.tenantAgency?.trim() || undefined;
+  if (input.providerSuperAdmin && requestedAgency) return requestedAgency;
+  return signedAgency || requestedAgency || input.storedAgency?.trim() || undefined;
 }
 
 function persistAuthoritativeAgency(agencyId: string): void {
@@ -47,12 +60,20 @@ export async function apiRequest<T>(agencyId: string | undefined, path: string, 
   const claimAgency = typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId.trim() || undefined : undefined;
   const tenantAgency = user.tenantId?.trim() || undefined;
   const storedAgency = storedAgencyId();
+  const providerSuperAdmin = tokenResult.claims.providerId === 'proinspect'
+    && tokenResult.claims.providerRole === 'super_admin';
 
-  // Explicit route context wins when a page is deliberately operating on another
-  // agency. Otherwise signed Firebase identity data is authoritative. Browser
-  // storage is only a last-resort compatibility fallback and must never override
-  // current token claims.
-  const resolvedAgencyId = agencyId?.trim() || claimAgency || tenantAgency || storedAgency;
+  // Signed identity data is authoritative for ordinary members. Only a provider
+  // super administrator, whose provider status is itself signed into the token,
+  // may deliberately select a different requested agency. Browser storage never
+  // overrides a signed agency claim for an ordinary member.
+  const resolvedAgencyId = resolveRequestAgency({
+    ...(agencyId ? { requestedAgency: agencyId } : {}),
+    ...(claimAgency ? { claimAgency } : {}),
+    ...(tenantAgency ? { tenantAgency } : {}),
+    ...(storedAgency ? { storedAgency } : {}),
+    providerSuperAdmin,
+  });
   if (!resolvedAgencyId) throw new Error('The signed-in identity is not linked to an agency.');
   if (!agencyId && (claimAgency || tenantAgency)) persistAuthoritativeAgency(resolvedAgencyId);
 

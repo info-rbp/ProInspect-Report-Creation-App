@@ -23,7 +23,11 @@ export default defineConfig({
           ...common,
           name: 'node',
           environment: 'node',
-          include: ['apps/api/tests/**/*.test.ts', 'packages/*/tests/**/*.test.ts'],
+          include: [
+            'apps/api/tests/**/*.test.ts',
+            'packages/*/tests/**/*.test.ts',
+            'scripts/**/*.test.mjs',
+          ],
         },
       },
     ],

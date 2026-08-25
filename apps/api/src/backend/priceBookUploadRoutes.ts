@@ -9,7 +9,6 @@ import type { ApiDependencies } from './types.js';
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
   'text/csv',
   'application/csv',
 ]);
@@ -83,7 +82,7 @@ export async function routePriceBookUploadRequest(
     const fileSize = typeof body.fileSize === 'number' ? body.fileSize : Number(body.fileSize);
     const sha256 = validHash(body.sha256);
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-      throw new ApiError(400, 'PRICE_BOOK_CONTENT_TYPE_UNSUPPORTED', 'Price books must be XLSX, XLS or CSV files.');
+      throw new ApiError(400, 'PRICE_BOOK_CONTENT_TYPE_UNSUPPORTED', 'Price books must be XLSX or CSV files.');
     }
     if (!Number.isInteger(fileSize) || fileSize < 1 || fileSize > MAX_PRICE_BOOK_BYTES) {
       throw new ApiError(400, 'PRICE_BOOK_FILE_SIZE_INVALID', 'Price-book source files must be between 1 byte and 50 MB.');

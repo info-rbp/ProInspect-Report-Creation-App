@@ -6,7 +6,6 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged as onFirebaseAuthStateChanged,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
@@ -61,11 +60,6 @@ export const signInWithGoogle = async (): Promise<User> => {
   provider.setCustomParameters({ prompt: 'select_account' });
   const result = await signInWithPopup(auth, provider);
   return result.user;
-};
-
-export const registerWithEmailPassword = async (email: string, password: string): Promise<User> => {
-  if (!auth) throw new Error('Identity Platform is not configured for this deployment.');
-  return (await createUserWithEmailAndPassword(auth, email, password)).user;
 };
 
 export const signOutUser = async (): Promise<void> => {

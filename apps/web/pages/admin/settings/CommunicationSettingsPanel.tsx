@@ -75,7 +75,7 @@ const CommunicationSettingsPanel: React.FC = () => {
     setError(null);
     setNotice(null);
     try {
-      const current = policy || ({ status: 'active', providers: [] } as CommunicationPolicy);
+      const current = policy || { status: 'active' as const, providers: [] };
       const updated = await saveCommunicationPolicy(agencyId, {
         ...current,
         status: current.status === 'retired' ? 'active' : current.status,

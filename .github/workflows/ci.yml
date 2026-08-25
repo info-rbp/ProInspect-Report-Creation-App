@@ -23,7 +23,11 @@ jobs:
         with: { node-version: 22 }
       - uses: actions/setup-java@v5
         with: { distribution: temurin, java-version: '21' }
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Scan tracked source for committed secrets
+        run: npm run security:scan
+      - name: Reject high or critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
       - name: Build shared packages
         run: npm run build:packages
       - name: Type check web
@@ -117,7 +121,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version: 22 }
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
   report:

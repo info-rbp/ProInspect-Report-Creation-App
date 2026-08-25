@@ -5,10 +5,16 @@ import { getFirestoreDb, isFirebaseConfigured } from '../storageService';
 
 const validRoles = new Set<UserRole>(['super_admin','proinspect_admin','operations','inspector','analyst','reviewer','tenant','landlord','shopify_customer']);
 const PROVIDER_ID = 'proinspect';
-export const DEFAULT_AGENCY_ID = 'unprovisioned-agency';
+
+export function requireSelectedAgencyId(): string {
+  if (typeof window === 'undefined') throw new Error('An agency workspace must be selected.');
+  const agencyId = window.localStorage.getItem('pcr_agency_id') || window.localStorage.getItem('agencyId');
+  if (!agencyId?.trim()) throw new Error('Your account is not linked to an agency workspace.');
+  return agencyId.trim();
+}
 
 function storeAgency(profile: UserProfile): UserProfile {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && profile.agencyId) {
     window.localStorage.setItem('pcr_agency_id', profile.agencyId);
     window.localStorage.setItem('agencyId', profile.agencyId);
   }

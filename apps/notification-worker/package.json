@@ -12,6 +12,7 @@
     "start": "node dist/runtime.js"
   },
   "dependencies": {
+    "@pcr/config": "*",
     "@pcr/domain": "*",
     "firebase-admin": "^14.2.0"
   }

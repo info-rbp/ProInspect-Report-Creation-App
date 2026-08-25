@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 const email = (process.argv[2] || process.env.PROINSPECT_PROVIDER_ADMIN_EMAIL || '').trim().toLowerCase();
 const providerId = (process.env.PROINSPECT_PROVIDER_ID || 'proinspect').trim();
-const homeAgencyId = (process.env.PROINSPECT_HOME_AGENCY_ID || 'agency-1').trim();
+const homeAgencyId = (process.env.PROINSPECT_HOME_AGENCY_ID || '').trim();
 const databaseId = process.env.FIRESTORE_DATABASE_ID?.trim();
 if (!email) {
   console.error('Usage: npm run provision:provider-admin -- admin@example.com');
@@ -12,6 +12,10 @@ if (!email) {
 }
 if (!databaseId) {
   console.error('FIRESTORE_DATABASE_ID is required so provider administration cannot be provisioned into the wrong Firestore database.');
+  process.exit(78);
+}
+if (!homeAgencyId) {
+  console.error('PROINSPECT_HOME_AGENCY_ID is required. Provider provisioning never invents a default agency.');
   process.exit(78);
 }
 

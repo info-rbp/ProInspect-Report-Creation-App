@@ -27,7 +27,7 @@ import { getProperty, updateProperty } from '../../services/platform/propertySer
 import { PropertyFormModal } from '../../components/properties/PropertyFormModal';
 import { listInspectionJobs, createInspectionJob } from '../../services/platform/inspectionJobService';
 import { getAllSavedReports, saveReportToDB } from '../../services/storageService';
-import { DEFAULT_AGENCY_ID } from '../../services/platform/userProfileService';
+import { requireSelectedAgencyId } from '../../services/platform/userProfileService';
 import { generateId } from '../../utils';
 
 export const PropertyDetailPage: React.FC = () => {
@@ -85,7 +85,7 @@ export const PropertyDetailPage: React.FC = () => {
     if (!property) return;
     try {
       const newJob = await createInspectionJob({
-        agencyId: property.agencyId || DEFAULT_AGENCY_ID,
+        agencyId: property.agencyId || requireSelectedAgencyId(),
         propertyId: property.id,
         reportType: reportType as any,
         scheduledAt: new Date().toISOString().split('T')[0],

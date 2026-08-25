@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Download, FileSpreadsheet, Upload } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { DEFAULT_AGENCY_ID } from '../../services/platform/userProfileService';
+import { requireSelectedAgencyId } from '../../services/platform/userProfileService';
 import {
   importPropertyCandidates,
   parsePropertyCsv,
@@ -37,7 +37,7 @@ const PropertyBulkImportPage: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
-      const created = await importPropertyCandidates(DEFAULT_AGENCY_ID, candidates);
+      const created = await importPropertyCandidates(requireSelectedAgencyId(), candidates);
       if (created.length === 1) navigate(`/app/admin/properties/${created[0].id}`);
       else navigate('/app/admin/properties');
     } catch (err) {

@@ -25,9 +25,9 @@ The repository cannot perform the following without an applied Google Cloud envi
 
 - Create the initial Identity Platform tenant and record its tenant ID as a protected environment variable.
 - Before external onboarding, create one tenant per agency and store the mapping in the agency record.
-- Enable MFA and require enrolment for `proinspect_admin`, `reviewer` and exceptional `super_admin` access.
+- Enable TOTP MFA and require enrolment for `proinspect_admin`, `reviewer` and `super_admin` access. Only Firebase's signed `firebase.sign_in_second_factor` token evidence satisfies the API policy; browser flags and custom `mfa_verified` claims do not.
 - Configure a strong password policy and email enumeration protection.
-- Configure authorised domains and disable anonymous sign-in and public self-sign-up.
+- Configure authorised domains and disable anonymous sign-in and public self-sign-up. The production login has no self-registration path; accounts must be created through an invitation or audited administrator provisioning process.
 - Register the production web client with Firebase App Check and set `REQUIRE_APP_CHECK=true` on the API.
 - Configure session revocation operations for suspension, role change, agency removal and suspected compromise.
 - Configure Cloud Armor or API Gateway quotas in front of the public API where appropriate.

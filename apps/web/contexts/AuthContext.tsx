@@ -11,10 +11,12 @@ import {
   completeTotpEnrollment,
   getMfaSessionState,
   isMultiFactorChallengeError,
+  requiresMfaRestart,
   sendMfaEmailVerification,
   type MfaFlowState,
   type TotpEnrollmentDetails,
 } from '../services/mfaService';
+import { resolveMfaSessionDecision, roleRequiresMfa } from '../services/mfaPolicy';
 import { getOrCreateUserProfile } from '../services/platform/userProfileService';
 import {
   auth,
@@ -22,7 +24,6 @@ import {
   onAuthStateChanged,
   signInWithEmailPassword,
   signInWithGoogle,
-  registerWithEmailPassword,
   signOutUser,
 } from '../services/storageService';
 import type { UserProfile, UserRole } from '../types/platform';
@@ -36,7 +37,6 @@ interface AuthContextValue {
   mfaEnrollmentDetails: TotpEnrollmentDetails | null;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
   completeMfaLogin: (code: string) => Promise<void>;
   beginMfaEnrollment: () => Promise<TotpEnrollmentDetails>;
   completeMfaEnrollment: (code: string) => Promise<void>;
@@ -47,12 +47,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const privilegedRoles = new Set<UserRole>(['super_admin', 'proinspect_admin', 'reviewer']);
-
-function requiresMfa(role: UserRole | undefined): boolean {
-  return Boolean(role && privilegedRoles.has(role));
-}
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -73,28 +67,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const applyAuthenticatedUser = async (firebaseUser: User): Promise<void> => {
     const profile = await getOrCreateUserProfile(firebaseUser);
     const session = await getMfaSessionState(firebaseUser);
+    const decision = resolveMfaSessionDecision(profile.role, session);
 
     setCurrentUser(firebaseUser);
     setUserProfile(profile);
     setMfaVerified(session.verified);
     setMfaEnrollmentDetails(null);
 
-    if (!requiresMfa(profile.role)) {
+    if (decision === 'none') {
       setMfaState('none');
       return;
     }
 
-    if (session.verified) {
-      setMfaState('none');
-      return;
-    }
-
-    if (!session.emailVerified) {
+    if (decision === 'email-verification') {
       setMfaState('email-verification');
       return;
     }
 
-    if (session.enrolledFactors === 0) {
+    if (decision === 'enrollment') {
       setMfaState('enrollment');
       return;
     }
@@ -185,29 +175,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const registerUser = async (email: string, password: string): Promise<void> => {
-    if (!auth || !isFirebaseConfigured()) {
-      throw new Error('Identity Platform must be configured before signing in.');
-    }
-
-    ensureAppCheck();
-    const firebaseUser = await registerWithEmailPassword(email.trim(), password);
+  const completeMfaLogin = async (code: string): Promise<void> => {
     try {
+      const firebaseUser = await completePendingTotpSignIn(code);
       await applyAuthenticatedUser(firebaseUser);
     } catch (error) {
-      try {
-        await signOutUser();
-      } catch {
-        // Preserve error
+      if (requiresMfaRestart(error)) {
+        setMfaState('none');
+        setCurrentUser(null);
+        setUserProfile(null);
+        setMfaVerified(false);
       }
-      clearLocalAuth();
       throw error;
     }
-  };
-
-  const completeMfaLogin = async (code: string): Promise<void> => {
-    const firebaseUser = await completePendingTotpSignIn(code);
-    await applyAuthenticatedUser(firebaseUser);
   };
 
   const beginMfaEnrollment = async (): Promise<TotpEnrollmentDetails> => {
@@ -223,7 +203,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser || mfaState !== 'enrollment') {
       throw new Error('There is no active MFA enrolment session.');
     }
-    await completeTotpEnrollment(currentUser, code);
+    try {
+      await completeTotpEnrollment(currentUser, code);
+    } catch (error) {
+      if (requiresMfaRestart(error)) setMfaEnrollmentDetails(null);
+      throw error;
+    }
 
     // The session used to enrol a factor was authenticated before the second
     // factor existed. Sign out deliberately and make the next login exercise
@@ -252,14 +237,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentUser
       && userProfile?.status === 'active'
       && mfaState === 'none'
-      && (!requiresMfa(userProfile.role) || mfaVerified),
+      && (!roleRequiresMfa(userProfile.role) || mfaVerified),
     ),
     isLoadingAuth,
     mfaState,
     mfaEnrollmentDetails,
     login,
     loginWithGoogle: loginWithGoogleUser,
-    register: registerUser,
     completeMfaLogin,
     beginMfaEnrollment,
     completeMfaEnrollment,
