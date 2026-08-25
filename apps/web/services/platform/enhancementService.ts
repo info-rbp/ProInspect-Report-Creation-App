@@ -25,19 +25,27 @@ export const renderDocumentPacket = (packet: DocumentPacket, renderRequests: Arr
 export const validateDocumentPacket = (packet: DocumentPacket) => call<DocumentPacket>(`/api/v1/document-packets/${encodeURIComponent(packet.id)}/validate`, { method: 'POST', body: {} });
 export const approveDocumentPacket = (packet: DocumentPacket) => call<DocumentPacket>(`/api/v1/document-packets/${encodeURIComponent(packet.id)}/approve`, { method: 'POST', body: { expectedVersion: packet.version } });
 export const issueDocumentPacket = (packet: DocumentPacket) => call<DocumentPacket>(`/api/v1/document-packets/${encodeURIComponent(packet.id)}/issue`, { method: 'POST', body: { expectedVersion: packet.version } });
+
 export const listRoutePlans = () => call<InspectionRoutePlan[]>('/api/v1/inspection-route-plans');
 export const createRoutePlan = (input: Partial<InspectionRoutePlan>) => call<InspectionRoutePlan>('/api/v1/inspection-route-plans', { method: 'POST', body: input });
 export const optimiseRoutePlan = (plan: InspectionRoutePlan) => call<InspectionRoutePlan>(`/api/v1/inspection-route-plans/${encodeURIComponent(plan.id)}/optimise`, { method: 'POST', body: {} });
 export const publishRoutePlan = (plan: InspectionRoutePlan) => call<InspectionRoutePlan>(`/api/v1/inspection-route-plans/${encodeURIComponent(plan.id)}/publish`, { method: 'POST', body: { expectedVersion: plan.version } });
+
 export const listCommunicationThreads = () => call<CommunicationThread[]>('/api/v1/communication-threads');
 export const createCommunicationThread = (input: Partial<CommunicationThread>) => call<CommunicationThread>('/api/v1/communication-threads', { method: 'POST', body: input });
 export const listCommunicationMessages = () => call<CommunicationMessage[]>('/api/v1/communication-messages');
 export const sendThreadMessage = (threadId: string, input: { channel: 'email' | 'sms' | 'portal'; recipients: string[]; subject?: string; body: string }) => call<CommunicationMessage>(`/api/v1/communication-threads/${encodeURIComponent(threadId)}/messages`, { method: 'POST', body: input });
+
 export const listComplianceObligations = () => call<ComplianceObligation[]>('/api/v1/compliance-obligations');
+export const createComplianceObligation = (input: Partial<ComplianceObligation>) => call<ComplianceObligation>('/api/v1/compliance-obligations', { method: 'POST', body: input });
+export const updateComplianceObligation = (obligation: ComplianceObligation, patch: Partial<ComplianceObligation>) => call<ComplianceObligation>(`/api/v1/compliance-obligations/${encodeURIComponent(obligation.id)}`, { method: 'PATCH', body: { ...patch, expectedVersion: obligation.version } });
 export const assessCompliance = (entityType: string, entityId: string) => call<ComplianceAssessment>(`/api/v1/compliance-assessments/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`);
+
 export const listKeyRegister = () => call<AccessDeviceRegisterItem[]>('/api/v1/key-register');
 export const createKeyRegisterItem = (input: Partial<AccessDeviceRegisterItem>) => call<AccessDeviceRegisterItem>('/api/v1/key-register', { method: 'POST', body: input });
 export const createKeyEvent = (itemId: string, input: { eventType: string; inspectionJobId?: string; toHolderId?: string; notes?: string }) => call<{ item: AccessDeviceRegisterItem; event: AccessDeviceCustodyEvent }>(`/api/v1/key-register/${encodeURIComponent(itemId)}/events`, { method: 'POST', body: input });
+export const listKeyEvents = () => call<AccessDeviceCustodyEvent[]>('/api/v1/key-custody-events');
+
 export const listPmsConnections = () => call<PmsConnection[]>('/api/v1/pms-connections');
 export const createPmsConnection = (input: Partial<PmsConnection>) => call<PmsConnection>('/api/v1/pms-connections', { method: 'POST', body: input });
 export const runPmsSync = (connectionId: string, input: { direction: 'import' | 'publish'; resource: string; entityId?: string }) => call<Record<string, unknown>>(`/api/v1/pms-connections/${encodeURIComponent(connectionId)}/sync`, { method: 'POST', body: input });
