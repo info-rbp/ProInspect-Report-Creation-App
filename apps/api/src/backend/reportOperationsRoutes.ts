@@ -1,7 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import {
   calculateWorkflowGateContext,
   evaluateReportQuality,
@@ -15,6 +14,7 @@ import {
   type ReportSupersession,
   type SecurityCapability,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
@@ -137,7 +137,7 @@ async function filteredRecords(
 }
 
 async function versionRecords(agencyId: string, reportId: string): Promise<Record<string, unknown>[]> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .doc(`agencies/${agencyId}/reports/${reportId}`)
     .collection('versions')
     .orderBy('sequence', 'asc')
@@ -567,7 +567,7 @@ async function supersedeReport(
 }
 
 async function resolveReportGrant(rawToken: string): Promise<ReportAccessGrantRecord> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collectionGroup('externalAccessGrants')
     .where('tokenHash', '==', hash(rawToken.trim()))
     .limit(2)

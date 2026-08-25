@@ -15,6 +15,16 @@ variable "app_check_enforcement_mode" {
   }
 }
 
+variable "require_api_app_check" {
+  description = "Require the Cloud Run API to verify Firebase App Check tokens after web-client acceptance."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.require_api_app_check || var.app_check_recaptcha_enterprise_site_key != null
+    error_message = "require_api_app_check cannot be true until app_check_recaptcha_enterprise_site_key is configured."
+  }
+}
+
 resource "google_project_service" "firebase_app_check" {
   project            = var.project_id
   service            = "firebaseappcheck.googleapis.com"

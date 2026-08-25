@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, type DocumentData, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { type DocumentData, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { firestoreDb } from '../firestoreDatabase.js';
 
 export interface CreateArchiveArtifactInput {
   agencyId: string;
@@ -132,7 +133,7 @@ async function verifyStoredArtifact(input: {
 }
 
 async function loadVersionContent(agencyId: string, reportId: string, reportVersionId: string) {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${reportVersionId}`);
   const versionSnapshot = await versionRef.get();
   if (!versionSnapshot.exists) {
@@ -165,7 +166,7 @@ async function loadVersionContent(agencyId: string, reportId: string, reportVers
 }
 
 async function loadTenantResponses(agencyId: string, reportId: string): Promise<Array<Record<string, unknown>>> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const nested = await database.collection(`agencies/${agencyId}/reports/${reportId}/tenantResponses`).get();
   const nestedRecords = serialiseDocuments(nested.docs);
 
@@ -180,7 +181,7 @@ async function loadTenantResponses(agencyId: string, reportId: string): Promise<
 }
 
 async function loadEvidence(agencyId: string, photoIds: Set<string>): Promise<Array<Record<string, unknown>>> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const evidence: Array<Record<string, unknown>> = [];
   for (const photoId of [...photoIds].sort()) {
     const snapshot = await database.doc(`agencies/${agencyId}/photoEvidence/${photoId}`).get();
@@ -207,7 +208,7 @@ async function loadEvidence(agencyId: string, photoIds: Set<string>): Promise<Ar
 }
 
 async function loadMaintenanceLinks(agencyId: string, reportId: string): Promise<Array<Record<string, unknown>>> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collection(`agencies/${agencyId}/maintenanceItems`)
     .where('sourceReportId', '==', reportId)
     .get();
@@ -228,7 +229,7 @@ async function loadMaintenanceLinks(agencyId: string, reportId: string): Promise
 }
 
 async function loadAuditReferences(agencyId: string, reportId: string): Promise<Array<Record<string, unknown>>> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collection(`agencies/${agencyId}/auditEvents`)
     .where('entityId', '==', reportId)
     .get();
@@ -301,7 +302,7 @@ async function saveArchiveManifest(input: {
 }
 
 export async function createArchiveArtifact(input: CreateArchiveArtifactInput): Promise<ArchiveArtifactResult> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const reportRef = database.doc(`agencies/${input.agencyId}/reports/${input.reportId}`);
   const reportSnapshot = await reportRef.get();
   if (!reportSnapshot.exists) throw archiveError('NOT_FOUND', 404, 'Report not found.');

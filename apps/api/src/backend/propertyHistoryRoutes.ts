@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { canonicalComponentOccurrenceIdentity, canonicalSemanticComponentIdentity } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -112,7 +112,7 @@ export async function routePropertyHistoryRequest(
   if (!property) throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found.');
   await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId, propertyId }, correlationId);
 
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const reportsPage = await dependencies.repository.list('reports', agencyId, 100);
   const reportRecords = reportsPage.items
     .filter((report) => report.propertyId === propertyId)

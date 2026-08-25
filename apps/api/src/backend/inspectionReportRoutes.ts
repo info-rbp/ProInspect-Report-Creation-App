@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import {
   canonicalComponentOccurrenceIdentity,
   canonicalInspectionType,
@@ -12,6 +11,7 @@ import {
   type ReportLifecycleStatus,
   type ReportPhotoReference,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import {
   canonicalInspectionTemplateFromRecord,
   templateAppliesToProperty,
@@ -108,7 +108,7 @@ async function loadBaselineVersion(
   reportId: string,
   versionId: string,
 ): Promise<BaselineIndex> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
   const versionSnapshot = await versionRef.get();
   if (!versionSnapshot.exists || versionSnapshot.get('immutable') !== true) {

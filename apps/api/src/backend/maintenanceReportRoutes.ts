@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type {
   BaselineComponentSnapshot,
   MaintenanceItem,
   ReportAggregate,
   ReportPhotoReference,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -64,7 +64,7 @@ async function sourceComponent(
   item: MaintenanceItem,
 ): Promise<{ areaId: string; areaName: string; componentId: string; componentName: string; baseline: BaselineComponentSnapshot } | undefined> {
   if (!item.sourceReportId || !item.sourceReportVersionId || !item.sourceAreaId || !item.sourceComponentId) return undefined;
-  const versionRef = getFirestore(adminApp()).doc(`agencies/${agencyId}/reports/${item.sourceReportId}/versions/${item.sourceReportVersionId}`);
+  const versionRef = firestoreDb(adminApp()).doc(`agencies/${agencyId}/reports/${item.sourceReportId}/versions/${item.sourceReportVersionId}`);
   const version = await versionRef.get();
   if (!version.exists || version.get('immutable') !== true) throw new ApiError(409, 'SOURCE_REPORT_VERSION_INVALID', `Maintenance item ${item.id} does not reference an immutable source report version.`);
   const areaRef = versionRef.collection('areas').doc(item.sourceAreaId);

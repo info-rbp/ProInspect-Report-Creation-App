@@ -1,6 +1,6 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { PdfWorkerError, type PdfGenerationTask } from './pdfGenerationService.js';
+import { firestoreDb } from './firestoreDatabase.js';
 import { ensureReportPresentationIdentity } from './reportPresentationPreflight.js';
 
 function adminApp() {
@@ -16,7 +16,7 @@ async function persistPreflightFailure(task: PdfGenerationTask, error: unknown):
   if (workerError?.retryable) return;
 
   const now = new Date().toISOString();
-  await getFirestore(adminApp()).doc(`agencies/${task.agencyId}/pdfJobs/${task.taskId}`).set(
+  await firestoreDb(adminApp()).doc(`agencies/${task.agencyId}/pdfJobs/${task.taskId}`).set(
     {
       status: 'failed',
       errorCode: workerError?.code ?? 'PDF_PREFLIGHT_FAILED',
@@ -31,7 +31,7 @@ async function persistPreflightFailure(task: PdfGenerationTask, error: unknown):
 
 export async function assertPdfTaskReady(task: PdfGenerationTask): Promise<void> {
   try {
-    const snapshot = await getFirestore(adminApp())
+    const snapshot = await firestoreDb(adminApp())
       .doc(`agencies/${task.agencyId}/reports/${task.reportId}`)
       .get();
     if (!snapshot.exists) throw new PdfWorkerError('REPORT_NOT_FOUND', 'Report not found.');

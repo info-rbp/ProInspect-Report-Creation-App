@@ -7,6 +7,13 @@ terraform {
 }
 
 variable "project_id" { type = string }
+variable "firestore_database_id" {
+  type = string
+  validation {
+    condition     = trimspace(var.firestore_database_id) != "" && var.firestore_database_id != "(default)"
+    error_message = "firestore_database_id must name the ProInspect database and cannot be (default)."
+  }
+}
 variable "environment" {
   type = string
   validation {
@@ -100,7 +107,7 @@ data "google_project" "current" {
 resource "google_service_account" "runtime" {
   for_each     = local.runtime_accounts
   project      = var.project_id
-  account_id   = replace(each.key, "_", "-")
+  account_id   = each.key == "api" ? "proinspect-api" : replace(each.key, "_", "-")
   display_name = each.value
 }
 
@@ -108,8 +115,6 @@ resource "google_project_iam_member" "runtime_roles" {
   for_each = {
     api_datastore   = { account = "api", role = "roles/datastore.user" }
     api_pubsub      = { account = "api", role = "roles/pubsub.publisher" }
-    api_tasks       = { account = "api", role = "roles/cloudtasks.enqueuer" }
-    api_secrets     = { account = "api", role = "roles/secretmanager.secretAccessor" }
     ai_vertex       = { account = "ai_worker", role = "roles/aiplatform.user" }
     ai_pubsub       = { account = "ai_worker", role = "roles/pubsub.subscriber" }
     ai_secrets      = { account = "ai_worker", role = "roles/secretmanager.secretAccessor" }
@@ -182,7 +187,7 @@ resource "google_storage_bucket_iam_member" "upload_access" {
 
 resource "google_storage_bucket_iam_member" "report_access" {
   for_each = {
-    api = "roles/storage.objectViewer"
+    api = "roles/storage.objectAdmin"
     pdf = "roles/storage.objectAdmin"
   }
   bucket = google_storage_bucket.reports.name
@@ -245,7 +250,7 @@ resource "google_cloud_tasks_queue" "analysis" {
 }
 
 resource "google_secret_manager_secret" "runtime" {
-  for_each  = toset(["external-api-config", "shopify-webhook-secret", "email-provider-config"])
+  for_each  = toset(["external-api-config", "shopify-webhook-secret", "email-provider-config", "cloudflare-origin-secret"])
   project   = var.project_id
   secret_id = each.value
   labels    = local.labels
@@ -259,9 +264,17 @@ resource "google_secret_manager_secret" "runtime" {
   depends_on = [google_project_service.required]
 }
 
+resource "google_secret_manager_secret_iam_member" "api_runtime_secret_access" {
+  for_each  = toset(["email-provider-config", "cloudflare-origin-secret"])
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.runtime[each.value].secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime["api"].email}"
+}
+
 resource "google_firestore_database" "default" {
   project                           = var.project_id
-  name                              = "(default)"
+  name                              = var.firestore_database_id
   location_id                       = var.region
   type                              = "FIRESTORE_NATIVE"
   concurrency_mode                  = "OPTIMISTIC"
@@ -294,10 +307,10 @@ resource "google_firebase_hosting_site" "web" {
 }
 
 resource "google_identity_platform_config" "this" {
-  provider                    = google-beta
-  project                     = var.project_id
-  authorized_domains          = var.identity_authorized_domains
-  autodelete_anonymous_users  = true
+  provider                   = google-beta
+  project                    = var.project_id
+  authorized_domains         = var.identity_authorized_domains
+  autodelete_anonymous_users = true
 
   sign_in {
     allow_duplicate_emails = false
@@ -357,8 +370,49 @@ resource "google_cloud_run_v2_service" "service" {
         value = var.environment
       }
       env {
+        name  = "NODE_ENV"
+        value = local.production ? "production" : "development"
+      }
+      env {
         name  = "GOOGLE_CLOUD_PROJECT"
         value = var.project_id
+      }
+      env {
+        name  = "FIREBASE_PROJECT_ID"
+        value = var.project_id
+      }
+      dynamic "env" {
+        for_each = each.key == "ai-worker" ? [] : [1]
+        content {
+          name  = "FIRESTORE_DATABASE_ID"
+          value = var.firestore_database_id
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api" ? [1] : []
+        content {
+          name  = "PROINSPECT_PROVIDER_ID"
+          value = "proinspect"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api" ? [1] : []
+        content {
+          name  = "REQUIRE_APP_CHECK"
+          value = tostring(var.require_api_app_check)
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api" ? [1] : []
+        content {
+          name = "CLOUDFLARE_ORIGIN_SECRET"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.runtime["cloudflare-origin-secret"].secret_id
+              version = "latest"
+            }
+          }
+        }
       }
       env {
         name  = "VERTEX_AI_LOCATION"

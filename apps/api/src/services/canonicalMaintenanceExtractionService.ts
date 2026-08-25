@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import {
   inferMaintenanceIssueType,
   sanitizeProhibitedCausation,
@@ -12,6 +11,7 @@ import {
   type ReportComponentRecord,
 } from '@pcr/domain';
 import type { ApiDependencies, StoredRecord } from '../backend/types.js';
+import { firestoreDb } from '../firestoreDatabase.js';
 
 function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
@@ -94,7 +94,7 @@ async function immutableAggregate(
   versionId: string,
   report: ReportAggregate['report'],
 ): Promise<ReportAggregate> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
   const version = await versionRef.get();
   if (!version.exists || version.get('immutable') !== true) {

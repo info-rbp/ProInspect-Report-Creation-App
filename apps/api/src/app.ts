@@ -60,6 +60,7 @@ function errorResponse(error: unknown, correlationId: string): ApiResponse { if 
 function reportRoute(urlValue: string | undefined): { reportId?: string; command?: string } | undefined { const route = new URL(urlValue ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); if (route[0] !== 'api' || route[1] !== 'v1' || route[2] !== 'reports') return undefined; return { ...(route[3] ? { reportId: route[3] } : {}), ...(route[4] ? { command: route[4] } : {}) }; }
 function isClientManagementRoute(urlValue: string | undefined): boolean { const path = new URL(urlValue ?? '/', 'http://localhost').pathname; return path.startsWith('/api/v1/client-management/') || /^\/api\/v1\/clients\/[^/]+\/documents(?:\/|$)/u.test(path) || /^\/api\/v1\/maintenance-quotes\/[^/]+\/actions\/send$/u.test(path); }
 function isHealthRequest(req: IncomingMessage): boolean { return req.method === 'GET' && new URL(req.url ?? '/', 'http://localhost').pathname === '/health'; }
+function applicationVersion(): string { return process.env.APP_VERSION?.trim() || 'development'; }
 
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -78,7 +79,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
     const rateKey = `${requestSourceIp(req) ?? 'unknown'}:${req.url ?? '/'}`;
     if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
     try {
-      if (isHealthRequest(req)) { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', correlationId } }, correlationId); return; }
+      if (isHealthRequest(req)) { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', commit: applicationVersion(), correlationId } }, correlationId); return; }
       if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: { ...buildOpenApiDocument(), financialBoundary: 'No trust accounting, payments, receipts, disbursements or reconciliation.' } }, correlationId); return; }
       const notificationCallback = await routeNotificationCallbackRequest(req, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
       const esignWebhook = await routeESignExternalWebhook(req, dependencies, correlationId); if (esignWebhook) { send(res, esignWebhook, correlationId); return; }

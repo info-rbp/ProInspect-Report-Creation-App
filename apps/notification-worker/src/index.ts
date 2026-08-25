@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { firestoreDb } from './firestoreDatabase.js';
 
 interface ProviderConfig {
   sendgridApiKey?: string;
@@ -159,7 +159,7 @@ function decodePubSub(input: unknown): Record<string, unknown> {
 
 async function updateCommunication(agencyId: string, communicationId: string | undefined, patch: Record<string, unknown>) {
   if (!communicationId) return;
-  await getFirestore(adminApp()).doc(`agencies/${agencyId}/tenantCommunications/${communicationId}`).set({ ...patch, updatedAt: new Date().toISOString() }, { merge: true });
+  await firestoreDb(adminApp()).doc(`agencies/${agencyId}/tenantCommunications/${communicationId}`).set({ ...patch, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
 async function sendEmail(agencyId: string, notificationId: string, job: NotificationJob, provider: ProviderConfig) {
@@ -205,7 +205,7 @@ async function sendSms(agencyId: string, notificationId: string, job: Notificati
 }
 
 export async function deliverNotification(agencyId: string, notificationId: string, supplied?: NotificationJob): Promise<NotificationJob> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const reference = database.doc(`agencies/${agencyId}/notificationJobs/${notificationId}`);
   const snapshot = await reference.get();
   const existing = snapshot.exists ? snapshot.data() as NotificationJob : supplied;
@@ -258,7 +258,7 @@ async function portalLink(agencyId: string, tenantId: string, tenancyId: string,
   const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
   const grantId = randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
-  await getFirestore(adminApp()).doc(`agencies/${agencyId}/tenantPortalGrants/${grantId}`).create({
+  await firestoreDb(adminApp()).doc(`agencies/${agencyId}/tenantPortalGrants/${grantId}`).create({
     id: grantId,
     agencyId,
     tenantId,
@@ -286,7 +286,7 @@ async function emitAutomationNotification(input: {
   message: string;
   relatedEntityType: 'tenant_instruction' | 'tenancy_document' | 'general';
 }): Promise<boolean> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const eventKey = `${input.rule}:${input.entityId}:${input.tenantId}:${input.dateKey}`;
   const eventId = automationId(eventKey);
   const eventRef = database.doc(`agencies/${input.agencyId}/tenantAutomationEvents/${eventId}`);
@@ -311,7 +311,7 @@ async function emitAutomationNotification(input: {
 }
 
 async function runAgencyAutomation(agencyId: string, now: Date): Promise<number> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const [tenancySnap, participantSnap, tenantSnap, actionSnap, documentSnap] = await Promise.all([
     database.collection(`agencies/${agencyId}/tenancies`).get(),
     database.collection(`agencies/${agencyId}/tenancyParticipants`).get(),
@@ -364,7 +364,7 @@ async function runAgencyAutomation(agencyId: string, now: Date): Promise<number>
 }
 
 export async function runTenantAutomation(now = new Date()): Promise<{ agencies: number; emitted: number }> {
-  const agencySnapshot = await getFirestore(adminApp()).collection('agencies').get();
+  const agencySnapshot = await firestoreDb(adminApp()).collection('agencies').get();
   let emitted = 0;
   for (const agency of agencySnapshot.docs) emitted += await runAgencyAutomation(agency.id, now);
   return { agencies: agencySnapshot.size, emitted };

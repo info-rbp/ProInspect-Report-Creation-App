@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type { AuthenticatedPrincipal, ExternalAccessGrant } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
 
@@ -40,7 +40,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 async function resolveGrant(rawToken: string): Promise<VersionedGrant> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collectionGroup('externalAccessGrants')
     .where('tokenHash', '==', tokenHash(rawToken))
     .limit(2)
@@ -261,7 +261,7 @@ export async function routeExternalEvidenceRequest(
     externalPrincipal(grant),
   );
 
-  await getFirestore(adminApp())
+  await firestoreDb(adminApp())
     .doc(`agencies/${grant.agencyId}/externalAccessGrants/${grant.id}`)
     .set({ lastAccessedAt: new Date().toISOString() }, { merge: true });
   await dependencies.audit.append({

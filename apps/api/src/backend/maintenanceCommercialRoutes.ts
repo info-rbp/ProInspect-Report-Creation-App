@@ -1,7 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type {
   ClientApproval,
   ExternalAccessGrant,
@@ -14,6 +13,7 @@ import type {
   QuoteApprovalPolicy,
   SecurityCapability,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import {
   createMaintenanceWorkOrder,
@@ -46,7 +46,7 @@ async function principal(req: IncomingMessage, dependencies: ApiDependencies, ca
 function grantTokenHash(rawToken: string): string { return createHash('sha256').update(rawToken.trim()).digest('hex'); }
 
 async function resolveQuoteGrant(rawToken: string): Promise<{ grant: ExternalAccessGrant & { version: number }; approval: ClientApproval & { version: number } }> {
-  const snapshot = await getFirestore(adminApp()).collectionGroup('externalAccessGrants').where('tokenHash', '==', grantTokenHash(rawToken)).limit(2).get();
+  const snapshot = await firestoreDb(adminApp()).collectionGroup('externalAccessGrants').where('tokenHash', '==', grantTokenHash(rawToken)).limit(2).get();
   if (snapshot.empty || snapshot.size !== 1) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Quote approval link is invalid or expired.');
   const document = snapshot.docs[0]; const grant = document.data() as ExternalAccessGrant & { version: number };
   if (grant.resourceType !== 'client_approval' || grant.revokedAt) throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'Quote approval link is not valid for this resource.');

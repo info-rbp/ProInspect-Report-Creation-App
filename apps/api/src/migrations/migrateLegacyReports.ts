@@ -1,6 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import { FieldPath } from 'firebase-admin/firestore';
 import { FirestoreReportAggregateStore } from '../backend/reportAggregateStore.js';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { planLegacyReportMigration } from './legacyReport.js';
 
 function adminApp() {
@@ -11,7 +12,7 @@ async function run(): Promise<void> {
   const apply = process.argv.includes('--apply');
   const limit = Math.min(Math.max(Number(process.env.MIGRATION_LIMIT ?? 100), 1), 500);
   const after = process.env.MIGRATION_AFTER?.trim();
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   let query = database.collection('reports').orderBy(FieldPath.documentId()).limit(limit);
   if (after) query = query.startAfter(after);
   const snapshot = await query.get();

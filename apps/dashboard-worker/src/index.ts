@@ -1,9 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { FieldPath, getFirestore, type CollectionReference, type Query } from 'firebase-admin/firestore';
+import { FieldPath, type CollectionReference, type Query } from 'firebase-admin/firestore';
+import { firestoreDb } from './firestoreDatabase.js';
 
 function adminApp() { return getApps()[0] ?? initializeApp({ credential: applicationDefault() }); }
-function database() { return getFirestore(adminApp()); }
+function database() { return firestoreDb(adminApp()); }
 function json(res: ServerResponse, status: number, body: unknown): void { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); }
 function perthDateKey(now = new Date()): string { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Perth', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now); const value = (type: string) => parts.find((part) => part.type === type)?.value || ''; return `${value('year')}-${value('month')}-${value('day')}`; }
 async function count(query: Query): Promise<number> { const snapshot = await query.count().get(); return snapshot.data().count; }

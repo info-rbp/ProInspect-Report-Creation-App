@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { firestoreDb } from './firestoreDatabase.js';
 
 interface SyncTask { taskId: string; agencyId: string; connectionId: string; syncRunId: string; direction: 'import' | 'publish'; resource: string; entityId?: string; }
 interface Connection { id: string; provider: string; status: string; credentialReference?: string; configuration?: Record<string, unknown>; }
@@ -27,7 +28,7 @@ async function perform(task: SyncTask) {
   if (FORBIDDEN_FINANCIAL_RESOURCES.has(task.resource)) throw new Error(`Financial resource ${task.resource} is outside the ProInspect licensing boundary.`);
   if (task.direction === 'import' && !ALLOWED_IMPORTS.has(task.resource)) throw new Error(`Import resource ${task.resource} is not allow-listed.`);
   if (task.direction === 'publish' && !ALLOWED_PUBLISH.has(task.resource)) throw new Error(`Publish resource ${task.resource} is not allow-listed.`);
-  const db = getFirestore(app()); const connectionRef = db.doc(`agencies/${task.agencyId}/pmsConnections/${task.connectionId}`); const connectionSnap = await connectionRef.get(); if (!connectionSnap.exists) throw new Error('PMS connection was not found.'); const connection = { id: connectionSnap.id, ...connectionSnap.data() } as Connection; if (connection.status !== 'connected') throw new Error('PMS connection is not connected.');
+  const db = firestoreDb(app()); const connectionRef = db.doc(`agencies/${task.agencyId}/pmsConnections/${task.connectionId}`); const connectionSnap = await connectionRef.get(); if (!connectionSnap.exists) throw new Error('PMS connection was not found.'); const connection = { id: connectionSnap.id, ...connectionSnap.data() } as Connection; if (connection.status !== 'connected') throw new Error('PMS connection is not connected.');
   const runRef = db.doc(`agencies/${task.agencyId}/integrationSyncRuns/${task.syncRunId}`); const now = new Date().toISOString(); await runRef.set({ status: 'running', startedAt: now, updatedAt: now }, { merge: true });
   const credential = await secret(connection.credentialReference); const endpoint = new URL(pathFor(connection, task.direction, task.resource), `${baseUrl(connection)}/`); const headers: Record<string, string> = { accept: 'application/json', 'content-type': 'application/json' }; if (credential) headers.authorization = credential.startsWith('Bearer ') ? credential : `Bearer ${credential}`;
   let processed = 0; let failed = 0;

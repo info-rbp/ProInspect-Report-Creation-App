@@ -76,8 +76,16 @@ resource "google_cloud_run_v2_service" "notification_worker" {
         value = var.environment
       }
       env {
+        name  = "NODE_ENV"
+        value = local.production ? "production" : "development"
+      }
+      env {
         name  = "GOOGLE_CLOUD_PROJECT"
         value = var.project_id
+      }
+      env {
+        name  = "FIRESTORE_DATABASE_ID"
+        value = var.firestore_database_id
       }
       env {
         name  = "WEB_APP_BASE_URL"

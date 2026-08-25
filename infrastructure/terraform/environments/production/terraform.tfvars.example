@@ -1,4 +1,5 @@
-project_id         = "pcr-production-example"
+project_id            = "business-plan-applicatio-17047"
+firestore_database_id = "ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60"
 billing_account_id = "000000-000000-000000"
 monthly_budget_aud = 2000
 
@@ -19,3 +20,4 @@ report_retention_days = 365
 # to the web build as VITE_FIREBASE_APP_CHECK_SITE_KEY.
 app_check_recaptcha_enterprise_site_key = null
 app_check_enforcement_mode              = "UNENFORCED"
+require_api_app_check                   = false

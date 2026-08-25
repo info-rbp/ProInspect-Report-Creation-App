@@ -13,12 +13,6 @@ resource "google_storage_bucket_iam_member" "pdf_worker_upload_viewer" {
   member = "serviceAccount:${google_service_account.runtime["pdf_worker"].email}"
 }
 
-resource "google_storage_bucket_iam_member" "api_report_archive_creator" {
-  bucket = google_storage_bucket.reports.name
-  role   = "roles/storage.objectCreator"
-  member = "serviceAccount:${google_service_account.runtime["api"].email}"
-}
-
 resource "google_cloud_run_v2_service_iam_member" "pdf_worker_pubsub_invoker" {
   project  = var.project_id
   location = var.region

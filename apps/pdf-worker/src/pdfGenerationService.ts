@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import type { ReportPhotoReference } from '@pcr/domain';
+import { firestoreDb } from './firestoreDatabase.js';
 import {
   buildRenderManifest,
   buildRenderPackage,
@@ -112,7 +112,7 @@ function tenantEvidenceIds(response: Record<string, unknown>): string[] {
 }
 
 async function loadTenantResponses(agencyId: string, reportId: string): Promise<Array<Record<string, unknown>>> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const nested = await database.collection(`agencies/${agencyId}/reports/${reportId}/tenantResponses`).get();
   const agencyScoped = await database.collection(`agencies/${agencyId}/tenantResponses`)
     .where('reportId', '==', reportId)
@@ -136,7 +136,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     throw new PdfWorkerError('PROJECT_ID_REQUIRED', 'GOOGLE_CLOUD_PROJECT is required for PDF generation.');
   }
 
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const reportRef = database.doc(`agencies/${task.agencyId}/reports/${task.reportId}`);
   const reportSnapshot = await reportRef.get();
   if (!reportSnapshot.exists) {
@@ -392,7 +392,7 @@ async function saveImmutableObject(input: {
 }
 
 async function markFailed(task: PdfGenerationTask, error: unknown): Promise<void> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const workerError = error instanceof PdfWorkerError ? error : undefined;
   await database.doc(`agencies/${task.agencyId}/pdfJobs/${task.taskId}`).set(
     {
@@ -412,7 +412,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
     throw new PdfWorkerError('INVALID_PDF_TASK', 'taskId, agencyId and reportId are required.');
   }
 
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const pdfJobRef = database.doc(`agencies/${task.agencyId}/pdfJobs/${task.taskId}`);
   const existingJob = await pdfJobRef.get();
   if (existingJob.exists && existingJob.get('status') === 'completed') {
