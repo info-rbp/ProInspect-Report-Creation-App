@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { CommunicationChannel, CommunicationEntityType, CommunicationMessage, CommunicationThread, PropertyRecord, Tenant } from '@pcr/domain';
+import type { CommunicationEntityType, CommunicationMessage, CommunicationThread, PropertyRecord, Tenant } from '@pcr/domain';
 import { createCommunicationThread, listCommunicationMessages, listCommunicationThreads, sendThreadMessage } from '../../services/platform/enhancementService';
 import { listProperties } from '../../services/platform/propertyService';
 import { listTenants } from '../../services/platform/tenantDirectoryService';
