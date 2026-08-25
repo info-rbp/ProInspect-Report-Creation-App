@@ -1,9 +1,9 @@
 FROM node:22-alpine AS build
 WORKDIR /workspace
-COPY package.json tsconfig.base.json tsconfig.json ./
-COPY apps/notification-worker ./apps/notification-worker
+COPY package.json package-lock.json tsconfig.base.json tsconfig.json ./
+COPY apps ./apps
 COPY packages ./packages
-RUN npm install --ignore-scripts --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund
 RUN npm run build:packages && npm run build --workspace @pcr/notification-worker
 
 FROM node:22-alpine AS runtime

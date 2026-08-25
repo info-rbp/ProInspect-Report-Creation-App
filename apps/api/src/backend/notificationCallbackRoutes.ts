@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { ApiError, type ApiResponse } from './router.js';
 
 interface ProviderConfig {
@@ -76,7 +76,7 @@ async function readRaw(req: IncomingMessage, maxBytes = 1_000_000): Promise<stri
 }
 
 async function updateStatus(agencyId: string, notificationId: string, communicationId: string | undefined, status: 'queued' | 'sent' | 'delivered' | 'failed', metadata: Record<string, unknown> = {}) {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { status, updatedAt: now, ...metadata };
   if (status === 'sent') patch.sentAt = now;

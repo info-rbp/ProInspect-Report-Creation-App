@@ -1,4 +1,5 @@
 import appletConfig from '../../../firebase-applet-config.json';
+import cloudflareConfig from '../../../firebase-cloudflare-config.json';
 
 export interface RuntimeConfig {
   apiKey: string;
@@ -18,6 +19,7 @@ export interface FirebaseRuntimeConfig {
   messagingSenderId: string;
   appId: string;
   firestoreDatabaseId?: string;
+  measurementId?: string;
 }
 
 const CONFIG_KEY = 'rbp_runtime_config';
@@ -45,16 +47,11 @@ const sanitizeRuntimeConfig = (value: Partial<RuntimeConfig> | null | undefined)
 });
 
 export const getRuntimeConfig = (): RuntimeConfig => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_RUNTIME_CONFIG;
-  }
+  if (typeof window === 'undefined') return DEFAULT_RUNTIME_CONFIG;
 
   try {
     const stored = window.localStorage.getItem(CONFIG_KEY);
-    if (!stored) {
-      return DEFAULT_RUNTIME_CONFIG;
-    }
-
+    if (!stored) return DEFAULT_RUNTIME_CONFIG;
     return sanitizeRuntimeConfig(JSON.parse(stored));
   } catch {
     return DEFAULT_RUNTIME_CONFIG;
@@ -63,18 +60,12 @@ export const getRuntimeConfig = (): RuntimeConfig => {
 
 export const saveRuntimeConfig = (config: RuntimeConfig): RuntimeConfig => {
   const sanitized = sanitizeRuntimeConfig(config);
-
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CONFIG_KEY, JSON.stringify(sanitized));
-  }
-
+  if (typeof window !== 'undefined') window.localStorage.setItem(CONFIG_KEY, JSON.stringify(sanitized));
   return sanitized;
 };
 
 export const clearRuntimeConfig = (): void => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(CONFIG_KEY);
-  }
+  if (typeof window !== 'undefined') window.localStorage.removeItem(CONFIG_KEY);
 };
 
 const hasCompleteFirebaseConfig = (config: FirebaseRuntimeConfig): boolean => Boolean(
@@ -86,9 +77,7 @@ const hasCompleteFirebaseConfig = (config: FirebaseRuntimeConfig): boolean => Bo
   config.appId
 );
 
-export const isRuntimeFirebaseFallbackAllowed = (): boolean => {
-  return Boolean(import.meta.env.DEV);
-};
+export const isRuntimeFirebaseFallbackAllowed = (): boolean => Boolean(import.meta.env.DEV);
 
 export const getEnvFirebaseConfig = (): FirebaseRuntimeConfig => ({
   apiKey: sanitizeString(import.meta.env.VITE_FIREBASE_API_KEY),
@@ -97,11 +86,16 @@ export const getEnvFirebaseConfig = (): FirebaseRuntimeConfig => ({
   storageBucket: sanitizeString(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
   messagingSenderId: sanitizeString(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
   appId: sanitizeString(import.meta.env.VITE_FIREBASE_APP_ID),
+  ...(sanitizeString(import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID)
+    ? { firestoreDatabaseId: sanitizeString(import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID) }
+    : {}),
+  ...(sanitizeString(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID)
+    ? { measurementId: sanitizeString(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) }
+    : {}),
 });
 
 export const getRuntimeFirebaseConfig = (): FirebaseRuntimeConfig => {
   const config = getRuntimeConfig();
-
   return {
     apiKey: config.apiKey,
     authDomain: config.authDomain,
@@ -112,38 +106,51 @@ export const getRuntimeFirebaseConfig = (): FirebaseRuntimeConfig => {
   };
 };
 
+function firebaseConfigFromSource(source: typeof appletConfig | typeof cloudflareConfig): FirebaseRuntimeConfig | undefined {
+  if (!source || !source.apiKey || !source.projectId) return undefined;
+  return {
+    apiKey: source.apiKey,
+    authDomain: source.authDomain,
+    projectId: source.projectId,
+    storageBucket: source.storageBucket,
+    messagingSenderId: source.messagingSenderId,
+    appId: source.appId,
+    ...(source.firestoreDatabaseId ? { firestoreDatabaseId: source.firestoreDatabaseId } : {}),
+    ...(source.measurementId ? { measurementId: source.measurementId } : {}),
+  };
+}
+
+function getCloudflareFirebaseConfig(): FirebaseRuntimeConfig | undefined {
+  return firebaseConfigFromSource(cloudflareConfig);
+}
+
+function getAppletFirebaseConfig(): FirebaseRuntimeConfig | undefined {
+  return firebaseConfigFromSource(appletConfig);
+}
+
 export const getResolvedFirebaseConfig = (): FirebaseRuntimeConfig | undefined => {
-  if (appletConfig && appletConfig.apiKey && appletConfig.projectId) {
-    return {
-      apiKey: appletConfig.apiKey,
-      authDomain: appletConfig.authDomain,
-      projectId: appletConfig.projectId,
-      storageBucket: appletConfig.storageBucket,
-      messagingSenderId: appletConfig.messagingSenderId,
-      appId: appletConfig.appId,
-      firestoreDatabaseId: appletConfig.firestoreDatabaseId || undefined,
-    };
-  }
-
   const envConfig = getEnvFirebaseConfig();
-  if (hasCompleteFirebaseConfig(envConfig)) {
-    return envConfig;
+  if (hasCompleteFirebaseConfig(envConfig)) return envConfig;
+
+  if (import.meta.env.PROD) {
+    const productionConfig = getCloudflareFirebaseConfig();
+    if (productionConfig && hasCompleteFirebaseConfig(productionConfig)) return productionConfig;
+    return undefined;
   }
 
-  const runtimeConfig = getRuntimeConfig();
-  const runtimeFirebaseConfig = getRuntimeFirebaseConfig();
+  if (import.meta.env.DEV) {
+    const applet = getAppletFirebaseConfig();
+    if (applet) return applet;
 
-  // TODO: Remove this fallback after deployment environments are the only Firebase config source.
-  if (isRuntimeFirebaseFallbackAllowed() && runtimeConfig.enableCloudSync && hasCompleteFirebaseConfig(runtimeFirebaseConfig)) {
-    return runtimeFirebaseConfig;
+    const runtimeConfig = getRuntimeConfig();
+    const runtimeFirebaseConfig = getRuntimeFirebaseConfig();
+    if (runtimeConfig.enableCloudSync && hasCompleteFirebaseConfig(runtimeFirebaseConfig)) return runtimeFirebaseConfig;
   }
 
   return undefined;
 };
 
-export const getFirebaseConfig = (): FirebaseRuntimeConfig => {
-  return getResolvedFirebaseConfig() || getRuntimeFirebaseConfig();
-};
+export const getFirebaseConfig = (): FirebaseRuntimeConfig => getResolvedFirebaseConfig() || getRuntimeFirebaseConfig();
 
 let cachedAiStatus = true;
 
@@ -161,11 +168,6 @@ export const checkAiStatus = async (): Promise<boolean> => {
 };
 
 export const getGeminiApiKey = (): string => '';
-
 export const isAiConfigured = (): boolean => cachedAiStatus;
-
-export const isCloudSyncEnabled = (): boolean => {
-  return Boolean(getResolvedFirebaseConfig());
-};
-
+export const isCloudSyncEnabled = (): boolean => Boolean(getResolvedFirebaseConfig());
 export const isFirebaseConfigured = (): boolean => Boolean(getResolvedFirebaseConfig());

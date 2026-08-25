@@ -120,7 +120,7 @@ High-confidence duplicates are linked to the existing account during bulk import
 
 ## Bulk onboarding
 
-The Clients module accepts XLSX, XLS and CSV portfolio files with up to 5,000 rows per reviewed batch.
+The Clients module accepts XLSX and CSV portfolio files with up to 5,000 rows per reviewed batch. Legacy XLS files must be exported to XLSX or CSV before import so the web application does not depend on the vulnerable legacy spreadsheet parser.
 
 The browser parses the spreadsheet into structured rows. The server performs duplicate matching and validates each row during a dry run. Rows can be:
 

@@ -55,7 +55,7 @@ steps:
   - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
-    args: ['run', 'services', 'update', 'api', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}', '--quiet']
+    args: ['run', 'services', 'update', 'api', '--project=$PROJECT_ID', '--region=${_REGION}', '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/pcr-containers/api:${_RELEASE_ID}', '--update-env-vars=APP_VERSION=${_RELEASE_ID}', '--quiet']
     waitFor: ['push-api']
   - id: deploy-pdf-worker
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim

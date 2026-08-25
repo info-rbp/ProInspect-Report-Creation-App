@@ -7,15 +7,19 @@ The repository implementation is complete only after CI passes. The controls bel
 | Value | Purpose | Repository placeholder |
 | --- | --- | --- |
 | Cloud Run API URL | Frontend API origin | `VITE_API_BASE_URL` |
+| Firestore database ID | Keep browser and Firebase Admin on the same database | `FIRESTORE_DATABASE_ID` |
 | Upload bucket name | Signed upload destinations | `UPLOAD_BUCKET` |
 | App Check site key | Browser App Check token creation | `VITE_FIREBASE_APP_CHECK_SITE_KEY` |
 | App Check enforcement | Reject unverified clients | `REQUIRE_APP_CHECK=true` |
 | API image digest | Immutable Cloud Run release | Build `apps/api/Dockerfile` |
 
+The current production Firestore database ID is `ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60`. Production API paths must not silently fall back to `(default)` because that separates membership and operational records from the database used by the browser.
+
 ## Development activation
 
 - [ ] Build the API image in the development Artifact Registry repository.
 - [ ] Deploy the immutable image digest to the development `api` Cloud Run service.
+- [ ] Set `FIRESTORE_DATABASE_ID` to the same database configured in the web application.
 - [ ] Set `UPLOAD_BUCKET` to the development upload bucket.
 - [ ] Set `REQUIRE_APP_CHECK=true` after the development web app is registered.
 - [ ] Set `VITE_API_BASE_URL` and `VITE_FIREBASE_APP_CHECK_SITE_KEY` in the development web build.
@@ -41,6 +45,7 @@ The outbox prevents a database record from claiming a task was dispatched when t
 ## Staging and production gates
 
 - [ ] Repeat the development checks in staging with staging identities and buckets.
+- [ ] Verify the browser build and Cloud Run API resolve the same `FIRESTORE_DATABASE_ID` before enabling production traffic.
 - [ ] Export and archive the generated OpenAPI document for the promoted release.
 - [ ] Put the public API behind the approved HTTPS load balancer or API gateway if external clients require access.
 - [ ] Configure edge rate limits and request-size limits.

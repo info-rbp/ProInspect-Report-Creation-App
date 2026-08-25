@@ -27,6 +27,12 @@ provider "google-beta" {
 }
 
 variable "project_id" { type = string }
+variable "firestore_database_id" { type = string }
+variable "firestore_location_id" {
+  type     = string
+  default  = null
+  nullable = true
+}
 variable "billing_account_id" {
   type      = string
   sensitive = true
@@ -58,6 +64,10 @@ variable "app_check_enforcement_mode" {
   type    = string
   default = "UNENFORCED"
 }
+variable "require_api_app_check" {
+  type    = bool
+  default = false
+}
 
 module "environment" {
   source = "../../modules/environment"
@@ -65,18 +75,21 @@ module "environment" {
     google      = google
     google-beta = google-beta
   }
-  project_id                                  = var.project_id
-  environment                                 = "production"
-  billing_account_id                          = var.billing_account_id
-  region                                      = var.region
-  identity_authorized_domains                 = var.identity_authorized_domains
-  firebase_hosting_site_id                    = var.firebase_hosting_site_id
-  monthly_budget_aud                          = var.monthly_budget_aud
-  notification_emails                         = var.notification_emails
-  report_retention_days                       = var.report_retention_days
-  app_check_recaptcha_enterprise_site_key     = var.app_check_recaptcha_enterprise_site_key
-  app_check_enforcement_mode                  = var.app_check_enforcement_mode
-  api_allow_unauthenticated                   = true
+  project_id                              = var.project_id
+  firestore_database_id                   = var.firestore_database_id
+  firestore_location_id                   = var.firestore_location_id
+  environment                             = "production"
+  billing_account_id                      = var.billing_account_id
+  region                                  = var.region
+  identity_authorized_domains             = var.identity_authorized_domains
+  firebase_hosting_site_id                = var.firebase_hosting_site_id
+  monthly_budget_aud                      = var.monthly_budget_aud
+  notification_emails                     = var.notification_emails
+  report_retention_days                   = var.report_retention_days
+  app_check_recaptcha_enterprise_site_key = var.app_check_recaptcha_enterprise_site_key
+  app_check_enforcement_mode              = var.app_check_enforcement_mode
+  require_api_app_check                   = var.require_api_app_check
+  api_allow_unauthenticated               = true
 }
 
 output "landing_zone" { value = module.environment }

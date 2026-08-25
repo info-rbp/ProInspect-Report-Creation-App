@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type { AgencyBrandingProfile, AgencyOrganisationSettings } from '@pcr/domain';
 import type { ReportBrandingSnapshot, ReportPresentationTemplate } from '@pcr/report-presentation';
 import { presentationTemplateForReportType } from '@pcr/report-presentation/presets';
+import { firestoreDb } from './firestoreDatabase.js';
 import type { PdfGenerationTask } from './pdfGenerationService.js';
 import { PdfWorkerError } from './pdfGenerationService.js';
 
@@ -48,7 +48,7 @@ async function publishedTemplate(
   agencyId: string,
   reportType: string,
 ): Promise<{ recordId: string; template: ReportPresentationTemplate }> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const kind = inspectionType(reportType);
   const snapshot = await database.collection(`agencies/${agencyId}/reportPresentationTemplateVersions`).get();
   const candidates = snapshot.docs
@@ -95,7 +95,7 @@ async function brandingSnapshot(
   template: ReportPresentationTemplate,
   capturedAt: string,
 ): Promise<{ snapshot: ReportBrandingSnapshot; hash: string }> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const [profileSnapshot, organisationSnapshot] = await Promise.all([
     database.collection(`agencies/${agencyId}/brandingProfiles`).get(),
     database.doc(`agencies/${agencyId}/agencySettings/organisation`).get(),
@@ -144,7 +144,7 @@ async function brandingSnapshot(
 }
 
 export async function ensureReportPresentationIdentity(task: PdfGenerationTask): Promise<void> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const reportRef = database.doc(`agencies/${task.agencyId}/reports/${task.reportId}`);
   await database.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(reportRef);

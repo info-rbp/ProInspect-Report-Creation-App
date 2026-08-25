@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import type {
   ContractorQuote,
   ContractorQuoteRequest,
@@ -11,6 +10,7 @@ import type {
   MaintenanceItem,
   PriceBookUnit,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
@@ -98,7 +98,7 @@ async function resolveGrant(token: string): Promise<{
   grant: Record<string, unknown> & { id: string; agencyId: string; version: number };
   reference: FirebaseFirestore.DocumentReference;
 }> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collectionGroup('contractorQuoteAccessGrants')
     .where('tokenHash', '==', hashToken(token))
     .limit(2)

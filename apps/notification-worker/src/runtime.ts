@@ -1,8 +1,9 @@
 import { createDecipheriv, createHash, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, type DocumentData } from 'firebase-admin/firestore';
+import type { DocumentData } from 'firebase-admin/firestore';
 import type { CommunicationPolicy, CommunicationTemplate, NotificationRule } from '@pcr/domain';
+import { firestoreDb } from './firestoreDatabase.js';
 
 interface ProviderConfig {
   sendgridApiKey?: string;
@@ -88,7 +89,7 @@ function adminApp() {
 }
 
 function database() {
-  return getFirestore(adminApp());
+  return firestoreDb(adminApp());
 }
 
 function text(value: unknown): string {

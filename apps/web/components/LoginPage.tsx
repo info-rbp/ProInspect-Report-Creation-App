@@ -8,15 +8,11 @@ import {
   AlertCircle,
   Loader2,
   LogIn,
-  UserPlus,
-  Building2,
-  Sparkles,
 } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, pass: string) => Promise<void>;
   onGoogleLogin?: () => Promise<void>;
-  onRegister?: (email: string, pass: string) => Promise<void>;
   error?: string | null;
   isSubmitting?: boolean;
 }
@@ -24,13 +20,11 @@ interface LoginPageProps {
 const LoginPage: React.FC<LoginPageProps> = ({
   onLogin,
   onGoogleLogin,
-  onRegister,
   error,
   isSubmitting = false,
 }) => {
-  const [mode, setMode] = useState<'signin' | 'register'>('signin');
-  const [email, setEmail] = useState('info@remotebusinesspartner.com.au');
-  const [password, setPassword] = useState('Foxtrot19!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeProvider, setActiveProvider] = useState<'google' | 'email' | null>(null);
 
@@ -39,11 +33,7 @@ const LoginPage: React.FC<LoginPageProps> = ({
     if (!email.trim() || !password) return;
     setActiveProvider('email');
     try {
-      if (mode === 'register' && onRegister) {
-        await onRegister(email.trim(), password);
-      } else {
-        await onLogin(email.trim(), password);
-      }
+      await onLogin(email.trim(), password);
     } finally {
       setActiveProvider(null);
     }
@@ -57,11 +47,6 @@ const LoginPage: React.FC<LoginPageProps> = ({
     } finally {
       setActiveProvider(null);
     }
-  };
-
-  const setPreset = (presetEmail: string, presetPass: string) => {
-    setEmail(presetEmail);
-    setPassword(presetPass);
   };
 
   return (
@@ -131,36 +116,6 @@ const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* Mode Switch Tabs */}
-          {onRegister && (
-            <div id="login-tabs" className="grid grid-cols-2 p-1 mb-5 bg-slate-100 rounded-xl text-xs font-semibold">
-              <button
-                id="login-tab-signin"
-                type="button"
-                onClick={() => setMode('signin')}
-                className={`py-1.5 rounded-lg transition-all ${
-                  mode === 'signin'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                id="login-tab-register"
-                type="button"
-                onClick={() => setMode('register')}
-                className={`py-1.5 rounded-lg transition-all ${
-                  mode === 'register'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
-          )}
-
           {/* Error & Diagnostic Banner */}
           {error && (
             <div
@@ -171,7 +126,7 @@ const LoginPage: React.FC<LoginPageProps> = ({
               <div className="space-y-1">
                 <p className="font-semibold">{error}</p>
                 <p className="text-red-700 text-[11px]">
-                  Tip: If your password was changed or unlinked, use Google Sign-in or switch to "Create Account" with your email.
+                  If your access has not been provisioned, contact a ProInspect administrator.
                 </p>
               </div>
             </div>
@@ -235,11 +190,6 @@ const LoginPage: React.FC<LoginPageProps> = ({
             >
               {activeProvider === 'email' && isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-              ) : mode === 'register' ? (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Register &amp; Launch</span>
-                </>
               ) : (
                 <>
                   <LogIn className="w-4 h-4" />
@@ -249,37 +199,6 @@ const LoginPage: React.FC<LoginPageProps> = ({
             </button>
           </form>
 
-          {/* Quick Presets / Help */}
-          <div id="login-preset-section" className="mt-6 pt-5 border-t border-slate-100">
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Quick Account Presets</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                id="preset-user-rbp"
-                type="button"
-                onClick={() => setPreset('info@remotebusinesspartner.com.au', 'Foxtrot19!')}
-                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 text-slate-700 text-xs transition-colors"
-              >
-                <div className="font-medium text-slate-900 flex items-center gap-1.5">
-                  <Building2 className="w-3 h-3 text-indigo-600" />
-                  <span>info@remotebusinesspartner.com.au</span>
-                </div>
-              </button>
-              <button
-                id="preset-user-proinspect"
-                type="button"
-                onClick={() => setPreset('info@proinspect.systems', 'Foxtrot19!')}
-                className="text-left px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 text-slate-700 text-xs transition-colors"
-              >
-                <div className="font-medium text-slate-900 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3 h-3 text-slate-700" />
-                  <span>info@proinspect.systems</span>
-                </div>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer info */}
@@ -292,4 +211,3 @@ const LoginPage: React.FC<LoginPageProps> = ({
 };
 
 export default LoginPage;
-

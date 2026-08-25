@@ -7,6 +7,13 @@ function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
 }
 
+export function hasVerifiedFirebaseSecondFactor(decoded: {
+  firebase?: { sign_in_second_factor?: unknown };
+}): boolean {
+  const factor = decoded.firebase?.sign_in_second_factor;
+  return typeof factor === 'string' && factor.trim().length > 0;
+}
+
 export class FirebaseIdentityVerifier implements IdentityVerifier {
   async verifyIdentityToken(token: string): Promise<VerifiedIdentityToken> {
     const decoded = await getAuth(adminApp()).verifyIdToken(token, true);
@@ -19,7 +26,7 @@ export class FirebaseIdentityVerifier implements IdentityVerifier {
       ...(typeof decoded.role === 'string' ? { role: decoded.role } : {}),
       authTime: decoded.auth_time,
       issuedAt: decoded.iat,
-      mfaVerified: Boolean(firebase?.sign_in_second_factor || decoded.mfa_verified === true),
+      mfaVerified: hasVerifiedFirebaseSecondFactor(decoded),
       ...(typeof decoded.sessionId === 'string' ? { sessionId: decoded.sessionId } : {}),
     };
   }

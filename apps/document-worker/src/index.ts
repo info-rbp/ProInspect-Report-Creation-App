@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { firestoreDb } from './firestoreDatabase.js';
 
 interface DocumentTask {
   taskId: string;
@@ -25,7 +25,7 @@ function decode(input: unknown): DocumentTask { if (!input || typeof input !== '
 function digest(bytes: Uint8Array | Buffer): string { return createHash('sha256').update(bytes).digest('hex'); }
 
 async function render(task: DocumentTask) {
-  const db = getFirestore(app());
+  const db = firestoreDb(app());
   const templateRef = db.doc(`agencies/${task.agencyId}/documentTemplateVersions/${task.templateVersionId}`);
   let templateSnap = await templateRef.get();
   if (!templateSnap.exists) templateSnap = await db.doc(`documentTemplateVersions/${task.templateVersionId}`).get();

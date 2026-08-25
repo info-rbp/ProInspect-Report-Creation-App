@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { AuthenticatedPrincipal, AuthorisationTarget, SecurityCapability, UserRole } from '@pcr/domain';
 import { authorise, requiresMfa } from './policy.js';
+import { requestSourceIp } from './trustedEdge.js';
 import { bearerToken, type SecurityDependencies } from './types.js';
 
 const roles = new Set<UserRole>(['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer', 'tenant', 'landlord', 'shopify_customer']);
@@ -29,11 +30,17 @@ export async function authenticateAndAuthorise(
   }
 
   const identity = await dependencies.identityVerifier.verifyIdentityToken(token);
-  const agencyId = identity.agencyId ?? identity.tenantId ?? (req.headers['x-agency-id'] as string | undefined) ?? (target.agencyId) ?? 'agency-1';
+  const requestedAgencyId = req.headers['x-agency-id']?.toString().trim() || target.agencyId;
+  const identityAgencyId = identity.agencyId ?? identity.tenantId;
+  const agencyId = requestedAgencyId || identityAgencyId;
+  if (!agencyId) throw new SecurityError(403, 'AGENCY_REQUIRED', 'The identity is not linked to an agency or ProInspect provider membership.');
 
   const membership = await dependencies.memberships.getMembership(identity.uid, agencyId);
   if (!membership || membership.status !== 'active') {
-    throw new SecurityError(403, 'MEMBERSHIP_INACTIVE', 'The agency membership is not active.');
+    throw new SecurityError(403, 'MEMBERSHIP_INACTIVE', 'The requested agency membership is not active.');
+  }
+  if (membership.agencyId !== agencyId) {
+    throw new SecurityError(403, 'AGENCY_MEMBERSHIP_MISMATCH', 'The resolved membership does not belong to the requested agency.');
   }
   if (!roles.has(membership.role)) throw new SecurityError(403, 'ROLE_INVALID', 'The membership role is invalid.');
 
@@ -57,22 +64,13 @@ export async function authenticateAndAuthorise(
     throw new SecurityError(403, 'MFA_REQUIRED', 'Multi-factor authentication is required.');
   }
 
-  const result = authorise(principal, capability, target);
-  const sourceIp = req.socket.remoteAddress;
+  const result = authorise(principal, capability, { ...target, agencyId });
+  const sourceIp = requestSourceIp(req);
   const userAgent = req.headers['user-agent'];
   await dependencies.audit.append({
-    id: randomUUID(),
-    timestamp: now.toISOString(),
-    actorId: principal.uid,
-    actorRole: principal.role,
-    agencyId,
-    capability,
-    outcome: result.allowed ? 'allowed' : 'denied',
-    ...(result.reason ? { reason: result.reason } : {}),
-    target,
-    correlationId,
-    ...(sourceIp ? { sourceIp } : {}),
-    ...(userAgent ? { userAgent } : {}),
+    id: randomUUID(), timestamp: now.toISOString(), actorId: principal.uid, actorRole: principal.role,
+    agencyId, capability, outcome: result.allowed ? 'allowed' : 'denied', ...(result.reason ? { reason: result.reason } : {}),
+    target: { ...target, agencyId }, correlationId, ...(sourceIp ? { sourceIp } : {}), ...(userAgent ? { userAgent } : {}),
   });
 
   if (!result.allowed) throw new SecurityError(403, 'FORBIDDEN', 'The requested action is not permitted.');

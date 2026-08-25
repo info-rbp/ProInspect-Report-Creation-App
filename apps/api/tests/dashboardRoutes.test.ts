@@ -25,7 +25,6 @@ function dependencies(role: 'proinspect_admin' | 'inspector' = 'proinspect_admin
     maintenanceQuotes: [record('quote-1', { status: 'sent', total: 1250 })],
     maintenanceWorkOrders: [record('work-order-1', { status: 'in_progress' })],
     integrationSyncExceptions: [record('integration-1', { status: 'open', severity: 'critical' })],
-    xeroSyncExceptions: [record('xero-1', { status: 'open' })],
     inspectionRequests: [record('request-1', { intakeStatus: 'awaiting_booking' })],
     recurringInspectionSchedules: [record('schedule-1', { paused: false, nextDueAt: new Date(Date.now() + 5 * 86_400_000).toISOString() })],
   };
@@ -70,10 +69,10 @@ describe('dashboard aggregate', () => {
   it('returns cross-module operational queues for administrators', async () => {
     const response = await getDashboard(dependencies());
     expect(response.status).toBe(200);
-    const payload = await response.json() as { data: { today: Array<{ key: string; value: number }>; maintenance: Array<{ key: string; value: number }>; commercial?: { xeroExceptions: number } } };
+    const payload = await response.json() as { data: { today: Array<{ key: string; value: number }>; maintenance: Array<{ key: string; value: number }>; commercial?: { integrationExceptions: number } } };
     expect(payload.data.today.find((item) => item.key === 'access_unconfirmed')?.value).toBe(1);
     expect(payload.data.maintenance.find((item) => item.key === 'maintenance_urgent')?.value).toBe(1);
-    expect(payload.data.commercial?.xeroExceptions).toBe(1);
+    expect(payload.data.commercial?.integrationExceptions).toBe(1);
   });
 
   it('limits assigned operational data and hides commercial data for inspectors', async () => {

@@ -20,11 +20,11 @@ ProInspect is a multi-agency property inspection, reporting, maintenance and ten
 Use Node 22.
 
 ```bash
-npm install --ignore-scripts --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 npm run dev
 ```
 
-The repository currently retains `bun.lock`, while the established CI and container build path installs the npm workspaces using the dependency ranges in `package.json`. Dependency upgrades should reconcile the lock strategy before changing major tooling versions rather than assuming an npm lockfile exists.
+`package-lock.json` is the reviewed dependency source of truth for CI and Cloudflare builds. Update it with Node 22/npm 10 and commit package manifest and lockfile changes together.
 
 ## Validation
 

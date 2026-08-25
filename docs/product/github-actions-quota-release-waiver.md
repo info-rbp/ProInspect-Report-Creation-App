@@ -1,4 +1,6 @@
-# GitHub Actions quota release waiver
+# Historical GitHub Actions quota release waiver
+
+> Historical record only. This waiver does not authorise merging PR #53 while its required CI status is red or unable to run. The current production-readiness gate is documented in `docs/deployment/production-runbook.md`.
 
 ## Scope
 
@@ -29,7 +31,7 @@ The quota-period review found and corrected issues that would otherwise have esc
 - PDF branding identity was pinned but the physical logo was not loaded/rendered. Final PDF generation now fetches the exact governed PNG/JPEG generation, verifies SHA-256, records it in render provenance and renders it on the cover.
 - Live dashboard refreshes could repeatedly rescan operational collections. A short identity-scoped cache now bounds repeated scans while re-authorising every cache hit so suspension, App Check and membership changes remain authoritative.
 - New runtime services lacked a usable non-Actions image promotion path. Notification/dashboard Dockerfiles and an image-only Cloud Build release path were added.
-- Existing/new Dockerfiles incorrectly assumed `package-lock.json`/`npm ci`; this repository uses `bun.lock` and the established npm-install CI convention. All deployable Dockerfiles and the Cloud Build validation path were corrected.
+- At the time of this waiver the repository used the older install convention. It now commits `package-lock.json` and uses `npm ci`; this line is retained only as historical context.
 - Firebase App Check was initialized lazily after authentication. A shared singleton now initializes before auth listeners/sign-in and is reused for API tokens, allowing Identity Toolkit enforcement to function.
 - Identity Platform Terraform now disables public user signup/deletion, enables multi-tenancy and enables TOTP MFA capability while application policy continues to require MFA for privileged roles.
 - App Check provider and service enforcement are now Terraform-managed and guarded so ENFORCED mode cannot be selected without the environment-specific reCAPTCHA Enterprise site key.

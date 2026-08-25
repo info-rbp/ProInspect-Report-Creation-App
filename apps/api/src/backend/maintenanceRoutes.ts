@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import {
   MAINTENANCE_CATEGORIES,
   MAINTENANCE_PRIORITIES,
@@ -19,6 +18,7 @@ import {
   type WorkRequest,
   type WorkRequestStatus,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, StoredRecord } from './types.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
@@ -102,7 +102,7 @@ async function resolveExternalGrant(
   if (!expectedResourceType) throw new ApiError(404, 'NOT_FOUND', 'External portal not found.');
 
   const tokenHash = hashGrantToken(rawToken);
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collectionGroup('externalAccessGrants')
     .where('tokenHash', '==', tokenHash)
     .limit(2)

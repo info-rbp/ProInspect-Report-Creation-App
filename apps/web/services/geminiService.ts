@@ -147,8 +147,8 @@ const preparePreviousReportPayload = async (
 
 async function callAnalysisApi<T>(endpoint: string, body: unknown): Promise<T> {
   const agencyId = typeof window !== 'undefined'
-    ? window.localStorage.getItem('agencyId') || window.localStorage.getItem('pcr_agency_id') || 'agency-demo'
-    : 'agency-demo';
+    ? window.localStorage.getItem('agencyId') || window.localStorage.getItem('pcr_agency_id') || undefined
+    : undefined;
   return apiRequest<T>(agencyId, `/api/v1/analysis/${endpoint}`, { method: 'POST', body });
 }
 

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import type { ExternalAccessGrant, UploadSessionRecord } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -19,7 +19,7 @@ function hashToken(value: string): string {
 }
 
 async function resolveGrant(rawToken: string): Promise<VersionedGrant> {
-  const snapshot = await getFirestore(adminApp())
+  const snapshot = await firestoreDb(adminApp())
     .collectionGroup('externalAccessGrants')
     .where('tokenHash', '==', hashToken(rawToken))
     .limit(2)
@@ -68,7 +68,7 @@ export async function routeExternalEvidenceCompletionRequest(
 
   const grant = await resolveGrant(decodeURIComponent(parts[4]));
   const uploadId = decodeURIComponent(parts[6]);
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const sessionSnapshot = await database
     .doc(`agencies/${grant.agencyId}/uploadSessions/${uploadId}`)
     .get();

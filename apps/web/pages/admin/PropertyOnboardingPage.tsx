@@ -15,7 +15,7 @@ import type {
 } from '../../types/platform';
 import { generateId } from '../../utils';
 import { createProperty, listProperties, updateProperty } from '../../services/platform/propertyService';
-import { DEFAULT_AGENCY_ID } from '../../services/platform/userProfileService';
+import { requireSelectedAgencyId } from '../../services/platform/userProfileService';
 import {
   PROPERTY_LAYOUT_TEMPLATES,
   applyLayoutTemplate,
@@ -202,7 +202,7 @@ const PropertyOnboardingPage: React.FC = () => {
       const now = new Date().toISOString();
       const draftProperty: PropertyRecord = {
         id: 'onboarding-draft',
-        agencyId: DEFAULT_AGENCY_ID,
+        agencyId: requireSelectedAgencyId(),
         address: address.trim(),
         suburb: suburb.trim(),
         state: state.trim(),

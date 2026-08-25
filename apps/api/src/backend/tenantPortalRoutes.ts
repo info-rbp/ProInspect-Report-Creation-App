@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import {
   MAINTENANCE_CATEGORIES,
@@ -11,6 +10,7 @@ import {
   type MaintenancePriority,
   type UploadSessionRecord,
 } from '@pcr/domain';
+import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 import { ApiError, type ApiResponse } from './router.js';
@@ -96,7 +96,7 @@ function externalPrincipal(grant: TenantPortalGrant): AuthenticatedPrincipal {
 }
 
 async function resolveGrant(rawToken: string): Promise<TenantPortalGrant> {
-  const snapshot = await getFirestore(adminApp()).collectionGroup('tenantPortalGrants').where('tokenHash', '==', hashToken(rawToken)).limit(2).get();
+  const snapshot = await firestoreDb(adminApp()).collectionGroup('tenantPortalGrants').where('tokenHash', '==', hashToken(rawToken)).limit(2).get();
   if (snapshot.empty || snapshot.size !== 1) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Tenant portal link is invalid or expired.');
   const document = snapshot.docs[0];
   const grant = document.data() as TenantPortalGrant;
@@ -325,7 +325,7 @@ async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGr
 }
 
 async function evidenceComplete(grant: TenantPortalGrant, dependencies: ApiDependencies, correlationId: string, uploadId: string): Promise<ApiResponse> {
-  const database = getFirestore(adminApp());
+  const database = firestoreDb(adminApp());
   const snapshot = await database.doc(`agencies/${grant.agencyId}/uploadSessions/${uploadId}`).get();
   if (!snapshot.exists) throw new ApiError(404, 'UPLOAD_SESSION_NOT_FOUND', 'Evidence upload session was not found.');
   const session = snapshot.data() as UploadSessionRecord;
