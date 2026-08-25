@@ -11,10 +11,17 @@ function cloudMode(): boolean {
   return Boolean(isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim());
 }
 
+function normaliseReportIndex(report: ReportIndex): ReportIndex {
+  const record = report as ReportIndex & { id?: string; reportId?: string };
+  const reportId = record.reportId?.trim() || record.id?.trim();
+  if (!reportId) throw new Error('The report register returned a record without a stable report identifier.');
+  return { ...report, id: reportId, reportId };
+}
+
 export const upsertReportIndexFromReport = async (report: ReportData): Promise<ReportIndex> => {
   if (cloudMode()) {
     const authoritative = await apiRequest<ReportIndex>(report.agencyId, `/api/v1/reports/${encodeURIComponent(report.id)}`);
-    return authoritative;
+    return normaliseReportIndex(authoritative);
   }
 
   const timestamp = new Date().toISOString();
@@ -72,18 +79,19 @@ export const createReportForInspectionJob = async (
 export const getReportIndex = async (reportId: string): Promise<ReportIndex | undefined> => {
   if (cloudMode()) {
     try {
-      return await apiRequest<ReportIndex>(undefined, `/api/v1/reports/${encodeURIComponent(reportId)}`);
+      return normaliseReportIndex(await apiRequest<ReportIndex>(undefined, `/api/v1/reports/${encodeURIComponent(reportId)}`));
     } catch (error) {
       if ((error as { code?: string }).code === 'NOT_FOUND') return undefined;
       throw error;
     }
   }
-  return localGet<ReportIndex>('reportIndexes', reportId);
+  const local = await localGet<ReportIndex>('reportIndexes', reportId);
+  return local ? normaliseReportIndex(local) : undefined;
 };
 
 export const listReportIndexes = async (): Promise<ReportIndex[]> => {
-  if (cloudMode()) return apiRequest<ReportIndex[]>(undefined, '/api/v1/reports');
-  return localList<ReportIndex>('reportIndexes');
+  if (cloudMode()) return (await apiRequest<ReportIndex[]>(undefined, '/api/v1/reports')).map(normaliseReportIndex);
+  return (await localList<ReportIndex>('reportIndexes')).map(normaliseReportIndex);
 };
 
 export const updateReportLifecycleStatus = async (
@@ -99,7 +107,7 @@ export const updateReportLifecycleStatus = async (
       lifecycleStatus,
       (existing as ReportIndex & { version?: number }).version ?? 1,
     );
-    return transitioned as unknown as ReportIndex;
+    return normaliseReportIndex(transitioned as unknown as ReportIndex);
   }
   const updatedReportIndex: ReportIndex = { ...existing, lifecycleStatus, updatedAt: new Date().toISOString() };
   await localPut('reportIndexes', updatedReportIndex);
