@@ -395,12 +395,9 @@ resource "google_cloud_run_v2_service" "service" {
         name  = "FIREBASE_PROJECT_ID"
         value = var.project_id
       }
-      dynamic "env" {
-        for_each = each.key == "ai-worker" ? [] : [1]
-        content {
-          name  = "FIRESTORE_DATABASE_ID"
-          value = var.firestore_database_id
-        }
+      env {
+        name  = "FIRESTORE_DATABASE_ID"
+        value = var.firestore_database_id
       }
       dynamic "env" {
         for_each = each.key == "api" ? [1] : []
