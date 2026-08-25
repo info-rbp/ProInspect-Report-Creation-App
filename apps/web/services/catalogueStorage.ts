@@ -10,8 +10,27 @@ import type {
 } from '@pcr/templates/catalogueAdmin';
 import { apiRequest } from './apiClient';
 
+const CATALOGUE_READ_TIMEOUT_MS = 10_000;
+
 function versionPath(kind: 'areas' | 'components', id: string, version: number): string {
   return `/api/v1/catalogue/${kind}/${encodeURIComponent(id)}/versions/${version}`;
+}
+
+async function boundedCatalogueRead<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeout = globalThis.setTimeout(() => reject(Object.assign(
+          new Error(`${label} did not respond within ${CATALOGUE_READ_TIMEOUT_MS / 1000} seconds. Use Refresh to retry.`),
+          { code: 'CATALOGUE_TIMEOUT' },
+        )), CATALOGUE_READ_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) globalThis.clearTimeout(timeout);
+  }
 }
 
 export async function getCatalogueAreas(
@@ -22,7 +41,10 @@ export async function getCatalogueAreas(
   if (filters.status && filters.status !== 'all') params.set('status', filters.status);
   if (filters.category && filters.category !== 'all') params.set('category', filters.category);
   const suffix = params.size ? `?${params.toString()}` : '';
-  return apiRequest<CatalogueAreaVersionView[]>(undefined, `/api/v1/catalogue/areas${suffix}`);
+  return boundedCatalogueRead(
+    apiRequest<CatalogueAreaVersionView[]>(undefined, `/api/v1/catalogue/areas${suffix}`),
+    'Canonical Areas catalogue',
+  );
 }
 
 export async function getCatalogueComponents(
@@ -33,7 +55,10 @@ export async function getCatalogueComponents(
   if (filters.status && filters.status !== 'all') params.set('status', filters.status);
   if (filters.category && filters.category !== 'all') params.set('category', filters.category);
   const suffix = params.size ? `?${params.toString()}` : '';
-  return apiRequest<CatalogueComponentVersionView[]>(undefined, `/api/v1/catalogue/components${suffix}`);
+  return boundedCatalogueRead(
+    apiRequest<CatalogueComponentVersionView[]>(undefined, `/api/v1/catalogue/components${suffix}`),
+    'Canonical Components catalogue',
+  );
 }
 
 export async function createCatalogueAreaDraft(
