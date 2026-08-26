@@ -5,6 +5,7 @@ export interface InspectionRouteStop { id: string; inspectionJobId: string; prop
 export interface InspectionRoutePlan {
   id: string;
   agencyId: string;
+  name?: string;
   inspectorId: string;
   serviceDate: string;
   timezone: string;

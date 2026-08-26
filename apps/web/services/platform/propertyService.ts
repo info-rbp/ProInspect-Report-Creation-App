@@ -8,6 +8,10 @@ import { localGet, localList, localPut } from './localPlatformStore';
 export type CreatePropertyInput = Omit<PropertyRecord, 'id' | 'status' | 'createdAt' | 'updatedAt' | 'clientIds'> & Partial<Pick<PropertyRecord, 'clientIds' | 'status'>> & { id?: string };
 type VersionedProperty = PropertyRecord & { version?: number };
 
+function cloudMode(): boolean {
+  return Boolean(isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim());
+}
+
 function inferredUse(property: PropertyRecord): PropertyUse { if (property.propertyUse) return property.propertyUse; return property.propertyType === 'commercial' ? 'commercial' : 'residential'; }
 function inferredPhysicalType(property: PropertyRecord): PhysicalPropertyType { if (property.physicalPropertyType) return property.physicalPropertyType; if (property.propertyType === 'commercial') return 'office'; return (property.propertyType || 'house') as PhysicalPropertyType; }
 function inferredOwnership(property: PropertyRecord): OwnershipStructure { if (property.ownershipStructure) return property.ownershipStructure; return ['apartment', 'unit'].includes(property.propertyType || '') ? 'strata' : 'unknown'; }
@@ -15,7 +19,14 @@ export function normalisePropertyRecord(property: PropertyRecord): PropertyRecor
 
 function cloudCreateCommand(property: VersionedProperty): Record<string, unknown> {
   const command: Record<string, unknown> = { ...property };
-  delete command.createdAt; delete command.updatedAt; delete command.version;
+  // Property IDs are server-authoritative. Supplying a browser-side draft ID here can
+  // turn an onboarding placeholder into a persistent record identifier and makes a
+  // failed create look successful when the browser falls back to local storage.
+  delete command.id;
+  delete command.agencyId;
+  delete command.createdAt;
+  delete command.updatedAt;
+  delete command.version;
   return command;
 }
 function cloudUpdateCommand(updates: Partial<PropertyRecord>): Record<string, unknown> {
@@ -42,15 +53,24 @@ const SAMPLE_PROPERTIES: PropertyRecord[] = [
 export const createProperty = async (input: CreatePropertyInput): Promise<PropertyRecord> => {
   const timestamp = new Date().toISOString(); const newId = input.id?.trim() || generateId();
   const localProperty = normalisePropertyRecord({ ...input, id: newId, clientIds: input.clientIds || [], status: input.status || 'active', createdAt: timestamp, updatedAt: timestamp });
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
-    try { return normalisePropertyRecord(await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', { method: 'POST', body: cloudCreateCommand(localProperty) })); }
-    catch (err) { console.warn('API createProperty failed, saving locally:', err); }
+  if (cloudMode()) {
+    // Never convert an authoritative cloud-write failure into a browser-only success.
+    // A successful create is immediately re-read from the server so the wizard only
+    // navigates after persistence has been proven under the generated canonical ID.
+    const created = normalisePropertyRecord(await apiRequest<PropertyRecord>(input.agencyId, '/api/v1/properties', { method: 'POST', body: cloudCreateCommand(localProperty) }));
+    if (!created.id?.trim()) throw new Error('The property API did not return a canonical property ID.');
+    const persisted = normalisePropertyRecord(await apiRequest<PropertyRecord>(input.agencyId, `/api/v1/properties/${encodeURIComponent(created.id)}`));
+    if (persisted.id !== created.id) throw new Error('The property could not be verified after creation.');
+    return persisted;
   }
   await localPut('properties', localProperty); return localProperty;
 };
 
 export const getProperty = async (propertyId: string): Promise<PropertyRecord | undefined> => {
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL) { try { return normalisePropertyRecord(await apiRequest<PropertyRecord>(undefined, `/api/v1/properties/${propertyId}`)); } catch { /* fall through */ } }
+  if (cloudMode()) {
+    try { return normalisePropertyRecord(await apiRequest<PropertyRecord>(undefined, `/api/v1/properties/${encodeURIComponent(propertyId)}`)); }
+    catch (error) { if ((error as { code?: string }).code === 'NOT_FOUND') return undefined; throw error; }
+  }
   const firestoreDb = getFirestoreDb();
   if (firestoreDb) { try { const docSnap = await getDoc(doc(firestoreDb, 'properties', propertyId)); if (docSnap.exists()) { const data = normalisePropertyRecord(docSnap.data() as PropertyRecord); await localPut('properties', data); return data; } } catch (err) { console.warn('Firestore getProperty failed, checking local:', err); } }
   const localRecord = await localGet<PropertyRecord>('properties', propertyId); if (localRecord) return normalisePropertyRecord(localRecord);
@@ -58,7 +78,7 @@ export const getProperty = async (propertyId: string): Promise<PropertyRecord | 
 };
 
 export const listProperties = async (): Promise<PropertyRecord[]> => {
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL) { try { return (await apiRequest<PropertyRecord[]>(undefined, '/api/v1/properties')).map(normalisePropertyRecord); } catch { /* fall through */ } }
+  if (cloudMode()) return (await apiRequest<PropertyRecord[]>(undefined, '/api/v1/properties')).map(normalisePropertyRecord);
   const firestoreDb = getFirestoreDb();
   if (firestoreDb) { try { const snapshot = await getDocs(collection(firestoreDb, 'properties')); if (!snapshot.empty) { const items = snapshot.docs.map((item) => normalisePropertyRecord(item.data() as PropertyRecord)); for (const item of items) await localPut('properties', item); return items; } } catch (err) { console.warn('Firestore listProperties failed, using local store:', err); } }
   const localItems = await localList<PropertyRecord>('properties'); if (localItems.length > 0) return localItems.map(normalisePropertyRecord);
@@ -68,9 +88,8 @@ export const listProperties = async (): Promise<PropertyRecord[]> => {
 export const updateProperty = async (propertyId: string, updates: Partial<Omit<PropertyRecord, 'id' | 'createdAt'>>): Promise<PropertyRecord> => {
   const existing = await getProperty(propertyId); if (!existing) throw new Error('Property not found.');
   const updatedProperty = normalisePropertyRecord({ ...existing, ...updates, id: propertyId, updatedAt: new Date().toISOString() });
-  if (isFirebaseConfigured() && import.meta.env.VITE_API_BASE_URL?.trim()) {
-    try { return normalisePropertyRecord(await apiRequest<PropertyRecord>(existing.agencyId, `/api/v1/properties/${propertyId}`, { method: 'PATCH', body: { ...cloudUpdateCommand(updates), expectedVersion: (existing as VersionedProperty).version ?? 1 } })); }
-    catch (err) { console.warn('API updateProperty failed, updating locally:', err); }
+  if (cloudMode()) {
+    return normalisePropertyRecord(await apiRequest<PropertyRecord>(existing.agencyId, `/api/v1/properties/${encodeURIComponent(propertyId)}`, { method: 'PATCH', body: { ...cloudUpdateCommand(updates), expectedVersion: (existing as VersionedProperty).version ?? 1 } }));
   }
   await localPut('properties', updatedProperty); return updatedProperty;
 };

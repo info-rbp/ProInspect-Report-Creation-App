@@ -3,6 +3,7 @@ import type { DashboardMetric, DashboardOverview, DashboardRange } from '@pcr/do
 import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getDashboardOverview } from '../services/platform/dashboardService';
+import { listPeople } from '../services/platform/peopleService';
 
 const ranges: Array<{ value: DashboardRange; label: string }> = [
   { value: 'today', label: 'Today' },
@@ -24,33 +25,17 @@ const MetricGrid: React.FC<{ title: string; metrics: DashboardMetric[] }> = ({ t
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       {metrics.map((item) => {
         const card = (
-          <div
-            className={`h-full rounded-xl border p-4 shadow-2xs transition-all duration-200 hover:shadow-md ${severityClass(
-              item.severity,
-            )}`}
-          >
+          <div className={`h-full rounded-xl border p-4 shadow-2xs transition-all duration-200 hover:shadow-md ${severityClass(item.severity)}`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-slate-500 leading-tight">{item.label}</p>
+                <p className="text-xs font-medium leading-tight text-slate-500">{item.label}</p>
                 <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">{item.value}</p>
               </div>
-              {item.deepLink ? (
-                <ArrowRight size={16} className="mt-0.5 text-slate-400 transition-transform group-hover:translate-x-0.5" />
-              ) : null}
+              {item.deepLink ? <ArrowRight size={16} className="mt-0.5 text-slate-400 transition-transform group-hover:translate-x-0.5" /> : null}
             </div>
           </div>
         );
-        return item.deepLink ? (
-          <Link
-            key={item.key}
-            to={item.deepLink}
-            className="group block rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-          >
-            {card}
-          </Link>
-        ) : (
-          <div key={item.key}>{card}</div>
-        );
+        return item.deepLink ? <Link key={item.key} to={item.deepLink} className="group block rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30">{card}</Link> : <div key={item.key}>{card}</div>;
       })}
     </div>
   </section>
@@ -61,6 +46,8 @@ const DashboardPage: React.FC = () => {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [peopleNames, setPeopleNames] = useState<Record<string, string>>({});
+
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setIsLoading(true);
     setError(null);
@@ -68,7 +55,14 @@ const DashboardPage: React.FC = () => {
     catch (err) { setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.'); }
     finally { if (!quiet) setIsLoading(false); }
   }, [range]);
+
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(true), 60_000); return () => window.clearInterval(timer); }, [load]);
+  useEffect(() => {
+    void listPeople()
+      .then((people) => setPeopleNames(Object.fromEntries(people.map((person) => [person.id, person.displayName || person.identity?.displayName || person.email || person.id]))))
+      .catch(() => setPeopleNames({}));
+  }, []);
+
   const trendEntries = useMemo(() => Object.entries(overview?.trends || {}), [overview]);
 
   if (isLoading && !overview) return <div className="rounded-lg border border-gray-200 bg-white p-8 text-sm text-gray-600">Loading operational dashboard…</div>;
@@ -86,7 +80,7 @@ const DashboardPage: React.FC = () => {
       <MetricGrid title="Maintenance & approvals" metrics={overview.maintenance} />
       {overview.commercial ? <section><h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Commercial operations</h2><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Quotes awaiting approval</p><p className="mt-1 text-2xl font-bold">{overview.commercial.quotesAwaitingApproval}</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Value awaiting approval</p><p className="mt-1 text-2xl font-bold">${overview.commercial.quoteValueAwaitingApproval.toLocaleString('en-AU')}</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Accepted quote value</p><p className="mt-1 text-2xl font-bold">${overview.commercial.acceptedQuoteValue.toLocaleString('en-AU')}</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Work orders in progress</p><p className="mt-1 text-2xl font-bold">{overview.commercial.workOrdersInProgress}</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Integration exceptions</p><p className="mt-1 text-2xl font-bold">{overview.commercial.integrationExceptions}</p></div></div></section> : null}
       <section><h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Performance for selected period</h2><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Inspections completed</p><p className="mt-1 text-2xl font-bold">{overview.performance.inspectionsCompleted}</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Reports finalised</p><p className="mt-1 text-2xl font-bold">{overview.performance.reportsFinalised}</p><p className="mt-1 text-xs text-gray-500">Avg {overview.performance.averageReportTurnaroundHours ?? '–'}h · SLA {overview.performance.reportSlaCompliancePercent ?? '–'}%</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Maintenance closed</p><p className="mt-1 text-2xl font-bold">{overview.performance.maintenanceClosed}</p><p className="mt-1 text-xs text-gray-500">Avg {overview.performance.averageMaintenanceTurnaroundHours ?? '–'}h · SLA {overview.performance.maintenanceSlaCompliancePercent ?? '–'}%</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Quote acceptance</p><p className="mt-1 text-2xl font-bold">{overview.performance.quoteAcceptancePercent ?? '–'}%</p></div></div></section>
-      {overview.capacity.length ? <section><h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Workload & capacity</h2><div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm"><table className="min-w-full text-sm"><thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Role</th><th className="px-4 py-3">User</th><th className="px-4 py-3">Assigned</th><th className="px-4 py-3">Due today</th><th className="px-4 py-3">Overdue</th></tr></thead><tbody>{overview.capacity.slice(0, 12).map((row) => <tr key={`${row.role}-${row.userId}`} className="border-t border-gray-100"><td className="px-4 py-3 capitalize">{row.role}</td><td className="px-4 py-3 font-medium">{row.userId}</td><td className="px-4 py-3">{row.assigned}</td><td className="px-4 py-3">{row.dueToday}</td><td className="px-4 py-3 font-semibold text-red-700">{row.overdue}</td></tr>)}</tbody></table></div></section> : null}
+      {overview.capacity.length ? <section><h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Workload & capacity</h2><div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm"><table className="min-w-full text-sm"><thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Role</th><th className="px-4 py-3">User</th><th className="px-4 py-3">Assigned</th><th className="px-4 py-3">Due today</th><th className="px-4 py-3">Overdue</th></tr></thead><tbody>{overview.capacity.slice(0, 12).map((row) => <tr key={`${row.role}-${row.userId}`} className="border-t border-gray-100"><td className="px-4 py-3 capitalize">{row.role}</td><td className="px-4 py-3"><div className="font-medium">{peopleNames[row.userId] || 'Unknown user'}</div>{!peopleNames[row.userId] ? <div className="max-w-48 truncate font-mono text-[10px] text-gray-400" title={row.userId}>{row.userId}</div> : null}</td><td className="px-4 py-3">{row.assigned}</td><td className="px-4 py-3">{row.dueToday}</td><td className="px-4 py-3 font-semibold text-red-700">{row.overdue}</td></tr>)}</tbody></table></div></section> : null}
       <section><h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Period trends</h2><div className="grid gap-3 md:grid-cols-3">{trendEntries.map(([key, item]) => { const TrendIcon = item.direction === 'up' ? ArrowUpRight : item.direction === 'down' ? ArrowDownRight : ArrowRight; return <div key={key} className="rounded-lg border border-gray-200 bg-white p-4"><div className="flex items-center justify-between"><p className="text-sm font-semibold capitalize text-gray-800">{key.replaceAll(/([A-Z])/g, ' $1')}</p><TrendIcon size={18} className="text-gray-500" /></div><p className="mt-2 text-2xl font-bold">{item.current}</p><p className="mt-1 text-xs text-gray-500">Previous {item.previous} · {item.change >= 0 ? '+' : ''}{item.change}{item.changePercent !== undefined ? ` (${item.changePercent}%)` : ''}</p></div>; })}</div></section>
       <MetricGrid title="Integration health" metrics={overview.integrations} />
     </> : null}

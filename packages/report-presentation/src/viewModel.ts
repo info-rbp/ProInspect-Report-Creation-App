@@ -107,6 +107,12 @@ function text(value: string | undefined, fallback: string): string {
   return value?.trim() || fallback;
 }
 
+function assessment(value: string | undefined): string {
+  // Missing data means the inspector has not assessed this dimension yet. It is
+  // not evidence that the inspector explicitly selected "unable to confirm".
+  return value?.trim() || 'unassessed';
+}
+
 function isConditionException(value: string): boolean {
   return ['repair_required', 'replacement_recommended', 'damaged', 'unable_to_confirm', 'not_visible', 'partially_visible'].includes(value);
 }
@@ -150,10 +156,10 @@ export function buildReportPresentationViewModel(input: PresentationReportInput)
     photoReferenceCount += areaPhotos.length;
     const components = area.components.map((component): PresentationComponentView => {
       componentCount += 1;
-      const condition = text(component.conditionCategory, 'unable_to_confirm');
-      const cleanliness = text(component.cleanlinessCategory, 'unable_to_confirm');
-      const working = text(component.workingStatus, 'unable_to_confirm');
-      const test = text(component.testStatus, 'unable_to_confirm');
+      const condition = assessment(component.conditionCategory);
+      const cleanliness = assessment(component.cleanlinessCategory);
+      const working = assessment(component.workingStatus);
+      const test = assessment(component.testStatus);
       const conditionException = isConditionException(condition);
       const cleaningException = isCleaningException(cleanliness);
       const operationalException = isOperationalException(working, test);
