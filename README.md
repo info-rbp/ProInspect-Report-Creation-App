@@ -13,6 +13,7 @@ ProInspect is a multi-agency property inspection, reporting, maintenance and ten
 - `packages/*` – domain, validation, templates, report presentation, UI and test foundations.
 - `infrastructure/firebase` – Firebase emulator configuration and security rules.
 - `infrastructure/terraform` – Google Cloud development/staging/production landing zones and delivery pipeline.
+- `infrastructure/appwrite` – guarded future Appwrite TablesDB/Auth/Storage foundation and migration preparation; not a production cutover.
 - `infrastructure/cloud-build` – non-GitHub validation and image release fallback used when hosted Actions capacity is unavailable.
 
 ## Development

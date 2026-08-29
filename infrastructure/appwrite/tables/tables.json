@@ -1,0 +1,8039 @@
+[
+  {
+    "$id": "agencies",
+    "databaseId": "proinspect_core",
+    "name": "Agencies",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "code",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "timezone",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_code",
+        "type": "unique",
+        "columns": [
+          "code"
+        ]
+      },
+      {
+        "key": "status_name",
+        "type": "key",
+        "columns": [
+          "status",
+          "name"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "managed_sites",
+    "databaseId": "proinspect_core",
+    "name": "Managed Sites",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "siteType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "timezone",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "streetAddress",
+        "type": "string",
+        "size": 512,
+        "required": false
+      },
+      {
+        "key": "suburb",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "state",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "postcode",
+        "type": "string",
+        "size": 16,
+        "required": false
+      },
+      {
+        "key": "country",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "strataPlanNumber",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "schemeName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "externalReference",
+        "type": "string",
+        "size": 128,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_name",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "name"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "user_profiles",
+    "databaseId": "proinspect_core",
+    "name": "User Profiles",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "displayName",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "preferredName",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "email",
+        "type": "string",
+        "size": 320,
+        "required": true,
+        "format": "email"
+      },
+      {
+        "key": "phone",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "user_id",
+        "type": "unique",
+        "columns": [
+          "userId"
+        ]
+      },
+      {
+        "key": "status_email",
+        "type": "key",
+        "columns": [
+          "status",
+          "email"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "agency_memberships",
+    "databaseId": "proinspect_core",
+    "name": "Agency Memberships",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "role",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "validFrom",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "validUntil",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "mfaRequired",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "user_agency",
+        "type": "unique",
+        "columns": [
+          "userId",
+          "agencyId"
+        ]
+      },
+      {
+        "key": "agency_role_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "role",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "site_memberships",
+    "databaseId": "proinspect_core",
+    "name": "Site Memberships",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "role",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "validFrom",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "validUntil",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "user_site",
+        "type": "unique",
+        "columns": [
+          "userId",
+          "managedSiteId"
+        ]
+      },
+      {
+        "key": "site_role_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "role",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_user",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "userId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "clients",
+    "databaseId": "proinspect_core",
+    "name": "Clients",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "legalName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "tradingName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "abn",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "clientType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "shopifyCustomerId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "contactDetails",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_name",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "name"
+        ]
+      },
+      {
+        "key": "shopify_customer",
+        "type": "key",
+        "columns": [
+          "shopifyCustomerId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "client_contacts",
+    "databaseId": "proinspect_core",
+    "name": "Client Contacts",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "clientId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "email",
+        "type": "string",
+        "size": 320,
+        "required": false,
+        "format": "email"
+      },
+      {
+        "key": "phone",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "role",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "primary",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "client_status",
+        "type": "key",
+        "columns": [
+          "clientId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_email",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "email"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "properties",
+    "databaseId": "proinspect_core",
+    "name": "Properties",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "clientId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "propertyUse",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "ownershipStructure",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "streetAddress",
+        "type": "string",
+        "size": 512,
+        "required": true
+      },
+      {
+        "key": "suburb",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "state",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "postcode",
+        "type": "string",
+        "size": 16,
+        "required": false
+      },
+      {
+        "key": "country",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "lotNumber",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "unitNumber",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "buildingName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "strataPlanNumber",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "externalReference",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "strataDetails",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_site_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "client_status",
+        "type": "key",
+        "columns": [
+          "clientId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_unit",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "unitNumber"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "buildings",
+    "databaseId": "proinspect_core",
+    "name": "Buildings",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "code",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "sequence",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_sequence",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "sequence"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "property_levels",
+    "databaseId": "proinspect_core",
+    "name": "Property Levels",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "buildingId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "code",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "sequence",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "building_sequence",
+        "type": "key",
+        "columns": [
+          "buildingId",
+          "sequence"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "property_areas",
+    "databaseId": "proinspect_core",
+    "name": "Property Areas",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "buildingId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "levelId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "areaType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "responsibility",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "sequence",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "property_sequence",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "sequence"
+        ]
+      },
+      {
+        "key": "level_sequence",
+        "type": "key",
+        "columns": [
+          "levelId",
+          "sequence"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "service_definitions",
+    "databaseId": "proinspect_core",
+    "name": "Service Definitions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "code",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "workflowType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "defaultConfiguration",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_code",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "code"
+        ]
+      },
+      {
+        "key": "workflow_status",
+        "type": "key",
+        "columns": [
+          "workflowType",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "service_requests",
+    "databaseId": "proinspect_core",
+    "name": "Service Requests",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "clientId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "serviceDefinitionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "source",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "sourceReference",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "requestedByUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "requestedForName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "requestedForEmail",
+        "type": "string",
+        "size": 320,
+        "required": false,
+        "format": "email"
+      },
+      {
+        "key": "requestedForPhone",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "paymentStatus",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "schedulingStatus",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "requestedDate",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "notes",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "accessInstructions",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_status_created",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status",
+          "createdAt"
+        ],
+        "orders": [
+          "ASC",
+          "ASC",
+          "DESC"
+        ]
+      },
+      {
+        "key": "source_reference",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "source",
+          "sourceReference"
+        ]
+      },
+      {
+        "key": "property_created",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "createdAt"
+        ],
+        "orders": [
+          "ASC",
+          "DESC"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "service_request_items",
+    "databaseId": "proinspect_core",
+    "name": "Service Request Items",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "serviceRequestId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "serviceDefinitionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "quantity",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "configuration",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "request_status",
+        "type": "key",
+        "columns": [
+          "serviceRequestId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "shopify_service_mappings",
+    "databaseId": "proinspect_core",
+    "name": "Shopify Service Mappings",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "shopifyProductId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "shopifyVariantId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "serviceDefinitionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "active",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "mappingConfiguration",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_variant",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "shopifyProductId",
+          "shopifyVariantId"
+        ]
+      },
+      {
+        "key": "service_active",
+        "type": "key",
+        "columns": [
+          "serviceDefinitionId",
+          "active"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspection_requests",
+    "databaseId": "proinspect_core",
+    "name": "Inspection Requests",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "serviceRequestId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "inspectionType",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "source",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "sourceReference",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "paymentStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "schedulingStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "shopifyReference",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "calendarReference",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_status_created",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status",
+          "createdAt"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspection_jobs",
+    "databaseId": "proinspect_core",
+    "name": "Inspection Jobs",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionRequestId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "serviceRequestId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "inspectorId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "reviewerId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "inspectionType",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "scheduledDate",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "propertySnapshot",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "inspector_schedule",
+        "type": "key",
+        "columns": [
+          "inspectorId",
+          "scheduledDate"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspection_templates",
+    "databaseId": "proinspect_core",
+    "name": "Inspection Templates",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "code",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "inspectionType",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "currentVersionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_code",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "code"
+        ]
+      },
+      {
+        "key": "type_status",
+        "type": "key",
+        "columns": [
+          "inspectionType",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspection_template_versions",
+    "databaseId": "proinspect_core",
+    "name": "Inspection Template Versions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "templateId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "contentHash",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "definition",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "publishedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "template_version",
+        "type": "unique",
+        "columns": [
+          "templateId",
+          "version"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspections",
+    "databaseId": "proinspect_core",
+    "name": "Inspections",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionJobId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "inspectorId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "startedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "submittedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "inspection_job",
+        "type": "unique",
+        "columns": [
+          "inspectionJobId"
+        ]
+      },
+      {
+        "key": "inspector_status",
+        "type": "key",
+        "columns": [
+          "inspectorId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspection_sections",
+    "databaseId": "proinspect_core",
+    "name": "Inspection Sections",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "areaId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "sequence",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "inspection_sequence",
+        "type": "key",
+        "columns": [
+          "inspectionId",
+          "sequence"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "observations",
+    "databaseId": "proinspect_core",
+    "name": "Observations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "sectionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "componentId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "condition",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "cleanliness",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "workingStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "commentary",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "maintenanceRequired",
+        "type": "boolean",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "inspection_section",
+        "type": "key",
+        "columns": [
+          "inspectionId",
+          "sectionId"
+        ]
+      },
+      {
+        "key": "component_condition",
+        "type": "key",
+        "columns": [
+          "componentId",
+          "condition"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "inspection_evidence",
+    "databaseId": "proinspect_core",
+    "name": "Inspection Evidence",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "observationId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "evidenceFileId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "sequence",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "inspection_sequence",
+        "type": "key",
+        "columns": [
+          "inspectionId",
+          "sequence"
+        ]
+      },
+      {
+        "key": "observation",
+        "type": "key",
+        "columns": [
+          "observationId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "reports",
+    "databaseId": "proinspect_core",
+    "name": "Reports",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionJobId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "currentVersionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "lifecycleStatus",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "finalisedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "finalisedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "lifecycleStatus"
+        ]
+      },
+      {
+        "key": "job_status",
+        "type": "key",
+        "columns": [
+          "inspectionJobId",
+          "lifecycleStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "report_versions",
+    "databaseId": "proinspect_core",
+    "name": "Report Versions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "reportId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "contentHash",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "fileId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "finalisedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "supersedesVersionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "report_version",
+        "type": "unique",
+        "columns": [
+          "reportId",
+          "version"
+        ]
+      },
+      {
+        "key": "report_finalised",
+        "type": "key",
+        "columns": [
+          "reportId",
+          "finalisedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_candidates",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Candidates",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "inspectionJobId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "reportId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "observationId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "title",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "confidence",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "confirmedItemId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      },
+      {
+        "key": "report_status",
+        "type": "key",
+        "columns": [
+          "reportId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_items",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Items",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "candidateId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assignedContractorId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "title",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "approvalStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "dueDate",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_priority_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "priority",
+          "status"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      },
+      {
+        "key": "contractor_status",
+        "type": "key",
+        "columns": [
+          "assignedContractorId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_quotes",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Quotes",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "currency",
+        "type": "string",
+        "size": 3,
+        "required": false
+      },
+      {
+        "key": "amount",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "approvalStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "validUntil",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "scope",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "contractor_status",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_estimates",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Estimates",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "currency",
+        "type": "string",
+        "size": 3,
+        "required": false
+      },
+      {
+        "key": "amount",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "basis",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "validUntil",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_approvals",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Approvals",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "quoteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "approvedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "decision",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "reason",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "decidedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_decision",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "decision"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_work_orders",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Work Orders",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "quoteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assignedInternalUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "dueDate",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "completedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "instructions",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "contractor_status",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "status"
+        ]
+      },
+      {
+        "key": "due_status",
+        "type": "key",
+        "columns": [
+          "dueDate",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_variations",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Variations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "workOrderId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "amount",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "currency",
+        "type": "string",
+        "size": 3,
+        "required": false
+      },
+      {
+        "key": "approvalStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "reason",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "work_order_status",
+        "type": "key",
+        "columns": [
+          "workOrderId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "preventive_maintenance",
+    "databaseId": "proinspect_core",
+    "name": "Preventive Maintenance",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assetId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "cadence",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "nextDueAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "instructions",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_next_due",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "nextDueAt"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "warranty_claims",
+    "databaseId": "proinspect_core",
+    "name": "Warranty Claims",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assetId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "provider",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "reference",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "lodgedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "details",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "asset_status",
+        "type": "key",
+        "columns": [
+          "assetId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "contractor_quote_requests",
+    "databaseId": "proinspect_core",
+    "name": "Contractor Quote Requests",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "dueAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "scope",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "contractor_status",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "contractor_quotes",
+    "databaseId": "proinspect_core",
+    "name": "Contractor Quotes",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "quoteRequestId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "amount",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "currency",
+        "type": "string",
+        "size": 3,
+        "required": false
+      },
+      {
+        "key": "scope",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "submittedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "contractor_status",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "work_requests",
+    "databaseId": "proinspect_core",
+    "name": "Work Requests",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "externalContactId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "dueDate",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "instructions",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "responseNotes",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "contact_status",
+        "type": "key",
+        "columns": [
+          "externalContactId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "tenant_instructions",
+    "databaseId": "proinspect_core",
+    "name": "Tenant Instructions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "tenancyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "instructionType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "title",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "instruction",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "dueDate",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "tenancy_status",
+        "type": "key",
+        "columns": [
+          "tenancyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "external_contacts",
+    "databaseId": "proinspect_core",
+    "name": "External Contacts",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "businessName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "email",
+        "type": "string",
+        "size": 320,
+        "required": false,
+        "format": "email"
+      },
+      {
+        "key": "phone",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "contactType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_type_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "contactType",
+          "status"
+        ]
+      },
+      {
+        "key": "email",
+        "type": "key",
+        "columns": [
+          "email"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "daily_activity_logs",
+    "databaseId": "proinspect_core",
+    "name": "Daily Activity Logs",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "authorUserId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "activityDate",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "summary",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_activity_date",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "activityDate"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "resident_requests",
+    "databaseId": "proinspect_core",
+    "name": "Resident Requests",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "residentUserId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "requestType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "assignedUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "resident_status",
+        "type": "key",
+        "columns": [
+          "residentUserId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "contractor_attendance",
+    "databaseId": "proinspect_core",
+    "name": "Contractor Attendance",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "workOrderId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "checkedInAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "checkedOutAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "checkedInBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_checkin",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "checkedInAt"
+        ]
+      },
+      {
+        "key": "contractor_checkin",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "checkedInAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "key_transactions",
+    "databaseId": "proinspect_core",
+    "name": "Key Transactions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "keyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "holderType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "holderId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "transactionType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "occurredAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "authorisedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "notes",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "key_occurred",
+        "type": "key",
+        "columns": [
+          "keyId",
+          "occurredAt"
+        ]
+      },
+      {
+        "key": "site_occurred",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "occurredAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "access_devices",
+    "databaseId": "proinspect_core",
+    "name": "Access Devices",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "deviceType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "identifier",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "assignedToUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_identifier",
+        "type": "unique",
+        "columns": [
+          "managedSiteId",
+          "identifier"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "access_device_history",
+    "databaseId": "proinspect_core",
+    "name": "Access Device History",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "accessDeviceId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "action",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "actorUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assignedToUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "occurredAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "notes",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "device_occurred",
+        "type": "key",
+        "columns": [
+          "accessDeviceId",
+          "occurredAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "move_bookings",
+    "databaseId": "proinspect_core",
+    "name": "Move Bookings",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "residentUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "moveType",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "startAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "endAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "approvalStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "conditions",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_start",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "startAt"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "resident_onboarding",
+    "databaseId": "proinspect_core",
+    "name": "Resident Onboarding",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "residentUserId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "occupancyType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "inductedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "inductedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "checklist",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_resident",
+        "type": "unique",
+        "columns": [
+          "managedSiteId",
+          "residentUserId"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "operational_inspections",
+    "databaseId": "proinspect_core",
+    "name": "Operational Inspections",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "inspectorId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "inspectionType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "scheduledAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "completedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "result",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "inspector_schedule",
+        "type": "key",
+        "columns": [
+          "inspectorId",
+          "scheduledAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "assets",
+    "databaseId": "proinspect_core",
+    "name": "Assets",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assetType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "serialNumber",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "installedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "warrantyUntil",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "metadata",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_type_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "assetType",
+          "status"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "maintenance_plans",
+    "databaseId": "proinspect_core",
+    "name": "Maintenance Plans",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "assetId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "cadence",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "nextDueAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "tasks",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_next_due",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "nextDueAt"
+        ]
+      },
+      {
+        "key": "asset_status",
+        "type": "key",
+        "columns": [
+          "assetId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "waste_events",
+    "databaseId": "proinspect_core",
+    "name": "Waste Events",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "eventType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "occurredAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "reportedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "details",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_occurred",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "occurredAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "incidents",
+    "databaseId": "proinspect_core",
+    "name": "Incidents",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "incidentType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "severity",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "occurredAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "reportedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "resolution",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_severity",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "severity"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "bylaw_observations",
+    "databaseId": "proinspect_core",
+    "name": "Bylaw Observations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "bylawReference",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "observedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "observedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "resolution",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "property_status",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "notices",
+    "databaseId": "proinspect_core",
+    "name": "Notices",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "noticeType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "title",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "content",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "publishedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "publishedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_published",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "publishedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "communications",
+    "databaseId": "proinspect_core",
+    "name": "Communications",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "channel",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "recipientType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "recipientId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "subject",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "content",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "deliveryStatus",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "sentAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_created",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "createdAt"
+        ]
+      },
+      {
+        "key": "recipient_created",
+        "type": "key",
+        "columns": [
+          "recipientId",
+          "createdAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "handovers",
+    "databaseId": "proinspect_core",
+    "name": "Handovers",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "fromUserId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "toUserId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "handoverAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "summary",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_handover",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "handoverAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "handover_checklist_items",
+    "databaseId": "proinspect_core",
+    "name": "Handover Checklist Items",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "handoverId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "title",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "itemStatus",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "completedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "completedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "notes",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "handover_status",
+        "type": "key",
+        "columns": [
+          "handoverId",
+          "itemStatus"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "operational_report_drafts",
+    "databaseId": "proinspect_core",
+    "name": "Operational Report Drafts",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "period",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "preparedBy",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "content",
+        "type": "longtext",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_period_version",
+        "type": "unique",
+        "columns": [
+          "managedSiteId",
+          "period",
+          "version"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "operational_reports",
+    "databaseId": "proinspect_core",
+    "name": "Operational Reports",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "period",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "draftId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "fileId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "contentHash",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "finalisedBy",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "finalisedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_period",
+        "type": "unique",
+        "columns": [
+          "managedSiteId",
+          "period"
+        ]
+      },
+      {
+        "key": "site_finalised",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "finalisedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "audit_events",
+    "databaseId": "proinspect_core",
+    "name": "Audit Events",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "actorUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "actorType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "action",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "entityType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "entityId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "source",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "previousState",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "newState",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "requestId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "correlationId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "ipAddress",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "userAgent",
+        "type": "string",
+        "size": 1024,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_created",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "createdAt"
+        ]
+      },
+      {
+        "key": "entity_created",
+        "type": "key",
+        "columns": [
+          "entityType",
+          "entityId",
+          "createdAt"
+        ]
+      },
+      {
+        "key": "correlation",
+        "type": "key",
+        "columns": [
+          "correlationId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_connections",
+    "databaseId": "proinspect_core",
+    "name": "Integration Connections",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "provider",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "externalAccountId",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "credentialReference",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "lastSuccessfulAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "lastAttemptedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "configuration",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "lastError",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_provider",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "provider"
+        ]
+      },
+      {
+        "key": "provider_status",
+        "type": "key",
+        "columns": [
+          "provider",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_events",
+    "databaseId": "proinspect_core",
+    "name": "Integration Events",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "provider",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "eventType",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "externalEventId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "deduplicationId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payloadReference",
+        "type": "string",
+        "size": 512,
+        "required": false
+      },
+      {
+        "key": "processingStatus",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "attempts",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "errorState",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "firstReceivedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "lastAttemptedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "processedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "provider_dedup",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "provider",
+          "deduplicationId"
+        ]
+      },
+      {
+        "key": "status_attempted",
+        "type": "key",
+        "columns": [
+          "processingStatus",
+          "lastAttemptedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_deliveries",
+    "databaseId": "proinspect_core",
+    "name": "Integration Deliveries",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "provider",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "eventId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "externalDeliveryId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "deliveryStatus",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "attempts",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "lastAttemptedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "deliveredAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "errorState",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "provider_delivery",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "provider",
+          "externalDeliveryId"
+        ]
+      },
+      {
+        "key": "status_attempted",
+        "type": "key",
+        "columns": [
+          "deliveryStatus",
+          "lastAttemptedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_exceptions",
+    "databaseId": "proinspect_core",
+    "name": "Integration Exceptions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "provider",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "severity",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "entityType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "entityId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "detail",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "resolution",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "resolvedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "provider_severity",
+        "type": "key",
+        "columns": [
+          "provider",
+          "severity"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_outbox",
+    "databaseId": "proinspect_core",
+    "name": "Integration Outbox",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "eventType",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "entityType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "entityId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "deliveryStatus",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "attempts",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "availableAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "lastAttemptedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "status_available",
+        "type": "key",
+        "columns": [
+          "deliveryStatus",
+          "availableAt"
+        ]
+      },
+      {
+        "key": "entity",
+        "type": "key",
+        "columns": [
+          "entityType",
+          "entityId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "evidence_files",
+    "databaseId": "proinspect_core",
+    "name": "Evidence Files",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "bucketId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "fileId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "entityType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "entityId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "mimeType",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "originalFilename",
+        "type": "string",
+        "size": 512,
+        "required": true
+      },
+      {
+        "key": "size",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "checksum",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "uploadedBy",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "capturedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "legacyFileId",
+        "type": "string",
+        "size": 255,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "bucket_file",
+        "type": "unique",
+        "columns": [
+          "bucketId",
+          "fileId"
+        ]
+      },
+      {
+        "key": "entity_created",
+        "type": "key",
+        "columns": [
+          "entityType",
+          "entityId",
+          "createdAt"
+        ]
+      },
+      {
+        "key": "property_created",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "createdAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "migration_id_map",
+    "databaseId": "proinspect_core",
+    "name": "Migration Id Map",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "sourceSystem",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "sourceEntity",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "sourceId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "targetTable",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "targetId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "sourceChecksum",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "migratedChecksum",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "migrationVersion",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "migratedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "error",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "source_identity",
+        "type": "unique",
+        "columns": [
+          "sourceSystem",
+          "sourceEntity",
+          "sourceId"
+        ]
+      },
+      {
+        "key": "status_source",
+        "type": "key",
+        "columns": [
+          "status",
+          "sourceSystem"
+        ]
+      },
+      {
+        "key": "target",
+        "type": "key",
+        "columns": [
+          "targetTable",
+          "targetId"
+        ]
+      }
+    ]
+  }
+]

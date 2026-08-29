@@ -1,0 +1,20 @@
+{
+  "projectId": "DEVELOPMENT_PROJECT_ID_REQUIRED",
+  "projectName": "ProInspect Development",
+  "endpoint": "https://syd.cloud.appwrite.io/v1",
+  "includes": {
+    "tablesDB": "databases/databases.json",
+    "tables": "tables/tables.json",
+    "buckets": "buckets/buckets.json",
+    "teams": "teams/teams.json",
+    "functions": "functions/functions.json"
+  },
+  "settings": {
+    "services": {"account": true, "databases": true, "storage": true, "teams": true, "users": true, "functions": true, "graphql": true},
+    "protocols": {"rest": true, "graphql": true, "websocket": true},
+    "auth": {
+      "methods": {"jwt": true, "phone": false, "invites": true, "anonymous": false, "email-otp": false, "magic-url": false, "email-password": true},
+      "security": {"sessionsLimit": 10, "passwordHistory": 5, "passwordDictionary": true, "personalDataCheck": true, "sessionAlerts": true}
+    }
+  }
+}

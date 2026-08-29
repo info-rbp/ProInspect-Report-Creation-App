@@ -27,6 +27,7 @@ export default defineConfig({
             'apps/api/tests/**/*.test.ts',
             'packages/*/tests/**/*.test.ts',
             'scripts/**/*.test.mjs',
+            'infrastructure/appwrite/**/*.test.mjs',
           ],
         },
       },

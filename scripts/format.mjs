@@ -14,7 +14,7 @@ const roots = [
   '.github',
 ];
 const extensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.md', '.yml', '.yaml', '.rules']);
-const ignored = new Set(['node_modules', 'dist', '.firebase-emulator-data']);
+const ignored = new Set(['node_modules', 'dist', '.firebase-emulator-data', '.terraform', '.wrangler']);
 const ignoredPaths = new Set(['packages/domain/src/platform.ts']);
 const changed = [];
 

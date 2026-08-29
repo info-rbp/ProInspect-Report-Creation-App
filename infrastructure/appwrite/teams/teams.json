@@ -1,0 +1,4 @@
+[
+  {"$id": "proinspect_admins", "name": "ProInspect Administrators"},
+  {"$id": "proinspect_operations", "name": "ProInspect Operations"}
+]

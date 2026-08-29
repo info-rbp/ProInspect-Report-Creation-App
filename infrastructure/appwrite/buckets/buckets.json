@@ -1,0 +1,9 @@
+[
+  {"$id":"inspection-evidence","name":"Inspection evidence","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":104857600,"allowedFileExtensions":["jpg","jpeg","png","webp","heic","pdf"],"compression":"none","encryption":true,"antivirus":true},
+  {"$id":"maintenance-evidence","name":"Maintenance evidence","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":104857600,"allowedFileExtensions":["jpg","jpeg","png","webp","heic","pdf","mp4","mov"],"compression":"none","encryption":true,"antivirus":true},
+  {"$id":"building-management-evidence","name":"Building Management evidence","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":104857600,"allowedFileExtensions":["jpg","jpeg","png","webp","heic","pdf","mp4","mov"],"compression":"none","encryption":true,"antivirus":true},
+  {"$id":"property-documents","name":"Property documents","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":52428800,"allowedFileExtensions":["pdf","doc","docx","xls","xlsx","jpg","jpeg","png"],"compression":"none","encryption":true,"antivirus":true},
+  {"$id":"contractor-documents","name":"Contractor documents","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":52428800,"allowedFileExtensions":["pdf","doc","docx","jpg","jpeg","png"],"compression":"none","encryption":true,"antivirus":true},
+  {"$id":"reports","name":"Immutable reports","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":104857600,"allowedFileExtensions":["pdf"],"compression":"none","encryption":true,"antivirus":true},
+  {"$id":"temporary-uploads","name":"Temporary uploads","$permissions":[],"fileSecurity":true,"enabled":true,"maximumFileSize":104857600,"allowedFileExtensions":["jpg","jpeg","png","webp","heic","pdf","doc","docx","xls","xlsx","mp4","mov"],"compression":"none","encryption":true,"antivirus":true}
+]

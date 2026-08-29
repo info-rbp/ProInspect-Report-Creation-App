@@ -33,7 +33,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['scripts/**/*.mjs', 'eslint.config.js'],
+    files: ['scripts/**/*.mjs', 'infrastructure/**/*.mjs', 'eslint.config.js'],
     languageOptions: {
       globals: {
         process: 'readonly',

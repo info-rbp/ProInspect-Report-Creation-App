@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.32.0",
+    "@pcr/appwrite-server": "*",
     "@pcr/config": "*",
     "@pcr/domain": "*",
     "@pcr/report-presentation": "*",
