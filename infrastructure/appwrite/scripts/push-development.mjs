@@ -20,14 +20,10 @@ function run(args, cwd = root) {
 const versionOutput = run(['--version']).trim();
 const version = versionOutput.match(/\d+\.\d+\.\d+/)?.[0];
 if (version !== '27.2.1') throw new Error(`Appwrite CLI 27.2.1 is required; found ${versionOutput}. Set APPWRITE_CLI_BIN to the pinned binary.`);
-const organizationId = process.env.APPWRITE_ORGANIZATION_ID?.trim();
-if (!organizationId) throw new Error('APPWRITE_ORGANIZATION_ID is required to verify the console project before pushing.');
 const live = JSON.parse(run([
   '--json',
-  'organization',
-  'get-project',
-  '--organization-id',
-  organizationId,
+  'project',
+  'get',
   '--project-id',
   requested.projectId,
 ]));

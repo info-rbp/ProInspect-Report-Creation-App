@@ -13,6 +13,7 @@ import { InputFile } from 'node-appwrite/file';
 import {
   AppwriteFoundationService,
   AppwriteTablesGateway,
+  canAccessFoundation,
 } from '@pcr/appwrite-server';
 import { assertDevelopmentTarget } from './safety.mjs';
 
@@ -39,6 +40,7 @@ let requestId;
 let fileId;
 let evidenceRowId;
 let auditRows = [];
+const temporaryRows = [];
 
 async function authenticate(userId) {
   const response = await fetch(`${target.endpoint}/account/sessions/email`, {
@@ -60,13 +62,28 @@ function userServices(session) {
   return { tables: new TablesDB(client), storage: new Storage(client) };
 }
 
+async function expectDenied(operation, label) {
+  let denied = false;
+  try { await operation(); }
+  catch (error) { denied = [401, 403, 404].includes(error?.code); }
+  if (!denied) throw new Error(`${label} was not denied.`);
+}
+
 try {
-  const [authorisedSession, unauthorisedSession] = await Promise.all([
+  const [authorisedSession, unauthorisedSession, inspectorSession, residentSession, otherResidentSession, adminSession] = await Promise.all([
     authenticate(authorisedUserId),
     authenticate(unauthorisedUserId),
+    authenticate('dev_inspector'),
+    authenticate('dev_resident_tenant'),
+    authenticate('dev_resident_owner'),
+    authenticate('dev_admin'),
   ]);
   const authorised = userServices(authorisedSession);
   const unauthorised = userServices(unauthorisedSession);
+  const inspector = userServices(inspectorSession);
+  const resident = userServices(residentSession);
+  const otherResident = userServices(otherResidentSession);
+  const admin = userServices(adminSession);
 
   const agencyMemberships = await authorised.tables.listRows({
     databaseId,
@@ -96,6 +113,53 @@ try {
     queries: [Query.equal('managedSiteId', siteIds), Query.limit(100)],
   });
   if (!properties.rows.some((item) => item.$id === 'dev_property_unit_1')) throw new Error('Permitted Property retrieval failed.');
+
+  await authorised.tables.getRow({ databaseId, tableId: 'managed_sites', rowId: 'dev_site_strata' });
+  await expectDenied(
+    () => authorised.tables.getRow({ databaseId, tableId: 'managed_sites', rowId: 'dev_site_commercial' }),
+    'Cross-site building-manager access',
+  );
+  await resident.tables.getRow({ databaseId, tableId: 'resident_requests', rowId: 'dev_resident_request' });
+  await expectDenied(
+    () => otherResident.tables.getRow({ databaseId, tableId: 'resident_requests', rowId: 'dev_resident_request' }),
+    'Other-resident request access',
+  );
+  await inspector.tables.getRow({ databaseId, tableId: 'inspection_jobs', rowId: 'dev_inspection_job' });
+  await unauthorised.tables.getRow({ databaseId, tableId: 'maintenance_work_orders', rowId: 'dev_work_order' });
+
+  const isolationNow = new Date().toISOString();
+  const inspectorIsolationId = randomUUID();
+  const contractorIsolationId = randomUUID();
+  const adminOnly = [Permission.read(Role.user('dev_admin'))];
+  await serverTables.createRow({
+    databaseId, tableId: 'inspection_jobs', rowId: inspectorIsolationId, permissions: adminOnly,
+    data: { agencyId: 'dev_agency', propertyId: 'dev_property_unit_1', inspectorId: 'dev_admin', inspectionType: 'Routine Inspection', priority: 'normal', status: 'assigned', version: 1, createdAt: isolationNow, updatedAt: isolationNow },
+  });
+  temporaryRows.push(['inspection_jobs', inspectorIsolationId]);
+  await serverTables.createRow({
+    databaseId, tableId: 'maintenance_work_orders', rowId: contractorIsolationId, permissions: adminOnly,
+    data: { agencyId: 'dev_agency', maintenanceItemId: 'dev_maintenance_item', contractorId: 'dev_admin', status: 'assigned', version: 1, createdAt: isolationNow, updatedAt: isolationNow },
+  });
+  temporaryRows.push(['maintenance_work_orders', contractorIsolationId]);
+  await expectDenied(
+    () => inspector.tables.getRow({ databaseId, tableId: 'inspection_jobs', rowId: inspectorIsolationId }),
+    'Unassigned inspector access',
+  );
+  await expectDenied(
+    () => unauthorised.tables.getRow({ databaseId, tableId: 'maintenance_work_orders', rowId: contractorIsolationId }),
+    'Unassigned contractor access',
+  );
+
+  const adminMemberships = await admin.tables.listRows({
+    databaseId,
+    tableId: 'agency_memberships',
+    queries: [Query.equal('userId', ['dev_admin']), Query.limit(10)],
+  });
+  if (adminMemberships.total !== 1 || adminMemberships.rows[0].mfaRequired !== true) throw new Error('Privileged membership does not require MFA.');
+  const adminPrincipal = { userId: 'dev_admin', agencyId: 'dev_agency', role: 'proinspect_admin', mfaVerified: false };
+  if (canAccessFoundation(adminPrincipal, 'property.read', { agencyId: 'dev_agency' })) throw new Error('Password-only privileged access was not denied.');
+  if (canAccessFoundation({ ...adminPrincipal, mfaVerified: true }, 'property.read', { agencyId: 'other_agency' })) throw new Error('Cross-agency privileged access was not denied.');
+  if (!canAccessFoundation({ ...adminPrincipal, mfaVerified: true }, 'property.read', { agencyId: 'dev_agency' })) throw new Error('Verified-MFA privileged access was not allowed.');
 
   const request = await service.createServiceRequest({
     agencyId: 'dev_agency',
@@ -159,19 +223,24 @@ try {
   const downloaded = await authorised.storage.getFileDownload({ bucketId: 'inspection-evidence', fileId });
   if (Buffer.from(downloaded).length !== png.length) throw new Error('Permitted evidence download did not return the uploaded file.');
 
-  let denied = false;
-  try { await unauthorised.storage.getFileDownload({ bucketId: 'inspection-evidence', fileId }); }
-  catch (error) { denied = [401, 403, 404].includes(error?.code); }
-  if (!denied) throw new Error('Unauthorised user was not denied evidence access.');
+  await expectDenied(
+    () => unauthorised.storage.getFileDownload({ bucketId: 'inspection-evidence', fileId }),
+    'Unauthorised evidence access',
+  );
 
-  console.log('Passed live Development workflow: authentication, membership/site/property resolution, transactional ServiceRequest+AuditEvent, evidence upload/download, and unauthorised denial.');
+  console.log('Passed live Development workflow: authentication; agency/site, resident, contractor and inspector isolation; privileged MFA policy; transactional ServiceRequest+AuditEvent; evidence upload/download and unauthorised denial.');
 } finally {
   if (evidenceRowId) await serverTables.deleteRow({ databaseId, tableId: 'evidence_files', rowId: evidenceRowId }).catch(() => undefined);
   if (fileId) await serverStorage.deleteFile({ bucketId: 'inspection-evidence', fileId }).catch(() => undefined);
   for (const row of auditRows) await serverTables.deleteRow({ databaseId, tableId: 'audit_events', rowId: row.$id }).catch(() => undefined);
+  for (const [tableId, rowId] of temporaryRows) await serverTables.deleteRow({ databaseId, tableId, rowId }).catch(() => undefined);
   if (requestId) await serverTables.deleteRow({ databaseId, tableId: 'service_requests', rowId: requestId }).catch(() => undefined);
   await Promise.all([
     serverUsers.deleteSessions({ userId: authorisedUserId }).catch(() => undefined),
     serverUsers.deleteSessions({ userId: unauthorisedUserId }).catch(() => undefined),
+    serverUsers.deleteSessions({ userId: 'dev_inspector' }).catch(() => undefined),
+    serverUsers.deleteSessions({ userId: 'dev_resident_tenant' }).catch(() => undefined),
+    serverUsers.deleteSessions({ userId: 'dev_resident_owner' }).catch(() => undefined),
+    serverUsers.deleteSessions({ userId: 'dev_admin' }).catch(() => undefined),
   ]);
 }

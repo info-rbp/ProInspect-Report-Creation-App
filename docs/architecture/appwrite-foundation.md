@@ -18,7 +18,7 @@ Development, Staging, and Production use separate Appwrite projects and API keys
 
 ## Canonical data model
 
-`proinspect_core` contains foundation, client/property, service request, inspection, maintenance, Building Management, audit, integration, evidence metadata, and migration identity domains. Explicit `agencyId`, `managedSiteId`, and `propertyId` columns are retained where relevant rather than depending on deep relationship chains. Structured domain snapshots and provider payload references use API-validated JSON text where relational decomposition would damage workflow semantics.
+`proinspect_core` contains 100 source-controlled foundation, client/property, service request, inspection, maintenance, Building Management, audit, integration, evidence metadata, and migration identity tables after source reconciliation. Explicit `agencyId`, `managedSiteId`, and `propertyId` columns are retained where relevant rather than depending on deep relationship chains. Structured domain snapshots and provider payload references use API-validated JSON text where relational decomposition would damage workflow semantics.
 
 Standalone properties have a nullable `managedSiteId`. The optional physical hierarchy is managed site → building → level → area; the repository's existing property layout/version model remains the source for future detailed conversion.
 
@@ -71,7 +71,7 @@ Rollback before authority switch deletes only imported target rows using `migrat
 
 ## Unresolved decisions
 
-- Obtain and inspect the Building Management/Strata repository, D1 migrations, R2 object conventions, session/RBAC code, and retention requirements.
+- Approve the remaining Building Management/Strata unit-to-inspectable-property and data-retention decisions documented in `appwrite-source-reconciliation.md`.
 - Choose Appwrite Development/Staging/Production project IDs and confirm Australian data-location requirements.
 - Approve the expanded role/capability matrix and Teams provisioning policy.
 - Decide evidence size limits where Appwrite encryption/antivirus processing thresholds are lower than operational upload needs.
