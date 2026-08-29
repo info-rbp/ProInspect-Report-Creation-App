@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tables } from '../tables/schema.mjs';
+import { validatePlatformDefinitions } from '../platforms/platforms.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const readJson = async (path) => JSON.parse(await readFile(resolve(root, path), 'utf8'));
@@ -9,6 +10,7 @@ const errors = [];
 const config = await readJson('appwrite.config.json');
 const generatedTables = await readJson('tables/tables.json');
 const buckets = await readJson('buckets/buckets.json');
+const platforms = await readJson('platforms/platforms.json');
 
 if (config.projectId !== 'DEVELOPMENT_PROJECT_ID_REQUIRED') errors.push('Version-controlled config must retain the non-deployable Development project placeholder.');
 if (!/Development/i.test(config.projectName)) errors.push('Project name must identify Development.');
@@ -37,6 +39,11 @@ for (const bucket of buckets) {
   if (bucket.encryption !== true || bucket.antivirus !== true) errors.push(`${bucket.$id} must enable encryption and antivirus.`);
 }
 
+errors.push(...validatePlatformDefinitions(platforms));
+if (!platforms.some((platform) => platform.type === 'web' && platform.hostname === 'localhost')) {
+  errors.push('Development requires an explicit localhost web platform for browser Auth redirects.');
+}
+
 const requiredTables = ['agencies','managed_sites','user_profiles','agency_memberships','site_memberships','properties','service_definitions','service_requests','inspection_jobs','maintenance_items','audit_events','evidence_files','migration_id_map'];
 for (const id of requiredTables) if (!ids.has(id)) errors.push(`Required table missing: ${id}`);
 
@@ -44,4 +51,4 @@ if (errors.length) {
   for (const error of errors) console.error(`ERROR: ${error}`);
   process.exit(1);
 }
-console.log(`Validated ${tables.length} tables and ${buckets.length} deny-by-default buckets.`);
+console.log(`Validated ${tables.length} tables, ${buckets.length} deny-by-default buckets, and ${platforms.length} Development platform.`);

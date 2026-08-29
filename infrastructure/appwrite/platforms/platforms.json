@@ -1,0 +1,8 @@
+[
+  {
+    "$id": "proinspect-localhost",
+    "name": "ProInspect local development",
+    "type": "web",
+    "hostname": "localhost"
+  }
+]

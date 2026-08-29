@@ -32,6 +32,7 @@
     "appwrite:prepare:development": "node infrastructure/appwrite/scripts/materialize-development-config.mjs",
     "appwrite:push:development": "node infrastructure/appwrite/scripts/push-development.mjs",
     "appwrite:verify": "node infrastructure/appwrite/scripts/verify-remote-schema.mjs",
+    "appwrite:audit:development": "node infrastructure/appwrite/scripts/audit-development-control-plane.mjs",
     "appwrite:seed:development": "node infrastructure/appwrite/scripts/seed-development.mjs",
     "appwrite:test:development": "node infrastructure/appwrite/scripts/test-development-workflow.mjs",
     "appwrite:clear-seed:development": "node infrastructure/appwrite/scripts/clear-development-seed.mjs",

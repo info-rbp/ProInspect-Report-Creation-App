@@ -17,7 +17,7 @@ source.projectId = target.projectId;
 source.projectName = target.projectName;
 source.endpoint = target.endpoint;
 await writeFile(resolve(output, 'appwrite.config.json'), `${JSON.stringify(source, null, 2)}\n`, { mode: 0o600 });
-for (const directory of ['databases', 'tables', 'buckets', 'teams', 'functions']) {
+for (const directory of ['databases', 'tables', 'buckets', 'teams', 'functions', 'platforms']) {
   await cp(resolve(root, directory), resolve(output, directory), { recursive: true });
 }
 console.log(`Materialized Development Appwrite configuration for project ${target.projectId}.`);

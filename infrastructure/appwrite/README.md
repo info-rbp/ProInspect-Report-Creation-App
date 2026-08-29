@@ -32,6 +32,7 @@ Copy `.env.example` to an ignored local environment file or export the variables
 - `tables/schema.mjs` — maintainable source of truth for TablesDB columns and query-driven indexes.
 - `tables/tables.json` — generated Appwrite CLI table definitions.
 - `databases`, `buckets`, `teams`, `functions` — modular CLI resources.
+- `platforms` — explicit Development browser hostnames reconciled through the guarded push script.
 - `scripts` — generation, validation, Development deployment, verification, and seed controls.
 - `migrations` — deterministic, dry-run-first migration framework.
 - `seeds` — fixed synthetic Development data only.
@@ -69,6 +70,9 @@ Then verify and seed:
 export APPWRITE_API_KEY=... # server-only secret
 export APPWRITE_CONFIRM_VERIFY=verify-development
 npm run appwrite:verify
+
+export APPWRITE_CONFIRM_VERIFY=verify-development
+npm run appwrite:audit:development
 
 export APPWRITE_SEED_PASSWORD=... # temporary Development-only value
 export APPWRITE_CONFIRM_SEED=seed-development

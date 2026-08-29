@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertDevelopmentTarget } from './safety.mjs';
+import { platformDrift, validatePlatformDefinitions } from '../platforms/platforms.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = process.env.APPWRITE_CLI_BIN || 'appwrite';
@@ -27,7 +29,7 @@ const live = JSON.parse(run([
   '--project-id',
   requested.projectId,
 ]));
-if (live.$id !== requested.projectId || live.name !== requested.projectName || !/\bdevelopment\b/i.test(live.name) || live.status !== 'active') {
+if (live.$id !== requested.projectId || live.name !== requested.projectName || !/\bdevelopment\b/i.test(live.name) || live.status !== 'active' || live.region !== 'syd') {
   throw new Error('Live project identity does not exactly match the confirmed active Development target.');
 }
 const materialize = spawnSync(process.execPath, [resolve(root, 'scripts/materialize-development-config.mjs')], { cwd: root, env: process.env, encoding: 'utf8' });
@@ -35,4 +37,15 @@ if (materialize.status !== 0) throw new Error(materialize.stderr || materialize.
 const generated = resolve(root, '.generated');
 run(['--force', 'push', 'settings'], generated);
 for (const resource of ['team', 'table', 'bucket']) run(['--force', 'push', resource, '--all'], generated);
-console.log(`Pushed Appwrite foundation to confirmed Development project ${requested.projectId}.`);
+const expectedPlatforms = JSON.parse(readFileSync(resolve(root, 'platforms/platforms.json'), 'utf8'));
+const platformErrors = validatePlatformDefinitions(expectedPlatforms);
+if (platformErrors.length) throw new Error(`Platform configuration is invalid:\n${platformErrors.map((item) => `- ${item}`).join('\n')}`);
+const remotePlatforms = JSON.parse(run(['--json', 'project', 'list-platforms', '--project-id', requested.projectId, '--limit', '100'])).platforms ?? [];
+const drift = platformDrift(expectedPlatforms, remotePlatforms);
+if (drift.incompatible.length) throw new Error(`Development platform IDs exist with incompatible definitions: ${drift.incompatible.map((item) => item.expected.$id).join(', ')}.`);
+for (const platform of drift.missing) {
+  if (platform.type !== 'web') throw new Error(`Unsupported platform type: ${platform.type}.`);
+  run(['--json', 'project', 'create-web-platform', '--project-id', requested.projectId, '--platform-id', platform.$id, '--name', platform.name, '--hostname', platform.hostname]);
+}
+if (drift.extra.length) console.warn(`WARNING: Remote Development platforms not represented locally: ${drift.extra.map((item) => item.$id).join(', ')}.`);
+console.log(`Pushed Appwrite foundation and reconciled ${expectedPlatforms.length} platform to confirmed Development project ${requested.projectId}.`);

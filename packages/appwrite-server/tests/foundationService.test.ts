@@ -6,7 +6,9 @@ class MemoryGateway implements TablesGateway {
   readonly rows = new Map<string, StoredRow>();
   commits = 0;
   rollbacks = 0;
+  failTableId?: string;
   async createRow<T extends StoredRow>(input: { tableId: string; rowId: string; data: Omit<T, '$id'> }): Promise<T> {
+    if (input.tableId === this.failTableId) throw new Error('injected write failure');
     const key = `${input.tableId}:${input.rowId}`;
     if (this.rows.has(key)) throw new Error('duplicate');
     const row = { $id: input.rowId, ...input.data } as T;
@@ -34,5 +36,18 @@ describe('Appwrite foundation service', () => {
     expect([...gateway.rows.keys()].filter((key) => key.startsWith('audit_events:'))).toHaveLength(1);
     expect(gateway.commits).toBe(1);
     expect(gateway.rollbacks).toBe(0);
+  });
+
+  it('rolls back and does not commit when the paired audit write fails', async () => {
+    const gateway = new MemoryGateway();
+    gateway.failTableId = 'audit_events';
+    const service = new AppwriteFoundationService(gateway, () => new Date('2026-08-29T00:00:00.000Z'));
+    await expect(service.createServiceRequest({
+      agencyId: 'agency-development', serviceDefinitionId: 'routine-inspection', source: 'admin_portal',
+      sourceReference: 'DEV-REQUEST-ROLLBACK', requestedByUserId: 'development-admin', correlationId: 'correlation-rollback',
+      readScope: { userIds: ['development-admin'] },
+    })).rejects.toThrow('injected write failure');
+    expect(gateway.commits).toBe(0);
+    expect(gateway.rollbacks).toBe(1);
   });
 });
