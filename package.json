@@ -54,7 +54,7 @@
     "prepare": "node scripts/verify-workspace.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.32.0",
+    "@google/genai": "^2.19.0",
     "firebase": "^12.6.0",
     "heic2any": "^0.0.4",
     "idb": "8.0.0",
