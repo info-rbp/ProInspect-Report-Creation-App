@@ -43,6 +43,7 @@ import { routeCachedDashboardRequest } from './backend/dashboardCachedRoutes.js'
 import { routePlatformEnhancementRequest } from './backend/platformEnhancementRoutes.js';
 import { routeESignCommandRequest, routeESignExternalWebhook } from './backend/eSignCommandRoutes.js';
 import { routeBuildingManagementRequest } from './backend/buildingManagementRoutes.js';
+import { routeUnifiedPlatformRequest } from './backend/unifiedPlatformRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
@@ -67,16 +68,9 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID();
     if (isCloudflareOriginProtectionConfigured() && !isHealthRequest(req) && !isTrustedCloudflareEdge(req)) {
-      const error: DomainErrorShape = {
-        code: 'EDGE_REQUIRED',
-        message: 'Requests to this API must pass through the configured application edge.',
-        status: 403,
-        correlationId,
-      };
-      send(res, { status: 403, body: { error } }, correlationId);
-      return;
+      const error: DomainErrorShape = { code: 'EDGE_REQUIRED', message: 'Requests to this API must pass through the configured application edge.', status: 403, correlationId };
+      send(res, { status: 403, body: { error } }, correlationId); return;
     }
-
     const rateKey = `${requestSourceIp(req) ?? 'unknown'}:${req.url ?? '/'}`;
     if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
     try {
@@ -88,7 +82,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       if (req.method === 'POST' && req.url === '/v1/security/authorise') { const requestBody = await readJson(req); const capability = requestBody.capability as SecurityCapability; const target = requestBody.target as AuthorisationTarget; const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId); send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return; }
       const peopleResponse = await routePeopleRequest(req, dependencies, correlationId); if (peopleResponse) { send(res, peopleResponse, correlationId); return; }
       if (isClientManagementRoute(req.url)) { const r = await routeClientManagementRequest(req, dependencies, correlationId); if (r) { send(res, r, correlationId); return; } }
-      const handlers = [routeBuildingManagementRequest, routeCachedDashboardRequest, routeClientPortalRequest, routeRemoteInspectionAdminRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
+      const handlers = [routeUnifiedPlatformRequest, routeBuildingManagementRequest, routeCachedDashboardRequest, routeClientPortalRequest, routeRemoteInspectionAdminRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
       for (const handler of handlers) { const response = await handler(req, dependencies, correlationId); if (response) { send(res, response, correlationId); return; } }
       const specialReportRoute = reportRoute(req.url); if (specialReportRoute) { const agency = req.headers['x-agency-id']?.toString().trim(); if (!agency) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); const response = await routeReportAggregateRequest(req, dependencies, correlationId, agency, specialReportRoute.reportId, specialReportRoute.command); if (response) { send(res, response, correlationId); return; } }
       const tailHandlers = [routeAnalysisRequest, routePriceBookUploadRequest, routeCanonicalMaintenancePricingRequest, routeMaintenanceCommercialRequest, routeMaintenanceCandidateCommercialRequest, routeMaintenanceCreateRequest, routeMaintenanceActionRequest, routeTenantDocumentRequest, routeTenantMigrationRequest, routeTenantActionSourceRequest, routeTenantActionQueueRequest, routeTenantOperationsRequest, routeTenantAutomationRequest, routeTenantPortalRequest, routeTenantInstructionGrantRequest, routeMaintenanceRequest, routeCatalogueRequest, routeTemplateRequest, routeReportPresentationRequest, routeBrandingAssetUploadRequest, routeSettingsRequest] as const;
