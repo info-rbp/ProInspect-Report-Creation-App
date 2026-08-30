@@ -40,9 +40,8 @@ export const unifiedPlatformExtensionTables = [
     str('verifiedBy', 36), datetime('verifiedAt'), str('overrideBy', 36), datetime('overrideUntil'),
     text('overrideReason'), text('requirements'),
   ], [
-    index('contractor_state', ['contractorId', 'complianceState']),
-    index('expiry_state', ['expiresAt', 'complianceState']),
-    unique('contractor_type_ref', ['contractorId', 'complianceType', 'reference']),
+    index('contractor_state', ['contractorId', 'complianceState']), index('contractor_status', ['contractorId', 'status']),
+    index('expiry_state', ['expiresAt', 'complianceState']), unique('contractor_type_ref', ['contractorId', 'complianceType', 'reference']),
   ]),
   agencyEntity('offer_partners', [
     str('name', 255, true), str('logoFileId', 36), str('contactName', 255),
@@ -59,12 +58,19 @@ export const unifiedPlatformExtensionTables = [
     str('offerId', 36, true), str('userId', 36, true), str('managedSiteId', 36), str('unitId', 36),
     str('redemptionToken', 255), datetime('redeemedAt'), datetime('expiresAt'), str('externalReference', 255),
     text('consentSnapshot'),
-  ], [unique('offer_user_token', ['offerId', 'userId', 'redemptionToken']), index('user_status', ['userId', 'status']), index('offer_status', ['offerId', 'status'])]),
+  ], [
+    unique('offer_user_token', ['offerId', 'userId', 'redemptionToken']), index('user_status', ['userId', 'status']),
+    index('offer_status', ['offerId', 'status']), index('site_status', ['managedSiteId', 'status']),
+  ]),
   agencyEntity('conversations', [
     str('subject', 255, true), str('linkedEntityType', 64, true), str('linkedEntityId', 36, true),
-    str('managedSiteId', 36), str('propertyId', 36), str('assignedUserId', 36), str('conversationState', 32, true),
-    datetime('lastMessageAt'), datetime('resolvedAt'), str('resolvedBy', 36),
-  ], [index('entity_state', ['linkedEntityType', 'linkedEntityId', 'conversationState']), index('assignee_state', ['assignedUserId', 'conversationState']), index('site_last_message', ['managedSiteId', 'lastMessageAt'])]),
+    str('managedSiteId', 36), str('propertyId', 36), str('clientAccountId', 36), str('assignedUserId', 36),
+    str('conversationState', 32, true), datetime('lastMessageAt'), datetime('resolvedAt'), str('resolvedBy', 36),
+  ], [
+    index('entity_state', ['linkedEntityType', 'linkedEntityId', 'conversationState']),
+    index('assignee_state', ['assignedUserId', 'conversationState']), index('site_last_message', ['managedSiteId', 'lastMessageAt']),
+    index('client_state', ['clientAccountId', 'conversationState']),
+  ]),
   agencyEntity('conversation_participants', [
     str('conversationId', 36, true), str('participantType', 32, true), str('participantId', 36, true),
     str('role', 64), datetime('joinedAt'), datetime('leftAt'), datetime('lastReadAt'), boolean('canReply', true),
@@ -78,30 +84,34 @@ export const unifiedPlatformExtensionTables = [
     str('userId', 36, true), boolean('emailEnabled', true), boolean('smsEnabled', true), boolean('pushEnabled', true),
     str('quietHoursStart', 8), str('quietHoursEnd', 8), str('timezone', 64), boolean('urgentOverride', true),
     text('eventPreferences'),
-  ], [unique('user_preference', ['agencyId', 'userId'])]),
+  ], [unique('user_preference', ['agencyId', 'userId']), index('user_status', ['userId', 'status'])]),
   agencyEntity('appointment_availability', [
     str('userId', 36), str('managedSiteId', 36), str('serviceDefinitionId', 36), datetime('startAt', true),
     datetime('endAt', true), integer('capacity', true), integer('reserved', true), text('constraints'),
-  ], [index('service_start', ['serviceDefinitionId', 'startAt']), index('user_start', ['userId', 'startAt']), index('site_start', ['managedSiteId', 'startAt'])]),
+  ], [index('service_start', ['serviceDefinitionId', 'startAt']), index('user_start', ['userId', 'startAt']), index('site_start', ['managedSiteId', 'startAt']), index('site_status', ['managedSiteId', 'status'])]),
   agencyEntity('appointment_bookings', [
     str('serviceRequestId', 36, true), str('availabilityId', 36), str('propertyId', 36), str('managedSiteId', 36),
     str('requestedByUserId', 36), str('assignedUserId', 36), datetime('startAt', true), datetime('endAt', true),
     str('bookingState', 32, true), text('accessInstructions'), text('rescheduleHistory'),
-  ], [index('request_state', ['serviceRequestId', 'bookingState']), index('assignee_start', ['assignedUserId', 'startAt']), index('property_start', ['propertyId', 'startAt'])]),
+  ], [
+    index('request_state', ['serviceRequestId', 'bookingState']), index('assignee_start', ['assignedUserId', 'startAt']),
+    index('property_start', ['propertyId', 'startAt']), index('site_status', ['managedSiteId', 'status']),
+    index('requester_status', ['requestedByUserId', 'status']),
+  ]),
   agencyEntity('route_plans', [
     str('assignedUserId', 36, true), datetime('routeDate', true), str('routeState', 32, true),
     str('originAddress', 512), str('destinationAddress', 512), number('estimatedDistanceKm'), integer('estimatedDurationMinutes'),
     datetime('publishedAt'), str('publishedBy', 36), text('optimisationMetadata'),
-  ], [unique('user_route_date', ['assignedUserId', 'routeDate']), index('date_state', ['routeDate', 'routeState'])]),
+  ], [unique('user_route_date', ['assignedUserId', 'routeDate']), index('date_state', ['routeDate', 'routeState']), index('user_status', ['assignedUserId', 'status'])]),
   agencyEntity('route_plan_stops', [
     str('routePlanId', 36, true), str('inspectionJobId', 36), str('appointmentBookingId', 36),
     str('propertyId', 36), integer('sequence', true), datetime('plannedArrivalAt'), integer('travelMinutes'),
     number('distanceKm'), str('stopState', 32), datetime('actualArrivalAt'), datetime('departedAt'),
-  ], [unique('route_sequence', ['routePlanId', 'sequence']), index('job_route', ['inspectionJobId', 'routePlanId'])]),
+  ], [unique('route_sequence', ['routePlanId', 'sequence']), index('job_route', ['inspectionJobId', 'routePlanId']), index('route_status', ['routePlanId', 'status'])]),
   agencyEntity('offline_sync_receipts', [
     str('userId', 36, true), str('deviceId', 128, true), str('clientSubmissionId', 128, true),
     str('entityType', 64, true), str('entityId', 36), str('payloadHash', 128, true), str('syncState', 32, true),
     integer('attempts', true), datetime('firstReceivedAt', true), datetime('lastAttemptedAt'), datetime('completedAt'),
     text('conflictDetail'), text('errorDetail'),
-  ], [unique('device_submission', ['deviceId', 'clientSubmissionId']), index('user_state', ['userId', 'syncState']), index('entity_state', ['entityType', 'entityId', 'syncState'])]),
+  ], [unique('device_submission', ['deviceId', 'clientSubmissionId']), index('user_state', ['userId', 'syncState']), index('user_status', ['userId', 'status']), index('entity_state', ['entityType', 'entityId', 'syncState'])]),
 ];
