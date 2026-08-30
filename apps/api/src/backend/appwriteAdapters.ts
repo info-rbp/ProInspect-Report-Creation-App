@@ -53,7 +53,8 @@ const VERSIONED_TABLES = new Set([
 ]);
 const FILTERABLE_COLUMNS = new Set([
   'managedSiteId', 'buildingId', 'locationId', 'unitId', 'propertyId', 'clientAccountId',
-  'contractorId', 'assignedUserId', 'userId', 'status', 'linkedEntityType', 'linkedEntityId',
+  'contractorId', 'assignedUserId', 'requestedByUserId', 'userId', 'status', 'linkedEntityType',
+  'linkedEntityId', 'conversationId', 'routePlanId', 'offerId', 'serviceDefinitionId',
 ]);
 
 function tableId(collection: string): string {
