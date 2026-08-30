@@ -12,31 +12,42 @@ interface PlatformResourcePolicy {
   writeCapability?: SecurityCapability;
   requiredScope?: 'site' | 'client' | 'contractor' | 'assignment' | 'self' | 'none';
   selfField?: string;
+  queryFields?: readonly string[];
 }
 
 const POLICIES: Readonly<Record<string, PlatformResourcePolicy>> = {
-  'portal-entitlements': { collection: 'portalEntitlements', readCapability: 'portal.switch', writeCapability: 'user.scope.manage', requiredScope: 'self', selfField: 'userId' },
-  'contractor-compliance': { collection: 'contractorCompliance', readCapability: 'contractor.compliance.read', createCapability: 'contractor.compliance.manage', writeCapability: 'contractor.compliance.manage', requiredScope: 'contractor' },
-  'offer-partners': { collection: 'offerPartners', readCapability: 'offer.read', createCapability: 'offer.manage', writeCapability: 'offer.manage', requiredScope: 'none' },
-  offers: { collection: 'offers', readCapability: 'offer.read', createCapability: 'offer.manage', writeCapability: 'offer.manage', requiredScope: 'site' },
-  'offer-redemptions': { collection: 'offerRedemptions', readCapability: 'offer.read', createCapability: 'offer.redeem', writeCapability: 'offer.manage', requiredScope: 'site', selfField: 'userId' },
-  conversations: { collection: 'conversations', readCapability: 'communication.read', createCapability: 'communication.send', writeCapability: 'communication.manage', requiredScope: 'site' },
-  'notification-preferences': { collection: 'notificationPreferences', readCapability: 'communication.read', createCapability: 'communication.send', writeCapability: 'communication.send', requiredScope: 'self', selfField: 'userId' },
-  'appointment-availability': { collection: 'appointmentAvailability', readCapability: 'building_calendar.read', createCapability: 'building_calendar.manage', writeCapability: 'building_calendar.manage', requiredScope: 'site' },
-  'appointment-bookings': { collection: 'appointmentBookings', readCapability: 'communication.read', createCapability: 'communication.send', writeCapability: 'building_calendar.manage', requiredScope: 'site', selfField: 'requestedByUserId' },
-  'route-plans': { collection: 'routePlans', readCapability: 'job.read', createCapability: 'job.plan', writeCapability: 'job.plan', requiredScope: 'assignment', selfField: 'assignedUserId' },
-  'route-plan-stops': { collection: 'routePlanStops', readCapability: 'job.read', createCapability: 'job.plan', writeCapability: 'job.plan', requiredScope: 'assignment' },
-  'offline-sync-receipts': { collection: 'offlineSyncReceipts', readCapability: 'job.offline.sync', createCapability: 'job.offline.sync', writeCapability: 'job.offline.sync', requiredScope: 'self', selfField: 'userId' },
+  'portal-entitlements': { collection: 'portalEntitlements', readCapability: 'portal.switch', createCapability: 'user.scope.manage', writeCapability: 'user.scope.manage', requiredScope: 'self', selfField: 'userId', queryFields: ['userId', 'status'] },
+  'contractor-compliance': { collection: 'contractorCompliance', readCapability: 'contractor.compliance.read', createCapability: 'contractor.compliance.manage', writeCapability: 'contractor.compliance.manage', requiredScope: 'contractor', queryFields: ['contractorId', 'status'] },
+  'offer-partners': { collection: 'offerPartners', readCapability: 'offer.read', createCapability: 'offer.manage', writeCapability: 'offer.manage', requiredScope: 'none', queryFields: ['status'] },
+  offers: { collection: 'offers', readCapability: 'offer.read', createCapability: 'offer.manage', writeCapability: 'offer.manage', requiredScope: 'none', queryFields: ['status'] },
+  'offer-redemptions': { collection: 'offerRedemptions', readCapability: 'offer.read', createCapability: 'offer.redeem', writeCapability: 'offer.manage', requiredScope: 'site', selfField: 'userId', queryFields: ['managedSiteId', 'userId', 'offerId', 'status'] },
+  conversations: { collection: 'conversations', readCapability: 'communication.read', createCapability: 'communication.send', writeCapability: 'communication.manage', requiredScope: 'none', queryFields: ['managedSiteId', 'clientAccountId', 'status'] },
+  'notification-preferences': { collection: 'notificationPreferences', readCapability: 'communication.read', createCapability: 'communication.send', writeCapability: 'communication.send', requiredScope: 'self', selfField: 'userId', queryFields: ['userId', 'status'] },
+  'appointment-availability': { collection: 'appointmentAvailability', readCapability: 'building_calendar.read', createCapability: 'building_calendar.manage', writeCapability: 'building_calendar.manage', requiredScope: 'site', queryFields: ['managedSiteId', 'status'] },
+  'appointment-bookings': { collection: 'appointmentBookings', readCapability: 'communication.read', createCapability: 'communication.send', writeCapability: 'building_calendar.manage', requiredScope: 'site', selfField: 'requestedByUserId', queryFields: ['managedSiteId', 'requestedByUserId', 'assignedUserId', 'status'] },
+  'route-plans': { collection: 'routePlans', readCapability: 'job.read', createCapability: 'job.plan', writeCapability: 'job.plan', requiredScope: 'assignment', selfField: 'assignedUserId', queryFields: ['assignedUserId', 'status'] },
+  'offline-sync-receipts': { collection: 'offlineSyncReceipts', readCapability: 'job.offline.sync', createCapability: 'job.offline.sync', writeCapability: 'job.offline.sync', requiredScope: 'self', selfField: 'userId', queryFields: ['userId', 'status'] },
 };
 
-const SELF_SERVICE_ROLES = new Set<SecurityRole>([
-  'resident_owner', 'resident_tenant', 'tenant', 'client_user', 'landlord',
-  'contractor_worker', 'contractor_admin', 'inspector', 'building_manager', 'relief_building_manager',
+const SITE_PORTAL_ROLES = new Set<SecurityRole>([
+  'building_manager', 'relief_building_manager', 'strata_manager', 'council_member',
+  'resident_owner', 'resident_tenant', 'contractor_admin', 'contractor_worker',
 ]);
+const USER_SELF_SERVICE_ROLES = new Set<SecurityRole>([
+  'resident_owner', 'resident_tenant', 'tenant', 'client_user', 'landlord',
+  'contractor_worker', 'contractor_admin', 'inspector',
+]);
+const PORTAL_SELF_RESOURCES = new Set(['portal-entitlements', 'notification-preferences', 'offline-sync-receipts']);
+const RESIDENT_SELF_RESOURCES = new Set(['offer-redemptions', 'appointment-bookings']);
 
-function pathParts(req: IncomingMessage): string[] {
-  return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean);
+function shouldSelfScope(resource: string, role: SecurityRole): boolean {
+  if (PORTAL_SELF_RESOURCES.has(resource)) return role !== 'super_admin' && role !== 'proinspect_admin';
+  if (RESIDENT_SELF_RESOURCES.has(resource)) return USER_SELF_SERVICE_ROLES.has(role);
+  if (resource === 'route-plans') return role === 'inspector';
+  return false;
 }
+
+function pathParts(req: IncomingMessage): string[] { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
 function agencyHeader(req: IncomingMessage): string {
   const agencyId = req.headers['x-agency-id']?.toString().trim();
   if (!agencyId) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.');
@@ -59,9 +70,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   } catch { throw new ApiError(400, 'INVALID_JSON', 'Request body must be a JSON object.'); }
 }
 function expectedVersion(body: Record<string, unknown>): number {
-  if (typeof body.expectedVersion !== 'number' || !Number.isInteger(body.expectedVersion) || body.expectedVersion < 1) {
-    throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion must be a positive integer.');
-  }
+  if (typeof body.expectedVersion !== 'number' || !Number.isInteger(body.expectedVersion) || body.expectedVersion < 1) throw new ApiError(400, 'EXPECTED_VERSION_REQUIRED', 'expectedVersion must be a positive integer.');
   return body.expectedVersion;
 }
 function idempotencyKey(req: IncomingMessage): string {
@@ -92,12 +101,16 @@ function target(value: Record<string, unknown>, agencyId: string): Authorisation
     ...(typeof value.status === 'string' ? { lifecycleStatus: value.status } : {}),
   };
 }
-function filtersFromQuery(url: URL): Record<string, string> {
-  const allowed = ['managedSiteId', 'propertyId', 'clientAccountId', 'contractorId', 'assignedUserId', 'userId', 'status'];
-  return Object.fromEntries(allowed.flatMap((key) => {
+function allScopeValues(url: URL): Record<string, string> {
+  const keys = ['managedSiteId', 'propertyId', 'clientAccountId', 'contractorId', 'assignedUserId', 'userId', 'offerId', 'status'];
+  return Object.fromEntries(keys.flatMap((key) => {
     const value = url.searchParams.get(key)?.trim();
     return value ? [[key, value]] : [];
   }));
+}
+function queryFilters(policy: PlatformResourcePolicy, values: Record<string, string>): Record<string, string> {
+  const allowed = new Set(policy.queryFields ?? []);
+  return Object.fromEntries(Object.entries(values).filter(([key]) => allowed.has(key)));
 }
 function requireScope(policy: PlatformResourcePolicy, value: Record<string, unknown>): void {
   if (policy.requiredScope === 'site' && typeof value.managedSiteId !== 'string') throw new ApiError(400, 'MANAGED_SITE_REQUIRED', 'managedSiteId is required.');
@@ -105,25 +118,36 @@ function requireScope(policy: PlatformResourcePolicy, value: Record<string, unkn
   if (policy.requiredScope === 'contractor' && typeof value.contractorId !== 'string') throw new ApiError(400, 'CONTRACTOR_SCOPE_REQUIRED', 'contractorId is required.');
   if (policy.requiredScope === 'assignment' && typeof value.assignedUserId !== 'string') throw new ApiError(400, 'ASSIGNMENT_REQUIRED', 'assignedUserId is required.');
 }
+function requireConversationScope(role: SecurityRole, value: Record<string, unknown>): void {
+  if (SITE_PORTAL_ROLES.has(role) && typeof value.managedSiteId !== 'string') throw new ApiError(400, 'MANAGED_SITE_REQUIRED', 'managedSiteId is required for this portal.');
+  if (['client_admin', 'client_user', 'landlord'].includes(role) && typeof value.clientAccountId !== 'string') throw new ApiError(400, 'CLIENT_SCOPE_REQUIRED', 'clientAccountId is required for this portal.');
+}
+function offerEligible(record: StoredRecord, managedSiteId: string | undefined): boolean {
+  if (!managedSiteId) return true;
+  if (record.status !== 'active') return false;
+  try {
+    const rules = typeof record.locationRules === 'string' ? JSON.parse(record.locationRules) as Record<string, unknown> : record.locationRules as Record<string, unknown> | undefined;
+    const siteIds = Array.isArray(rules?.managedSiteIds) ? rules.managedSiteIds.map(String) : [];
+    return siteIds.length === 0 || siteIds.includes(managedSiteId);
+  } catch { return false; }
+}
 async function appendAudit(deps: ApiDependencies, principal: { uid: string; role: string; agencyId: string }, capability: SecurityCapability, eventType: string, entityType: string, entityId: string, correlationId: string, eventTarget: AuthorisationTarget): Promise<void> {
-  await deps.audit.append({
-    id: randomUUID(), timestamp: new Date().toISOString(), actorId: principal.uid, actorRole: principal.role,
-    agencyId: principal.agencyId, capability, outcome: 'allowed', reason: eventType, target: eventTarget,
-    correlationId, eventType, entityType, entityId,
-  });
+  await deps.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: principal.uid, actorRole: principal.role, agencyId: principal.agencyId, capability, outcome: 'allowed', reason: eventType, target: eventTarget, correlationId, eventType, entityType, entityId });
 }
 
 async function listResource(req: IncomingMessage, deps: ApiDependencies, correlationId: string, resource: string, policy: PlatformResourcePolicy): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
-  const filters = filtersFromQuery(url);
-  const requestedTarget = target(filters, agencyId);
-  requireScope(policy, filters);
-  const principal = await authenticateAndAuthorise(req, deps, policy.readCapability, requestedTarget, correlationId);
-  if (policy.selfField && SELF_SERVICE_ROLES.has(principal.role)) filters[policy.selfField] = principal.uid;
+  const scopeValues = allScopeValues(url);
+  requireScope(policy, scopeValues);
+  const principal = await authenticateAndAuthorise(req, deps, policy.readCapability, target(scopeValues, agencyId), correlationId);
+  if (resource === 'conversations') requireConversationScope(principal.role, scopeValues);
+  const filters = queryFilters(policy, scopeValues);
+  if (policy.selfField && shouldSelfScope(resource, principal.role)) filters[policy.selfField] = principal.uid;
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 50), 1), 100);
   const page = await deps.repository.list(policy.collection, agencyId, limit, url.searchParams.get('cursor') ?? undefined, filters);
-  return { status: 200, body: { data: page.items, meta: { correlationId, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) } } };
+  const data = resource === 'offers' ? page.items.filter((item) => offerEligible(item, scopeValues.managedSiteId)) : page.items;
+  return { status: 200, body: { data, meta: { correlationId, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) } } };
 }
 
 async function createResource(req: IncomingMessage, deps: ApiDependencies, correlationId: string, resource: string, policy: PlatformResourcePolicy, body: Record<string, unknown>): Promise<ApiResponse> {
@@ -132,7 +156,8 @@ async function createResource(req: IncomingMessage, deps: ApiDependencies, corre
   const data = clean(body);
   requireScope(policy, data);
   const principal = await authenticateAndAuthorise(req, deps, policy.createCapability, target(data, agencyId), correlationId);
-  if (policy.selfField && SELF_SERVICE_ROLES.has(principal.role)) data[policy.selfField] = principal.uid;
+  if (resource === 'conversations') requireConversationScope(principal.role, data);
+  if (policy.selfField && shouldSelfScope(resource, principal.role)) data[policy.selfField] = principal.uid;
   if (resource === 'offer-redemptions') {
     data.redeemedAt = new Date().toISOString();
     data.redemptionToken = typeof data.redemptionToken === 'string' ? data.redemptionToken : randomUUID();
@@ -157,7 +182,7 @@ async function updateResource(req: IncomingMessage, deps: ApiDependencies, corre
   const existing = await deps.repository.get(policy.collection, agencyId, id);
   if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
   const principal = await authenticateAndAuthorise(req, deps, policy.writeCapability, target(existing, agencyId), correlationId);
-  if (policy.selfField && SELF_SERVICE_ROLES.has(principal.role) && existing[policy.selfField] !== principal.uid) throw new ApiError(403, 'FORBIDDEN', 'This record belongs to another user.');
+  if (policy.selfField && shouldSelfScope(resource, principal.role) && existing[policy.selfField] !== principal.uid) throw new ApiError(403, 'FORBIDDEN', 'This record belongs to another user.');
   const version = expectedVersion(body);
   return idempotent(deps, req, agencyId, `platform:${resource}:${id}:update`, body, async () => {
     const updated = await deps.repository.update(policy.collection, agencyId, id, clean(body), version, principal.uid);
@@ -172,9 +197,10 @@ async function conversationMessages(req: IncomingMessage, deps: ApiDependencies,
   if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation not found.');
   const capability: SecurityCapability = req.method === 'GET' ? 'communication.read' : 'communication.send';
   const principal = await authenticateAndAuthorise(req, deps, capability, target(conversation, agencyId), correlationId);
+  requireConversationScope(principal.role, conversation);
   if (req.method === 'GET') {
-    const page = await deps.repository.list('conversationMessages', agencyId, 100);
-    return { status: 200, body: { data: page.items.filter((item) => item.conversationId === conversationId), meta: { correlationId } } };
+    const page = await deps.repository.list('conversationMessages', agencyId, 100, undefined, { conversationId });
+    return { status: 200, body: { data: page.items, meta: { correlationId } } };
   }
   if (req.method === 'POST') {
     const body = await readJson(req);
@@ -195,11 +221,34 @@ async function conversationMessages(req: IncomingMessage, deps: ApiDependencies,
   throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Method is not supported.');
 }
 
+async function routePlanStops(req: IncomingMessage, deps: ApiDependencies, correlationId: string, routePlanId: string): Promise<ApiResponse> {
+  const agencyId = agencyHeader(req);
+  const routePlan = await deps.repository.get('routePlans', agencyId, routePlanId);
+  if (!routePlan) throw new ApiError(404, 'NOT_FOUND', 'Route plan not found.');
+  const capability: SecurityCapability = req.method === 'GET' ? 'job.read' : 'job.plan';
+  const principal = await authenticateAndAuthorise(req, deps, capability, target(routePlan, agencyId), correlationId);
+  if (req.method === 'GET') {
+    const page = await deps.repository.list('routePlanStops', agencyId, 100, undefined, { routePlanId });
+    return { status: 200, body: { data: page.items, meta: { correlationId } } };
+  }
+  if (req.method === 'POST') {
+    const body = await readJson(req);
+    return idempotent(deps, req, agencyId, `platform:route-plan:${routePlanId}:stop`, body, async () => {
+      const id = typeof body.id === 'string' ? body.id : randomUUID();
+      const created = await deps.repository.create('routePlanStops', agencyId, id, { ...clean(body), routePlanId, status: typeof body.status === 'string' ? body.status : 'planned' }, principal.uid);
+      await appendAudit(deps, principal, capability, 'platform.route_plan.stop.created', 'route_plan_stop', id, correlationId, target(routePlan, agencyId));
+      return { status: 201, body: { data: created, meta: { correlationId } } };
+    });
+  }
+  throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Method is not supported.');
+}
+
 export async function routeUnifiedPlatformRequest(req: IncomingMessage, deps: ApiDependencies, correlationId: string): Promise<ApiResponse | undefined> {
   const parts = pathParts(req);
   if (parts[0] !== 'api' || parts[1] !== 'v1' || parts[2] !== 'platform') return undefined;
   const resource = parts[3];
   if (!resource) return { status: 200, body: { name: 'ProInspect Unified Platform API', version: 'v1', resources: Object.keys(POLICIES) } };
+  if (resource === 'route-plans' && parts[4] && parts[5] === 'stops') return routePlanStops(req, deps, correlationId, parts[4]);
   const policy = POLICIES[resource];
   if (!policy) throw new ApiError(404, 'NOT_FOUND', 'Unified platform resource not found.');
   const id = parts[4];
@@ -217,8 +266,9 @@ export async function routeUnifiedPlatformRequest(req: IncomingMessage, deps: Ap
     const agencyId = agencyHeader(req);
     const record = await deps.repository.get(policy.collection, agencyId, id);
     if (!record) throw new ApiError(404, 'NOT_FOUND', 'Record not found.');
-    const principal = await authenticateAndAuthorise(req, deps, policy.readCapability, target(record, agencyId), correlationId);
-    if (policy.selfField && SELF_SERVICE_ROLES.has(principal.role) && record[policy.selfField] !== principal.uid) throw new ApiError(403, 'FORBIDDEN', 'This record belongs to another user.');
+    const scopeValues = allScopeValues(new URL(req.url ?? '/', 'http://localhost'));
+    const principal = await authenticateAndAuthorise(req, deps, policy.readCapability, target({ ...record, ...scopeValues }, agencyId), correlationId);
+    if (policy.selfField && shouldSelfScope(resource, principal.role) && record[policy.selfField] !== principal.uid) throw new ApiError(403, 'FORBIDDEN', 'This record belongs to another user.');
     return { status: 200, body: { data: record, meta: { correlationId } } };
   }
   if (req.method === 'POST' && !id) return createResource(req, deps, correlationId, resource, policy, await readJson(req));
