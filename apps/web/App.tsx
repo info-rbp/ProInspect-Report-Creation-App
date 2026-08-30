@@ -50,12 +50,22 @@ import RemoteInspectionPage from './pages/external/RemoteInspectionPage';
 import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPage';
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
+import PortalWorkspacePage from './pages/portals/PortalWorkspacePage';
 
 const App: React.FC = () => (
   <AuthProvider><BrowserRouter><Routes>
     <Route path="/" element={<AuthRedirect />} /><Route path="/auth/login" element={<LoginRoutePage />} />
     <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} /><Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} /><Route path="/tenant-portal/:grantToken" element={<TenantPortalPage />} /><Route path="/tenant-portal/:grantToken/inspection/:assignmentId" element={<RemoteInspectionPage />} /><Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} /><Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} /><Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
-    <Route element={<ProtectedRoute />}><Route path="/client-portal/:clientAccountId" element={<ClientPortalPage />} /></Route>
+    <Route element={<ProtectedRoute />}>
+      <Route path="/client-portal/:clientAccountId" element={<ClientPortalPage />} />
+      <Route path="/admin" element={<PortalWorkspacePage portalId="admin" />} />
+      <Route path="/inspector" element={<PortalWorkspacePage portalId="inspector" />} />
+      <Route path="/building" element={<PortalWorkspacePage portalId="building" />} />
+      <Route path="/strata" element={<PortalWorkspacePage portalId="strata" />} />
+      <Route path="/resident" element={<PortalWorkspacePage portalId="resident" />} />
+      <Route path="/client" element={<PortalWorkspacePage portalId="client" />} />
+      <Route path="/contractor" element={<PortalWorkspacePage portalId="contractor" />} />
+    </Route>
     <Route path="/app" element={<ProtectedRoute />}><Route element={<AppShell />}><Route index element={<Navigate to="/app/dashboard" replace />} />
       <Route element={<RoleProtectedRoute section="dashboard" />}><Route path="dashboard" element={<DashboardPage />} /><Route path="admin" element={<AdminHomePage />} /></Route>
       <Route element={<RoleProtectedRoute section="analytics" />}><Route path="admin/analytics" element={<AnalyticsPage />} /></Route>

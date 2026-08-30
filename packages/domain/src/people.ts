@@ -1,5 +1,5 @@
-import type { InspectionReportType, PropertyUse, UserRole } from './platform.js';
-import type { SecurityCapability } from './security.js';
+import type { InspectionReportType, PropertyUse } from './platform.js';
+import type { SecurityCapability, SecurityRole } from './security.js';
 
 export type MembershipStatus = 'invited' | 'active' | 'suspended' | 'revoked';
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'cancelled';
@@ -20,7 +20,7 @@ export interface PeopleInvitation {
   agencyId: string;
   email: string;
   displayName?: string;
-  role: UserRole;
+  role: SecurityRole;
   status: InvitationStatus;
   mfaRequired: boolean;
   expiresAt: string;
@@ -37,7 +37,7 @@ export interface WorkforceProfile {
   agencyId: string;
   userId: string;
   active: boolean;
-  disciplines: Array<'inspection' | 'analysis' | 'review' | 'operations' | 'maintenance'>;
+  disciplines: Array<'inspection' | 'analysis' | 'review' | 'operations' | 'maintenance' | 'building_management' | 'strata'>;
   inspectionTypes: InspectionReportType[];
   propertyUses: PropertyUse[];
   serviceAreas: string[];
@@ -85,7 +85,7 @@ export interface PeopleDirectoryEntry {
   agencyId: string;
   email: string;
   displayName?: string;
-  role: UserRole;
+  role: SecurityRole;
   membershipStatus: MembershipStatus;
   mfaRequired: boolean;
   effectiveCapabilities: SecurityCapability[];
@@ -97,11 +97,14 @@ export interface PeopleDirectoryEntry {
   version?: number;
 }
 
-export function isPrivilegedPeopleRole(role: UserRole): boolean {
-  return role === 'super_admin' || role === 'proinspect_admin' || role === 'reviewer';
+export function isPrivilegedPeopleRole(role: SecurityRole): boolean {
+  return [
+    'super_admin', 'proinspect_admin', 'reviewer', 'operations', 'inspector',
+    'building_manager', 'relief_building_manager', 'strata_manager', 'client_admin', 'contractor_admin',
+  ].includes(role);
 }
 
-export function mayAssignRole(actorRole: UserRole, targetRole: UserRole): boolean {
+export function mayAssignRole(actorRole: SecurityRole, targetRole: SecurityRole): boolean {
   if (actorRole === 'super_admin') return true;
   if (actorRole !== 'proinspect_admin') return false;
   return targetRole !== 'super_admin';

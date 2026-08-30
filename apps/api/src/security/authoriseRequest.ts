@@ -1,11 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type { AuthenticatedPrincipal, AuthorisationTarget, SecurityCapability, UserRole } from '@pcr/domain';
+import type {
+  AuthenticatedPrincipal,
+  AuthorisationTarget,
+  SecurityCapability,
+  SecurityRole,
+} from '@pcr/domain';
 import { authorise, requiresMfa } from './policy.js';
 import { requestSourceIp } from './trustedEdge.js';
 import { bearerToken, type SecurityDependencies } from './types.js';
 
-const roles = new Set<UserRole>(['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer', 'tenant', 'landlord', 'shopify_customer']);
+const roles = new Set<SecurityRole>([
+  'super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer',
+  'tenant', 'landlord', 'shopify_customer', 'building_manager', 'relief_building_manager',
+  'strata_manager', 'council_member', 'resident_owner', 'resident_tenant', 'client_admin',
+  'client_user', 'contractor_admin', 'contractor_worker',
+]);
 
 export class SecurityError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string) {
@@ -58,6 +68,10 @@ export async function authenticateAndAuthorise(
     mfaVerified: identity.mfaVerified,
     ...(identity.sessionId ? { sessionId: identity.sessionId } : {}),
     tokenIssuedAt: identity.issuedAt,
+    ...(membership.siteIds?.length ? { siteIds: membership.siteIds } : {}),
+    ...(membership.propertyIds?.length ? { propertyIds: membership.propertyIds } : {}),
+    ...(membership.clientAccountIds?.length ? { clientAccountIds: membership.clientAccountIds } : {}),
+    ...(membership.contractorId ? { contractorId: membership.contractorId } : {}),
   };
 
   if ((membership.mfaRequired || requiresMfa(principal.role)) && !principal.mfaVerified) {

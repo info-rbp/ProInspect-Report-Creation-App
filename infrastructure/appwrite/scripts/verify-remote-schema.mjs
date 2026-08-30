@@ -1,10 +1,12 @@
 import { Client, Query, Storage, TablesDB, Teams } from 'node-appwrite';
-import { tables as expectedTables } from '../tables/schema.mjs';
+import { tables as foundationTables } from '../tables/schema.mjs';
+import { unifiedPlatformExtensionTables } from '../tables/unified-platform-extensions.mjs';
 import databases from '../databases/databases.json' with { type: 'json' };
 import buckets from '../buckets/buckets.json' with { type: 'json' };
 import teamsConfig from '../teams/teams.json' with { type: 'json' };
 import { assertDevelopmentTarget } from './safety.mjs';
 
+const expectedTables = [...foundationTables, ...unifiedPlatformExtensionTables];
 const target = assertDevelopmentTarget({projectId:process.env.APPWRITE_PROJECT_ID,projectName:process.env.APPWRITE_PROJECT_NAME,endpoint:process.env.APPWRITE_ENDPOINT}, process.env.APPWRITE_CONFIRM_VERIFY);
 if (!process.env.APPWRITE_API_KEY) throw new Error('APPWRITE_API_KEY is required for schema verification.');
 const client = new Client().setEndpoint(target.endpoint).setProject(target.projectId).setKey(process.env.APPWRITE_API_KEY);
@@ -12,7 +14,7 @@ const tables = new TablesDB(client);
 const storage = new Storage(client);
 const teams = new Teams(client);
 const remoteDatabases = await tables.list({ queries: [Query.limit(100)] });
-const remoteTables = await tables.listTables({ databaseId: 'proinspect_core', queries: [Query.limit(100)] });
+const remoteTables = await tables.listTables({ databaseId: 'proinspect_core', queries: [Query.limit(500)] });
 const remoteBuckets = await storage.listBuckets({ queries: [Query.limit(100)] });
 const remoteTeams = await teams.list({ queries: [Query.limit(100)] });
 const errors = [];
@@ -58,8 +60,8 @@ for (const expected of expectedTables) {
   if (!actual) continue;
   if (actual.name !== expected.name || actual.rowSecurity !== expected.rowSecurity || actual.enabled !== expected.enabled || JSON.stringify(actual.$permissions) !== JSON.stringify(expected.$permissions)) errors.push(`${expected.$id} table security/settings differ.`);
   const [remoteColumns, remoteIndexes] = await Promise.all([
-    tables.listColumns({ databaseId: 'proinspect_core', tableId: expected.$id, queries: [Query.limit(100)] }),
-    tables.listIndexes({ databaseId: 'proinspect_core', tableId: expected.$id, queries: [Query.limit(100)] }),
+    tables.listColumns({ databaseId: 'proinspect_core', tableId: expected.$id, queries: [Query.limit(500)] }),
+    tables.listIndexes({ databaseId: 'proinspect_core', tableId: expected.$id, queries: [Query.limit(500)] }),
   ]);
   columnCount += remoteColumns.columns.length;
   indexCount += remoteIndexes.indexes.length;
@@ -70,25 +72,19 @@ for (const expected of expectedTables) {
   for (const column of expected.columns) {
     const remote = remoteColumns.columns.find((item) => item.key === column.key);
     if (!remote) errors.push(`${expected.$id}.${column.key} column is missing.`);
-    else if (columnDiffers(column, remote)) {
-      errors.push(`${expected.$id}.${column.key} column definition/status differs.`);
-    }
+    else if (columnDiffers(column, remote)) errors.push(`${expected.$id}.${column.key} column definition/status differs.`);
   }
   for (const item of expected.indexes) {
     const remote = remoteIndexes.indexes.find((candidate) => candidate.key === item.key);
     if (!remote) errors.push(`${expected.$id}.${item.key} index is missing.`);
-    else if (remote.status !== 'available' || remote.type !== item.type || JSON.stringify(remote.columns) !== JSON.stringify(item.columns) || JSON.stringify(remote.orders ?? []) !== JSON.stringify(item.orders ?? [])) {
-      errors.push(`${expected.$id}.${item.key} index definition/status differs.`);
-    }
+    else if (remote.status !== 'available' || remote.type !== item.type || JSON.stringify(remote.columns) !== JSON.stringify(item.columns) || JSON.stringify(remote.orders ?? []) !== JSON.stringify(item.orders ?? [])) errors.push(`${expected.$id}.${item.key} index definition/status differs.`);
   }
 }
 
 for (const expected of buckets) {
   const actual = remoteBuckets.buckets.find((item) => item.$id === expected.$id);
   if (!actual) continue;
-  if (actual.name !== expected.name || JSON.stringify(actual.$permissions) !== JSON.stringify(expected.$permissions) || actual.fileSecurity !== expected.fileSecurity || actual.enabled !== expected.enabled || actual.encryption !== expected.encryption || actual.antivirus !== expected.antivirus || actual.maximumFileSize !== expected.maximumFileSize || actual.compression !== expected.compression || JSON.stringify(actual.allowedFileExtensions) !== JSON.stringify(expected.allowedFileExtensions)) {
-    errors.push(`${expected.$id} bucket security/settings differ.`);
-  }
+  if (actual.name !== expected.name || JSON.stringify(actual.$permissions) !== JSON.stringify(expected.$permissions) || actual.fileSecurity !== expected.fileSecurity || actual.enabled !== expected.enabled || actual.encryption !== expected.encryption || actual.antivirus !== expected.antivirus || actual.maximumFileSize !== expected.maximumFileSize || actual.compression !== expected.compression || JSON.stringify(actual.allowedFileExtensions) !== JSON.stringify(expected.allowedFileExtensions)) errors.push(`${expected.$id} bucket security/settings differ.`);
 }
 for (const expected of teamsConfig) {
   const actual = remoteTeams.teams.find((item) => item.$id === expected.$id);
