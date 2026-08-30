@@ -58,11 +58,7 @@ function dependencies(
     },
     memberships: {
       getMembership: async () => ({
-        uid,
-        agencyId: 'agency-a',
-        role,
-        status: 'active',
-        mfaRequired: true,
+        uid, agencyId: 'agency-a', role, status: 'active', mfaRequired: true,
         updatedAt: new Date().toISOString(),
         ...(input.siteIds ? { siteIds: input.siteIds } : {}),
         ...(input.propertyIds ? { propertyIds: input.propertyIds } : {}),
@@ -70,11 +66,8 @@ function dependencies(
         ...(input.contractorId ? { contractorId: input.contractorId } : {}),
       }),
     },
-    audit: { append: async () => undefined },
-    repository,
-    reports: new EmptyReportStore(),
-    idempotency: new MemoryIdempotencyStore(),
-    tasks: { dispatch: async () => undefined },
+    audit: { append: async () => undefined }, repository, reports: new EmptyReportStore(),
+    idempotency: new MemoryIdempotencyStore(), tasks: { dispatch: async () => undefined },
     uploads: { create: async (agencyId, uploadId, payload) => ({ agencyId, uploadId, ...payload }) },
   };
 }
@@ -88,12 +81,7 @@ async function request(deps: ApiDependencies, path: string, init: RequestInit = 
 }
 
 function headers(key: string): Record<string, string> {
-  return {
-    authorization: 'Bearer token',
-    'content-type': 'application/json',
-    'x-agency-id': 'agency-a',
-    'idempotency-key': key,
-  };
+  return { authorization: 'Bearer token', 'content-type': 'application/json', 'x-agency-id': 'agency-a', 'idempotency-key': key };
 }
 
 describe('Building Management API', () => {
@@ -101,18 +89,14 @@ describe('Building Management API', () => {
     const repository = new MemoryRepository();
     const deps = dependencies(repository);
     const created = await request(deps, '/api/v1/building/defects', {
-      method: 'POST',
-      headers: headers('defect-create-0001'),
+      method: 'POST', headers: headers('defect-create-0001'),
       body: JSON.stringify({ id: 'defect-1', managedSiteId: 'site-a', status: 'new', title: 'Water leak' }),
     });
     expect(created.status).toBe(201);
     expect(await created.json()).toMatchObject({ data: { id: 'defect-1', managedSiteId: 'site-a', status: 'new', version: 1 } });
     server?.close();
-
     const transition = await request(deps, '/api/v1/building/defects/defect-1/transitions', {
-      method: 'POST',
-      headers: headers('defect-transition-0001'),
-      body: JSON.stringify({ expectedVersion: 1, status: 'bm_assessment' }),
+      method: 'POST', headers: headers('defect-transition-0001'), body: JSON.stringify({ expectedVersion: 1, status: 'bm_assessment' }),
     });
     expect(transition.status).toBe(200);
     expect(await transition.json()).toMatchObject({ data: { status: 'bm_assessment', version: 2 } });
@@ -122,9 +106,7 @@ describe('Building Management API', () => {
     const repository = new MemoryRepository();
     await repository.create('defects', 'agency-a', 'defect-2', { managedSiteId: 'site-a', status: 'new' }, 'admin-1');
     const response = await request(dependencies(repository), '/api/v1/building/defects/defect-2', {
-      method: 'PATCH',
-      headers: headers('defect-patch-0001'),
-      body: JSON.stringify({ expectedVersion: 1, status: 'closed' }),
+      method: 'PATCH', headers: headers('defect-patch-0001'), body: JSON.stringify({ expectedVersion: 1, status: 'closed' }),
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: { code: 'LIFECYCLE_FIELD_PROTECTED' } });
@@ -133,57 +115,50 @@ describe('Building Management API', () => {
   it('denies a Building Manager outside the assigned site', async () => {
     const repository = new MemoryRepository();
     await repository.create('incidents', 'agency-a', 'incident-1', { managedSiteId: 'site-b', status: 'open' }, 'admin-1');
-    const response = await request(
-      dependencies(repository, { role: 'building_manager', siteIds: ['site-a'] }),
-      '/api/v1/building/incidents/incident-1',
-      { headers: { authorization: 'Bearer token', 'x-agency-id': 'agency-a' } },
-    );
+    const response = await request(dependencies(repository, { role: 'building_manager', siteIds: ['site-a'] }), '/api/v1/building/incidents/incident-1', { headers: { authorization: 'Bearer token', 'x-agency-id': 'agency-a' } });
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
   });
 
+  it('lets a resident create only a self-scoped request at an assigned site', async () => {
+    const repository = new MemoryRepository();
+    const response = await request(
+      dependencies(repository, { role: 'resident_tenant', uid: 'resident-1', siteIds: ['site-a'], propertyIds: ['property-1'] }),
+      '/api/v1/building/resident-requests',
+      {
+        method: 'POST', headers: headers('resident-request-0001'),
+        body: JSON.stringify({ id: 'request-1', managedSiteId: 'site-a', propertyId: 'property-1', status: 'submitted', category: 'maintenance' }),
+      },
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ data: { id: 'request-1', submittedByUserId: 'resident-1', residentUserId: 'resident-1' } });
+  });
+
   it('blocks contractor sign-out with an outstanding key unless an override is supplied', async () => {
     const repository = new MemoryRepository();
-    await repository.create('contractorAttendance', 'agency-a', 'attendance-1', {
-      managedSiteId: 'site-a', contractorId: 'contractor-1', status: 'checked_in',
-    }, 'admin-1');
-    const deps = dependencies(repository, {
-      role: 'contractor_worker', siteIds: ['site-a'], contractorId: 'contractor-1',
-    });
+    await repository.create('contractorAttendance', 'agency-a', 'attendance-1', { managedSiteId: 'site-a', contractorId: 'contractor-1', status: 'checked_in' }, 'admin-1');
+    const deps = dependencies(repository, { role: 'contractor_worker', siteIds: ['site-a'], contractorId: 'contractor-1' });
     const blocked = await request(deps, '/api/v1/building/contractor-attendance/attendance-1/sign-out', {
-      method: 'POST',
-      headers: headers('attendance-out-0001'),
-      body: JSON.stringify({ expectedVersion: 1, keyIssued: true, keyReturned: false }),
+      method: 'POST', headers: headers('attendance-out-0001'), body: JSON.stringify({ expectedVersion: 1, keyIssued: true, keyReturned: false }),
     });
     expect(blocked.status).toBe(409);
     expect(await blocked.json()).toMatchObject({ error: { code: 'ACCESS_ITEM_OUTSTANDING' } });
     server?.close();
-
     const allowed = await request(deps, '/api/v1/building/contractor-attendance/attendance-1/sign-out', {
-      method: 'POST',
-      headers: headers('attendance-out-0002'),
-      body: JSON.stringify({
-        expectedVersion: 1,
-        keyIssued: true,
-        keyReturned: false,
-        overrideReason: 'Approved return visit tomorrow.',
-      }),
+      method: 'POST', headers: headers('attendance-out-0002'),
+      body: JSON.stringify({ expectedVersion: 1, keyIssued: true, keyReturned: false, overrideReason: 'Approved return visit tomorrow.' }),
     });
     expect(allowed.status).toBe(200);
     expect(await allowed.json()).toMatchObject({ data: { status: 'checked_out', keyReturnOverrideBy: 'user-1' } });
   });
 
-  it('prevents generic mutation of a final operational report', async () => {
+  it('keeps final operational reports read only outside a supersession command', async () => {
     const repository = new MemoryRepository();
-    await repository.create('operationalReports', 'agency-a', 'monthly-1', {
-      managedSiteId: 'site-a', status: 'finalised', immutable: true, finalisedAt: '2026-08-01T00:00:00.000Z',
-    }, 'admin-1');
+    await repository.create('operationalReports', 'agency-a', 'monthly-1', { managedSiteId: 'site-a', status: 'finalised', immutable: true, finalisedAt: '2026-08-01T00:00:00.000Z' }, 'admin-1');
     const response = await request(dependencies(repository), '/api/v1/building/operational-reports/monthly-1', {
-      method: 'PATCH',
-      headers: headers('report-patch-0001'),
-      body: JSON.stringify({ expectedVersion: 1, title: 'Changed final report' }),
+      method: 'PATCH', headers: headers('report-patch-0001'), body: JSON.stringify({ expectedVersion: 1, title: 'Changed final report' }),
     });
-    expect(response.status).toBe(500);
-    expect(await response.json()).toMatchObject({ error: { code: 'INTERNAL_ERROR' } });
+    expect(response.status).toBe(405);
+    expect(await response.json()).toMatchObject({ error: { code: 'METHOD_NOT_ALLOWED' } });
   });
 });
