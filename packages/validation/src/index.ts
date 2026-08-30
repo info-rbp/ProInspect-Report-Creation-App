@@ -1,4 +1,4 @@
-import type { DomainErrorShape, InspectionJobStatus, InspectionType, ReportLifecycleStatus, UserRole } from '@pcr/domain';
+import type { DomainErrorShape, InspectionJobStatus, InspectionType, ReportLifecycleStatus, SecurityRole } from '@pcr/domain';
 import { evidenceUploadSessionSchema, type EvidenceUploadSessionInput } from './photoUpload.js';
 
 export type ValidationResult<T> =
@@ -22,7 +22,12 @@ const workflowStatuses = new Set<WorkflowStatus>([
   'tenant_response_in_progress', 'tenant_submitted', 'agent_response_required', 'finalisation_ready',
   'finalised', 'archived', 'on_hold', 'cancelled', 'internal_review', 'approved_for_issue',
 ]);
-const roles = new Set<UserRole>(['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer', 'tenant', 'landlord', 'shopify_customer']);
+const roles = new Set<SecurityRole>([
+  'super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer',
+  'tenant', 'landlord', 'shopify_customer', 'building_manager', 'relief_building_manager',
+  'strata_manager', 'council_member', 'resident_owner', 'resident_tenant', 'client_admin',
+  'client_user', 'contractor_admin', 'contractor_worker',
+]);
 
 function validationError(message: string, details?: Record<string, unknown>): ValidationResult<never> {
   return { ok: false, error: { code: 'VALIDATION_ERROR', message, status: 400, ...(details ? { details } : {}) } };
@@ -66,7 +71,7 @@ export const workflowTransitionSchema: ValidationSchema<WorkflowTransitionInput>
 export const uploadSessionSchema: ValidationSchema<UploadSessionInput> = evidenceUploadSessionSchema;
 export const taskCreationSchema: ValidationSchema<TaskCreationInput> = { parse(value) { const parsed = record(value); if (!parsed.ok) return parsed; const reportId = requireNonEmptyString(parsed.value.reportId, 'reportId'); if (!reportId.ok) return reportId; const priority = parsed.value.priority; if (priority !== undefined && priority !== 'normal' && priority !== 'high') return validationError('priority must be normal or high.', { field: 'priority' }); return { ok: true, value: { reportId: reportId.value, ...(typeof parsed.value.reportVersionId === 'string' ? { reportVersionId: parsed.value.reportVersionId } : {}), ...(priority ? { priority } : {}) } }; } };
 export const tenantResponseSchema: ValidationSchema<TenantResponseInput> = { parse(value) { const parsed = record(value); if (!parsed.ok) return parsed; const reportId = requireNonEmptyString(parsed.value.reportId, 'reportId'); if (!reportId.ok) return reportId; const tenancyId = requireNonEmptyString(parsed.value.tenancyId, 'tenancyId'); if (!tenancyId.ok) return tenancyId; const version = requirePositiveInteger(parsed.value.expectedVersion, 'expectedVersion'); if (!version.ok) return version; if (!Array.isArray(parsed.value.responses)) return validationError('responses must be an array.', { field: 'responses' }); return { ok: true, value: { reportId: reportId.value, tenancyId: tenancyId.value, responses: parsed.value.responses, expectedVersion: version.value } }; } };
-export const userRoleSchema: ValidationSchema<UserRole> = { parse(value) { if (typeof value === 'string' && roles.has(value as UserRole)) return { ok: true, value: value as UserRole }; return validationError('Unsupported user role.', { field: 'role' }); } };
+export const userRoleSchema: ValidationSchema<SecurityRole> = { parse(value) { if (typeof value === 'string' && roles.has(value as SecurityRole)) return { ok: true, value: value as SecurityRole }; return validationError('Unsupported user role.', { field: 'role' }); } };
 export function parseWithSchema<T>(schema: ValidationSchema<T>, value: unknown): T { const result = schema.parse(value); if (!result.ok) throw result.error; return result.value; }
 export * from './reportModel.js';
 export * from './photoUpload.js';
