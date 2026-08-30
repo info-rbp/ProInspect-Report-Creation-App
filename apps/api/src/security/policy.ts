@@ -16,7 +16,7 @@ const siteScopedRoles = new Set<SecurityRole>([
   'resident_owner', 'resident_tenant', 'contractor_admin', 'contractor_worker',
 ]);
 const siteOptionalCapabilities = new Set<SecurityCapability>([
-  'portal.switch', 'communication.read', 'communication.send', 'contractor.compliance.read',
+  'portal.switch', 'communication.read', 'communication.send', 'contractor.compliance.read', 'job.offline.sync',
 ]);
 const immutableStatuses = new Set([
   'approved_for_issue', 'issued_to_tenant', 'tenant_response_in_progress', 'tenant_submitted',
@@ -71,9 +71,7 @@ export function authorise(
   if (contractorRoles.has(principal.role)) {
     const assignedContractorId = target.assignedContractorId ?? target.contractorId;
     const selfServiceCapability = siteOptionalCapabilities.has(capability);
-    if (!selfServiceCapability && (!assignedContractorId || assignedContractorId !== principal.contractorId)) {
-      return { allowed: false, reason: 'contractor_assignment_required' };
-    }
+    if (!selfServiceCapability && (!assignedContractorId || assignedContractorId !== principal.contractorId)) return { allowed: false, reason: 'contractor_assignment_required' };
     if (assignedContractorId && assignedContractorId !== principal.contractorId) return { allowed: false, reason: 'contractor_assignment_required' };
   }
 
