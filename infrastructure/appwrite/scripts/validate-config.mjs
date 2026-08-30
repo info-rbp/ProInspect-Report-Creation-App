@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tables } from '../tables/schema.mjs';
+import { unifiedPlatformExtensionTables } from '../tables/unified-platform-extensions.mjs';
 import { validatePlatformDefinitions } from '../platforms/platforms.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -11,13 +12,14 @@ const config = await readJson('appwrite.config.json');
 const generatedTables = await readJson('tables/tables.json');
 const buckets = await readJson('buckets/buckets.json');
 const platforms = await readJson('platforms/platforms.json');
+const allTables = [...tables, ...unifiedPlatformExtensionTables];
 
 if (config.projectId !== 'DEVELOPMENT_PROJECT_ID_REQUIRED') errors.push('Version-controlled config must retain the non-deployable Development project placeholder.');
 if (!/Development/i.test(config.projectName)) errors.push('Project name must identify Development.');
 if (JSON.stringify(generatedTables) !== JSON.stringify(tables)) errors.push('tables/tables.json is stale; run npm run appwrite:generate.');
 
 const ids = new Set();
-for (const table of tables) {
+for (const table of allTables) {
   if (ids.has(table.$id)) errors.push(`Duplicate table ID: ${table.$id}`);
   ids.add(table.$id);
   if (table.$id.length > 36) errors.push(`Table ID exceeds 36 characters: ${table.$id}`);
@@ -44,11 +46,17 @@ if (!platforms.some((platform) => platform.type === 'web' && platform.hostname =
   errors.push('Development requires an explicit localhost web platform for browser Auth redirects.');
 }
 
-const requiredTables = ['agencies','managed_sites','user_profiles','agency_memberships','site_memberships','properties','service_definitions','service_requests','inspection_jobs','maintenance_items','audit_events','evidence_files','migration_id_map'];
+const requiredTables = [
+  'agencies','managed_sites','user_profiles','agency_memberships','site_memberships','properties',
+  'service_definitions','service_requests','inspection_jobs','maintenance_items','audit_events',
+  'evidence_files','migration_id_map','portal_entitlements','contractor_compliance','conversations',
+  'conversation_messages','offer_partners','offers','offer_redemptions','appointment_bookings',
+  'route_plans','offline_sync_receipts',
+];
 for (const id of requiredTables) if (!ids.has(id)) errors.push(`Required table missing: ${id}`);
 
 if (errors.length) {
   for (const error of errors) console.error(`ERROR: ${error}`);
   process.exit(1);
 }
-console.log(`Validated ${tables.length} tables, ${buckets.length} deny-by-default buckets, and ${platforms.length} Development platform.`);
+console.log(`Validated ${allTables.length} tables, ${buckets.length} deny-by-default buckets, and ${platforms.length} Development platform.`);
