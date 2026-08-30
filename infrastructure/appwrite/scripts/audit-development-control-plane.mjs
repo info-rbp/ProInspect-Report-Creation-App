@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { platformDrift, validatePlatformDefinitions } from '../platforms/platforms.mjs';
+import { tables as foundationTables } from '../tables/schema.mjs';
+import { unifiedPlatformExtensionTables } from '../tables/unified-platform-extensions.mjs';
 import { assertDevelopmentTarget } from './safety.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,7 +49,7 @@ const [platformList, keyList, policyList, oauthList, databaseList, tableList, bu
   Promise.resolve(json(['project', 'list-policies', '--limit', '100'], generated)),
   Promise.resolve(json(['project', 'list-o-auth-2-providers', '--limit', '100'], generated)),
   Promise.resolve(json(['tablesdb', 'list', '--limit', '100'], generated)),
-  Promise.resolve(json(['tablesdb', 'list-tables', '--database-id', 'proinspect_core', '--limit', '100'], generated)),
+  Promise.resolve(json(['tablesdb', 'list-tables', '--database-id', 'proinspect_core', '--limit', '500'], generated)),
   Promise.resolve(json(['storage', 'list-buckets', '--limit', '100'], generated)),
   Promise.resolve(json(['teams', 'list', '--limit', '100'], generated)),
   Promise.resolve(json(['functions', 'list', '--limit', '100'], generated)),
@@ -59,6 +61,7 @@ const [platformList, keyList, policyList, oauthList, databaseList, tableList, bu
 
 const expectedPlatforms = JSON.parse(readFileSync(resolve(root, 'platforms/platforms.json'), 'utf8'));
 const expectedFunctions = JSON.parse(readFileSync(resolve(root, 'functions/functions.json'), 'utf8'));
+const expectedTables = [...foundationTables, ...unifiedPlatformExtensionTables];
 const platformErrors = validatePlatformDefinitions(expectedPlatforms);
 const drift = platformDrift(expectedPlatforms, platformList.platforms ?? []);
 const errors = [...platformErrors];
@@ -68,6 +71,7 @@ if (drift.incompatible.length) errors.push(`Incompatible platforms: ${drift.inco
 if (keyList.total !== 0) errors.push(`${keyList.total} persistent or temporary API keys remain.`);
 if (functionList.total !== expectedFunctions.length) errors.push(`Remote Function count ${functionList.total} does not match source-controlled count ${expectedFunctions.length}.`);
 if (webhookList.total !== 0) errors.push(`${webhookList.total} untracked Appwrite webhooks exist.`);
+if (tableList.total !== expectedTables.length) errors.push(`Remote table count ${tableList.total} does not match source-controlled count ${expectedTables.length}.`);
 
 const authMethods = Object.fromEntries((project.authMethods ?? []).map((item) => [item.$id, item.enabled]));
 const summary = {
