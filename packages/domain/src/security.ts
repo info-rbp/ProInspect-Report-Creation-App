@@ -43,27 +43,28 @@ const tenantWorkspace = ['tenant.read', 'tenant.manage', 'tenancy.read', 'tenanc
 const documentOperations = ['document.policy.read', 'document.policy.manage', 'document.packet.read', 'document.packet.manage', 'document.packet.approve', 'document.packet.issue', 'document.sign.manage', 'notice.issue', 'service_record.manage'] satisfies SecurityCapability[];
 const operationalEnhancements = ['job.plan', 'job.plan.publish', 'job.offline.sync', 'job.remote.manage', 'communication.read', 'communication.send', 'communication.manage', 'compliance.read', 'compliance.manage', 'compliance.rule.manage', 'key.read', 'key.manage', 'analytics.read'] satisfies SecurityCapability[];
 const portalCapabilities = (role: PortalRole): readonly SecurityCapability[] => PORTAL_ROLE_CAPABILITIES[role];
+const portalCommunication = ['communication.read', 'communication.send'] satisfies SecurityCapability[];
 
 export const ROLE_CAPABILITIES: Readonly<Record<SecurityRole, readonly SecurityCapability[]>> = {
   super_admin: SECURITY_CAPABILITIES,
   proinspect_admin: ['agency.read', 'agency.manage', ...settingsAdministration, 'user.read', 'user.invite', 'user.profile.manage', 'user.role.manage', 'user.scope.manage', 'user.suspend', 'user.reactivate', 'user.revoke', 'user.session.revoke', 'user.security.manage', 'user.audit.read', 'workforce.read', 'workforce.manage', ...clientAdministration, 'property.read', 'property.manage', ...tenantWorkspace, ...documentOperations, 'job.read', 'job.manage', 'job.inspect', ...operationalEnhancements, 'report.read', 'report.edit', 'report.review', 'report.issue', 'report.finalise', 'template.manage', 'audit.read', 'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare', 'maintenance.quote.approve', 'maintenance.quote.send', 'maintenance.work_order.issue', 'maintenance.verify', 'price_book.manage', 'upload.create', 'analysis.create', 'pdf.create', 'notification.send', 'external_contact.manage', 'client_approval.manage', ...BUILDING_MANAGEMENT_CAPABILITIES],
   operations: ['agency.read', 'settings.read', 'integration.read', 'integration.sync', 'user.read', 'workforce.read', ...clientAdministration, 'property.read', 'property.manage', ...tenantWorkspace, 'document.policy.read', 'document.packet.read', 'document.packet.manage', 'document.packet.issue', 'document.sign.manage', 'notice.issue', 'service_record.manage', 'job.read', 'job.manage', 'job.plan', 'job.plan.publish', 'job.offline.sync', 'job.remote.manage', 'report.read', 'report.issue', 'maintenance.manage', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare', 'maintenance.quote.send', 'maintenance.work_order.issue', 'maintenance.verify', 'communication.read', 'communication.send', 'communication.manage', 'compliance.read', 'compliance.manage', 'key.read', 'key.manage', 'analytics.read', 'upload.create', 'analysis.create', 'pdf.create', 'notification.send', 'external_contact.manage', 'client_approval.manage', ...BUILDING_MANAGEMENT_CAPABILITIES.filter((item) => !['managed_site.manage', 'offer.manage'].includes(item))],
-  inspector: ['property.read', 'tenant.read', 'tenancy.read', 'job.read', 'job.inspect', 'job.offline.sync', 'report.read', 'report.edit', 'upload.create', 'maintenance.read', 'maintenance.triage', 'key.read', 'key.manage'],
+  inspector: ['property.read', 'tenant.read', 'tenancy.read', 'job.read', 'job.inspect', 'job.plan', 'job.offline.sync', 'report.read', 'report.edit', 'upload.create', 'maintenance.read', 'maintenance.triage', 'key.read', 'key.manage', ...portalCommunication],
   analyst: ['property.read', 'tenant.read', 'tenancy.read', 'job.read', 'report.read', 'report.edit', 'maintenance.read', 'maintenance.triage', 'maintenance.quote.prepare', 'analysis.create', 'tenant_instruction.manage', 'tenant.communication.read', 'tenant.document.read', 'document.packet.read', 'communication.read', 'compliance.read', 'external_contact.manage', 'client_approval.manage'],
   reviewer: ['property.read', 'tenant.read', 'tenancy.read', 'job.read', 'report.read', 'report.review', 'audit.read', 'pdf.create', 'maintenance.read', 'maintenance.triage', 'maintenance.verify', 'tenant_instruction.manage', 'tenant.communication.read', 'tenant.document.read', 'document.packet.read', 'document.packet.approve', 'communication.read', 'compliance.read', 'client_approval.manage'],
-  tenant: ['report.read', 'tenant_response.submit', 'upload.create', ...portalCapabilities('resident_tenant')],
-  landlord: ['client.portal.read', 'property.read', 'report.read', ...portalCapabilities('client_user')],
+  tenant: ['report.read', 'tenant_response.submit', 'upload.create', ...portalCapabilities('resident_tenant'), ...portalCommunication],
+  landlord: ['client.portal.read', 'property.read', 'report.read', ...portalCapabilities('client_user'), ...portalCommunication],
   shopify_customer: [],
-  building_manager: portalCapabilities('building_manager'),
-  relief_building_manager: portalCapabilities('relief_building_manager'),
-  strata_manager: portalCapabilities('strata_manager'),
-  council_member: portalCapabilities('council_member'),
-  resident_owner: portalCapabilities('resident_owner'),
-  resident_tenant: portalCapabilities('resident_tenant'),
-  client_admin: portalCapabilities('client_admin'),
-  client_user: portalCapabilities('client_user'),
-  contractor_admin: portalCapabilities('contractor_admin'),
-  contractor_worker: portalCapabilities('contractor_worker'),
+  building_manager: [...portalCapabilities('building_manager'), ...portalCommunication, 'communication.manage', 'job.offline.sync'],
+  relief_building_manager: [...portalCapabilities('relief_building_manager'), ...portalCommunication, 'job.offline.sync'],
+  strata_manager: [...portalCapabilities('strata_manager'), ...portalCommunication, 'communication.manage'],
+  council_member: [...portalCapabilities('council_member'), 'communication.read'],
+  resident_owner: [...portalCapabilities('resident_owner'), ...portalCommunication],
+  resident_tenant: [...portalCapabilities('resident_tenant'), ...portalCommunication],
+  client_admin: [...portalCapabilities('client_admin'), ...portalCommunication],
+  client_user: [...portalCapabilities('client_user'), ...portalCommunication],
+  contractor_admin: [...portalCapabilities('contractor_admin'), ...portalCommunication],
+  contractor_worker: [...portalCapabilities('contractor_worker'), ...portalCommunication],
 };
 
 export const INTERNAL_SECTION_CAPABILITIES: Readonly<Record<InternalSection, readonly SecurityCapability[]>> = {
