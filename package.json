@@ -28,7 +28,7 @@
     "cloudflare:preview": "npx wrangler versions upload",
     "security:scan": "node scripts/scan-secrets.mjs",
     "appwrite:generate": "node infrastructure/appwrite/scripts/generate-resources.mjs",
-    "appwrite:validate": "node infrastructure/appwrite/scripts/validate-config.mjs",
+    "appwrite:validate": "npm run appwrite:generate && node infrastructure/appwrite/scripts/validate-config.mjs",
     "appwrite:prepare:development": "node infrastructure/appwrite/scripts/materialize-development-config.mjs",
     "appwrite:push:development": "node infrastructure/appwrite/scripts/push-development.mjs",
     "appwrite:verify": "node infrastructure/appwrite/scripts/verify-remote-schema.mjs",
@@ -50,7 +50,7 @@
     "verify:dist": "node scripts/verify-built-artifacts.mjs",
     "provision:provider-admin": "node scripts/provision-provider-admin.mjs",
     "smoke:api": "node scripts/smoke-api-routes.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:run && npm run build && npm run verify:dist",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:run && npm run appwrite:validate && npm run build && npm run verify:dist",
     "prepare": "node scripts/verify-workspace.mjs"
   },
   "dependencies": {
