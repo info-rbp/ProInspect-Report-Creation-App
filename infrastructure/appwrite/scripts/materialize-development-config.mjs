@@ -1,6 +1,8 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tables } from '../tables/schema.mjs';
+import { unifiedPlatformExtensionTables } from '../tables/unified-platform-extensions.mjs';
 import { assertDevelopmentTarget } from './safety.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,4 +22,6 @@ await writeFile(resolve(output, 'appwrite.config.json'), `${JSON.stringify(sourc
 for (const directory of ['databases', 'tables', 'buckets', 'teams', 'functions', 'platforms']) {
   await cp(resolve(root, directory), resolve(output, directory), { recursive: true });
 }
-console.log(`Materialized Development Appwrite configuration for project ${target.projectId}.`);
+const deploymentTables = [...tables, ...unifiedPlatformExtensionTables];
+await writeFile(resolve(output, 'tables/tables.json'), `${JSON.stringify(deploymentTables, null, 2)}\n`, { mode: 0o600 });
+console.log(`Materialized Development Appwrite configuration for project ${target.projectId} with ${deploymentTables.length} tables.`);
