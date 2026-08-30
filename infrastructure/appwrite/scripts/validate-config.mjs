@@ -16,7 +16,7 @@ const allTables = [...tables, ...unifiedPlatformExtensionTables];
 
 if (config.projectId !== 'DEVELOPMENT_PROJECT_ID_REQUIRED') errors.push('Version-controlled config must retain the non-deployable Development project placeholder.');
 if (!/Development/i.test(config.projectName)) errors.push('Project name must identify Development.');
-if (JSON.stringify(generatedTables) !== JSON.stringify(tables)) errors.push('tables/tables.json is stale; run npm run appwrite:generate.');
+if (JSON.stringify(generatedTables) !== JSON.stringify(allTables)) errors.push('tables/tables.json is stale; run npm run appwrite:generate.');
 
 const ids = new Set();
 for (const table of allTables) {
