@@ -8,6 +8,7 @@ import './clientAugmentation.js';
 import './propertyCatalogueAugmentation.js';
 
 export * from './platform.js';
+export * from './buildingManagement.js';
 export * from './propertyCatalogueAugmentation.js';
 export * from './propertyIntelligence.js';
 export * from './inspectionOperations.js';
