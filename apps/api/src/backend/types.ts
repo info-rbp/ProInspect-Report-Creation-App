@@ -13,7 +13,7 @@ export interface StoredRecord {
 
 export interface Page<T> { items: T[]; nextCursor?: string; }
 export interface OperationalRepository {
-  list(collection: string, agencyId: string, limit: number, cursor?: string): Promise<Page<StoredRecord>>;
+  list(collection: string, agencyId: string, limit: number, cursor?: string, filters?: Record<string, string | number | boolean>): Promise<Page<StoredRecord>>;
   get(collection: string, agencyId: string, id: string): Promise<StoredRecord | undefined>;
   create(collection: string, agencyId: string, id: string, data: Record<string, unknown>, actorId: string): Promise<StoredRecord>;
   update(collection: string, agencyId: string, id: string, data: Record<string, unknown>, expectedVersion: number, actorId: string): Promise<StoredRecord>;
