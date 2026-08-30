@@ -49,7 +49,7 @@ export function authorise(
   }
 
   if (['inspector', 'analyst', 'reviewer'].includes(principal.role) && [
-    'job.read', 'job.inspect', 'report.read', 'report.edit', 'report.review',
+    'job.read', 'job.inspect', 'job.plan', 'report.read', 'report.edit', 'report.review',
     'upload.create', 'analysis.create', 'pdf.create',
   ].includes(capability)) {
     if (!isAssigned(principal, target)) return { allowed: false, reason: 'assignment_required' };
