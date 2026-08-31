@@ -51,6 +51,7 @@ import ReportRecipientPortalPage from './pages/external/ReportRecipientPortalPag
 import ReportEditWithLegacyBaselinePage from './pages/reports/ReportEditWithLegacyBaselinePage';
 import ReportPreviewPage from './pages/reports/ReportPreviewPage';
 import PortalWorkspacePage from './pages/portals/PortalWorkspacePage';
+import PortalFeaturePage from './pages/portals/PortalFeaturePage';
 
 const App: React.FC = () => (
   <AuthProvider><BrowserRouter><Routes>
@@ -58,13 +59,13 @@ const App: React.FC = () => (
     <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} /><Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} /><Route path="/tenant-portal/:grantToken" element={<TenantPortalPage />} /><Route path="/tenant-portal/:grantToken/inspection/:assignmentId" element={<RemoteInspectionPage />} /><Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} /><Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} /><Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
     <Route element={<ProtectedRoute />}>
       <Route path="/client-portal/:clientAccountId" element={<ClientPortalPage />} />
-      <Route path="/admin" element={<PortalWorkspacePage portalId="admin" />} />
-      <Route path="/inspector" element={<PortalWorkspacePage portalId="inspector" />} />
-      <Route path="/building" element={<PortalWorkspacePage portalId="building" />} />
-      <Route path="/strata" element={<PortalWorkspacePage portalId="strata" />} />
-      <Route path="/resident" element={<PortalWorkspacePage portalId="resident" />} />
-      <Route path="/client" element={<PortalWorkspacePage portalId="client" />} />
-      <Route path="/contractor" element={<PortalWorkspacePage portalId="contractor" />} />
+      <Route path="/admin" element={<PortalWorkspacePage portalId="admin" />} /><Route path="/admin/:featureSlug" element={<PortalFeaturePage portalId="admin" />} />
+      <Route path="/inspector" element={<PortalWorkspacePage portalId="inspector" />} /><Route path="/inspector/:featureSlug" element={<PortalFeaturePage portalId="inspector" />} />
+      <Route path="/building" element={<PortalWorkspacePage portalId="building" />} /><Route path="/building/:featureSlug" element={<PortalFeaturePage portalId="building" />} />
+      <Route path="/strata" element={<PortalWorkspacePage portalId="strata" />} /><Route path="/strata/:featureSlug" element={<PortalFeaturePage portalId="strata" />} />
+      <Route path="/resident" element={<PortalWorkspacePage portalId="resident" />} /><Route path="/resident/:featureSlug" element={<PortalFeaturePage portalId="resident" />} />
+      <Route path="/client" element={<PortalWorkspacePage portalId="client" />} /><Route path="/client/:featureSlug" element={<PortalFeaturePage portalId="client" />} />
+      <Route path="/contractor" element={<PortalWorkspacePage portalId="contractor" />} /><Route path="/contractor/:featureSlug" element={<PortalFeaturePage portalId="contractor" />} />
     </Route>
     <Route path="/app" element={<ProtectedRoute />}><Route element={<AppShell />}><Route index element={<Navigate to="/app/dashboard" replace />} />
       <Route element={<RoleProtectedRoute section="dashboard" />}><Route path="dashboard" element={<DashboardPage />} /><Route path="admin" element={<AdminHomePage />} /></Route>
