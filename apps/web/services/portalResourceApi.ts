@@ -23,12 +23,11 @@ export interface PortalResourceContext {
 
 export interface PortalResourceRecord extends BuildingManagementRecord { [key: string]: unknown; }
 
-const EXPERIENCE_RESOURCES = new Set([
-  'admin/service-requests',
-  'resident/conversations',
-  'site/contractors',
-  'contractor/site-access',
-  'contractor/notifications',
+const EXPERIENCE_RESOURCES = new Set(['admin/service-requests', 'resident/conversations', 'site/contractors', 'contractor/site-access', 'contractor/notifications']);
+const OPERATION_CREATE_RESOURCES = new Set([
+  'daily-activity-logs', 'tasks', 'defects', 'operational-inspections', 'move-bookings',
+  'access-device-requests', 'incidents', 'bylaw-observations', 'assets', 'maintenance-plans',
+  'waste-events', 'operational-report-drafts', 'handovers', 'notices',
 ]);
 
 function agency(): string { const value = storedAgencyId(); if (!value) throw new Error('Select an agency before opening portal data.'); return value; }
@@ -36,11 +35,7 @@ function safeResource(resource: string): string { const value = resource.trim().
 function safeScopedResource(resource: string): string { const segments = resource.split('/').map((part) => safeResource(part)).filter(Boolean); if (segments.length < 2) throw new Error('A scoped portal resource requires an audience and resource.'); return segments.join('/'); }
 function queryString(context: PortalResourceContext): string { const query = new URLSearchParams(); for (const [key, value] of Object.entries(context)) if (value) query.set(key, value); return query.size ? `?${query.toString()}` : ''; }
 function platformPath(resource: string, id?: string, context: PortalResourceContext = {}): string { return `/api/v1/platform/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}${queryString(context)}`; }
-function scopedPath(resource: string, context: PortalResourceContext = {}): string {
-  const safe = safeScopedResource(resource);
-  const root = EXPERIENCE_RESOURCES.has(safe) ? 'portal-experience' : 'portal-scope';
-  return `/api/v1/${root}/${safe}${queryString(context)}`;
-}
+function scopedPath(resource: string, context: PortalResourceContext = {}): string { const safe = safeScopedResource(resource); const root = EXPERIENCE_RESOURCES.has(safe) ? 'portal-experience' : 'portal-scope'; return `/api/v1/${root}/${safe}${queryString(context)}`; }
 function corePath(resource: string, id?: string): string { return `/api/v1/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}`; }
 
 export async function listPortalResource(source: PortalResourceSource, resource: string, context: PortalResourceContext = {}): Promise<PortalResourceRecord[]> {
@@ -52,6 +47,7 @@ export async function listPortalResource(source: PortalResourceSource, resource:
 
 export async function createPortalResource(source: PortalResourceSource, resource: string, data: Record<string, unknown>, context: PortalResourceContext = {}): Promise<PortalResourceRecord> {
   const body = { ...context, ...data };
+  if (source === 'building' && OPERATION_CREATE_RESOURCES.has(resource)) return apiRequest<PortalResourceRecord>(agency(), `/api/v1/portal-operations/${safeResource(resource)}`, { method: 'POST', body });
   if (source === 'building') return createBuildingManagementRecord(resource, body);
   if (source === 'core') return apiRequest<PortalResourceRecord>(agency(), corePath(resource), { method: 'POST', body });
   if (source === 'scoped') return apiRequest<PortalResourceRecord>(agency(), scopedPath(resource, context), { method: 'POST', body });
