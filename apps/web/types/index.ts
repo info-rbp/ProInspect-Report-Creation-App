@@ -1,4 +1,4 @@
-import type { AgencySettings, DashboardAggregateSnapshot, SecurityRole, UserRole } from '@pcr/domain';
+import type { AgencyOrganisationSettings, DashboardOverview, SecurityRole } from '@pcr/domain';
 
 export type { SecurityRole, UserRole } from '@pcr/domain';
 export type DashboardSectionKey = 'dashboard' | 'analytics' | 'clients' | 'properties' | 'jobs' | 'reports' | 'maintenance' | 'tenants' | 'communications' | 'compliance' | 'users' | 'templates' | 'settings';
@@ -55,11 +55,11 @@ export interface UrgentItem { id: string; type: 'overdue' | 'urgent' | 'failed' 
 export interface UpcomingInspection { id: string; jobId: string; propertyAddress: string; inspectionType: string; scheduledAt: Date; inspector?: { id: string; name: string }; status: string; clientName?: string; }
 export interface StaffPerformance { userId: string; userName: string; role: string; inspectionsCompleted: number; reportsCompleted: number; averageCompletionTime: number; rating?: number; }
 
-export interface DashboardViewModel extends DashboardAggregateSnapshot {
+export interface DashboardViewModel extends DashboardOverview {
   source: 'snapshot' | 'legacy';
 }
 
-export interface AgencySettingsViewModel extends AgencySettings {}
+export type AgencySettingsViewModel = AgencyOrganisationSettings;
 
 export interface FilterOptions { dateRange?: { start: Date; end: Date }; inspectionType?: string[]; status?: string[]; assignedTo?: string[]; clientId?: string; propertyId?: string; }
 export interface PaginationState { page: number; pageSize: number; total: number; }

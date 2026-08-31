@@ -6,7 +6,7 @@ import {
   logoutCurrentSession,
 } from '@pcr/appwrite-client';
 import type { SecurityRole } from '@pcr/domain';
-import type { UserProfile } from '../types';
+import type { UserProfile } from '../types/index';
 import { asUnifiedRole } from './platform/portalAccess';
 
 export type AuthProviderMode = 'firebase' | 'appwrite';

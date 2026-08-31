@@ -5,7 +5,7 @@ import type {
   DashboardOverview,
   DashboardRange,
   DashboardTrend,
-  UserRole,
+  SecurityRole,
 } from '@pcr/domain';
 import type { IncomingMessage } from 'node:http';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
@@ -32,7 +32,7 @@ function countCreated(records: StoredRecord[], start: number, end: number): numb
 function durationHours(record: StoredRecord): number | undefined { const start = time(record.createdAt); const end = time(record.finalisedAt || record.closedAt || record.completedAt || record.updatedAt); if (start === undefined || end === undefined || end < start) return undefined; return (end - start) / 3_600_000; }
 function average(values: number[]): number | undefined { return values.length ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 : undefined; }
 function percentage(part: number, total: number): number | undefined { return total ? Math.round((part / total) * 1000) / 10 : undefined; }
-function visibleAssignment(record: StoredRecord, role: UserRole, uid: string): boolean { if (role === 'inspector') return record.assignedInspectorId === uid; if (role === 'analyst') return record.assignedAnalystId === uid || record.ownerUid === uid; if (role === 'reviewer') return record.assignedReviewerId === uid; return true; }
+function visibleAssignment(record: StoredRecord, role: SecurityRole, uid: string): boolean { if (role === 'inspector') return record.assignedInspectorId === uid; if (role === 'analyst') return record.assignedAnalystId === uid || record.ownerUid === uid; if (role === 'reviewer') return record.assignedReviewerId === uid; return true; }
 function attention(kind: DashboardAttentionItem['kind'], label: string, severity: DashboardAttentionItem['severity'], record: StoredRecord, deepLink: string): DashboardAttentionItem { return { id: `${kind}-${record.id}`, kind, label, severity, entityId: record.id, ...(typeof record.dueDate === 'string' ? { dueAt: record.dueDate } : typeof record.scheduledAt === 'string' ? { dueAt: record.scheduledAt } : {}), deepLink }; }
 
 function capacity(jobs: StoredRecord[], reports: StoredRecord[], now: number): DashboardCapacityRow[] {

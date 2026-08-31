@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runMigration } from './framework.mjs';
+import { planMigrationBatch, runMigration } from './framework.mjs';
 
 describe('Appwrite migration framework', () => {
   it('is idempotent when source checksums are unchanged', async () => {
@@ -28,5 +28,50 @@ describe('Appwrite migration framework', () => {
     });
     expect(report.created).toBe(1);
     expect(writes).toBe(0);
+  });
+
+  it('fails deterministic plans closed for duplicate source identities', () => {
+    const plan = planMigrationBatch({
+      sourceSystem: 'strata_d1',
+      sourceEntity: 'defects',
+      targetTable: 'defects',
+      agencyId: 'agency-development',
+      records: [{ id: 'defect-1' }, { id: 'defect-1' }],
+      transform: (record, context) => ({ id: context.targetId, legacyId: record.id }),
+    });
+    expect(plan.valid).toBe(false);
+    expect(plan.targetCount).toBe(1);
+    expect(plan.errors).toContainEqual({ code: 'SOURCE_ID_DUPLICATE', sourceId: 'defect-1' });
+  });
+
+  it('marks a checksum-matched completed mapping unchanged', () => {
+    const source = { id: 'incident-1', category: 'security' };
+    const baseline = planMigrationBatch({
+      sourceSystem: 'strata_d1',
+      sourceEntity: 'incidents',
+      targetTable: 'incidents',
+      agencyId: 'agency-development',
+      records: [source],
+      transform: (record, context) => ({ id: context.targetId, category: record.category }),
+    });
+    const row = baseline.records[0];
+    const rerun = planMigrationBatch({
+      sourceSystem: 'strata_d1',
+      sourceEntity: 'incidents',
+      targetTable: 'incidents',
+      agencyId: 'agency-development',
+      records: [source],
+      existingMappings: [{
+        sourceSystem: 'strata_d1',
+        sourceEntity: 'incidents',
+        sourceId: row.sourceId,
+        sourceChecksum: row.sourceChecksum,
+        migratedChecksum: row.targetChecksum,
+        status: 'completed',
+      }],
+      transform: (record, context) => ({ id: context.targetId, category: record.category }),
+    });
+    expect(rerun.valid).toBe(true);
+    expect(rerun.records[0].action).toBe('unchanged');
   });
 });

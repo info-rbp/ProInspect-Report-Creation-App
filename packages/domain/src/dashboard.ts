@@ -1,4 +1,4 @@
-import type { UserRole } from './platform.js';
+import type { SecurityRole } from './security.js';
 
 export type DashboardRange = 'today' | '7d' | '30d' | '90d' | 'quarter';
 export type DashboardSeverity = 'info' | 'warning' | 'critical';
@@ -82,7 +82,7 @@ export interface DashboardOverview {
   generatedAt: string;
   range: DashboardRange;
   timezone: string;
-  role: UserRole;
+  role: SecurityRole;
   today: DashboardMetric[];
   workQueues: DashboardMetric[];
   portfolio: DashboardMetric[];

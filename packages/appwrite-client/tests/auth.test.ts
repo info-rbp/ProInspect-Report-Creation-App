@@ -7,6 +7,7 @@ import {
   completeEmailVerification,
   completeMfaChallenge,
   completePasswordRecovery,
+  createAccountJwt,
   createMfaRecoveryCodes,
   enableMfa,
   logoutCurrentSession,
@@ -14,6 +15,14 @@ import {
 } from '../src/auth.js';
 
 describe('Appwrite authentication lifecycle helpers', () => {
+  it('creates a short-lived account JWT with the current object-parameter SDK contract', async () => {
+    const account = {
+      createJWT: vi.fn().mockResolvedValue({ jwt: 'header.payload.signature' }),
+    } as unknown as Account;
+    await expect(createAccountJwt(account, 900)).resolves.toEqual({ jwt: 'header.payload.signature' });
+    expect(account.createJWT).toHaveBeenCalledWith({ duration: 900 });
+  });
+
   it('uses approved return URLs and exposes completion and logout operations', async () => {
     const account = {
       createEmailVerification: vi.fn().mockResolvedValue({}),
