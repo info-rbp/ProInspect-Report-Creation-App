@@ -14,19 +14,19 @@ interface CreatePolicy {
 
 const POLICIES: Readonly<Record<string, CreatePolicy>> = {
   'daily-activity-logs': { collection: 'dailyActivityLogs', capability: 'building.activity.manage', required: ['activityDate', 'summary'], prepare: (body, actorId) => ({ ...body, authorUserId: actorId, status: 'recorded' }) },
-  tasks: { collection: 'tasks', capability: 'building.task.manage', required: ['title', 'taskType'], prepare: (body) => ({ ...body, status: 'open' }) },
+  tasks: { collection: 'tasks', capability: 'building_task.manage', required: ['title', 'taskType'], prepare: (body) => ({ ...body, status: 'open' }) },
   defects: { collection: 'defects', capability: 'defect.create', required: ['category', 'description'], prepare: (body) => ({ ...body, source: typeof body.source === 'string' ? body.source : 'building_management', status: 'new' }) },
-  'operational-inspections': { collection: 'operationalInspections', capability: 'operational_inspection.manage', required: ['inspectionType', 'inspectorId'], prepare: (body) => ({ ...body, status: typeof body.status === 'string' ? body.status : 'scheduled' }) },
+  'operational-inspections': { collection: 'operationalInspections', capability: 'operational_inspection.perform', required: ['inspectionType', 'inspectorId'], prepare: (body) => ({ ...body, status: typeof body.status === 'string' ? body.status : 'scheduled' }) },
   'move-bookings': { collection: 'moveBookings', capability: 'move_booking.manage', required: ['propertyId', 'moveType', 'startAt', 'endAt'], prepare: (body) => ({ ...body, requestedAt: new Date().toISOString(), approvalStatus: 'pending', status: 'new' }) },
   'access-device-requests': { collection: 'accessDeviceRequests', capability: 'access_device.manage', required: ['unitId', 'requestType', 'deviceTypeRequested'], prepare: (body) => ({ ...body, status: 'submitted' }) },
   incidents: { collection: 'incidents', capability: 'incident.manage', required: ['incidentType', 'severity', 'occurredAt', 'description'], prepare: (body, actorId) => ({ ...body, reportedBy: actorId, status: 'open' }) },
-  'bylaw-observations': { collection: 'bylawObservations', capability: 'bylaw.observe', required: ['observedAt', 'description'], prepare: (body, actorId) => ({ ...body, observedBy: actorId, status: 'observed' }) },
+  'bylaw-observations': { collection: 'bylawObservations', capability: 'bylaw.create', required: ['observedAt', 'description'], prepare: (body, actorId) => ({ ...body, observedBy: actorId, status: 'observed' }) },
   assets: { collection: 'assets', capability: 'asset.manage', required: ['assetType', 'name'], prepare: (body) => ({ ...body, sourceType: typeof body.sourceType === 'string' ? body.sourceType : 'building_management', status: 'active' }) },
-  'maintenance-plans': { collection: 'maintenancePlans', capability: 'asset.maintenance.manage', required: ['name', 'cadence'], prepare: (body) => ({ ...body, status: 'active' }) },
+  'maintenance-plans': { collection: 'maintenancePlans', capability: 'maintenance_plan.manage', required: ['name', 'cadence'], prepare: (body) => ({ ...body, status: 'active' }) },
   'waste-events': { collection: 'wasteEvents', capability: 'waste.manage', required: ['eventType', 'occurredAt', 'details'], prepare: (body, actorId) => ({ ...body, reportedBy: actorId, status: 'recorded' }) },
   'operational-report-drafts': { collection: 'operationalReportDrafts', capability: 'operational_report.prepare', required: ['period', 'content'], prepare: (body, actorId) => ({ ...body, preparedBy: actorId, version: 1, status: 'draft' }) },
   handovers: { collection: 'handovers', capability: 'handover.manage', required: ['toUserId', 'handoverAt', 'summary'], prepare: (body, actorId) => ({ ...body, fromUserId: actorId, status: 'open' }) },
-  notices: { collection: 'notices', capability: 'notice.manage', required: ['noticeType', 'title', 'content'], prepare: (body, actorId) => ({ ...body, ...(body.publishedAt ? { publishedBy: actorId } : {}), status: body.publishedAt ? 'published' : 'draft' }) },
+  notices: { collection: 'notices', capability: 'building_notice.manage', required: ['noticeType', 'title', 'content'], prepare: (body, actorId) => ({ ...body, ...(body.publishedAt ? { publishedBy: actorId } : {}), status: body.publishedAt ? 'published' : 'draft' }) },
 };
 
 function parts(req: IncomingMessage): string[] { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
