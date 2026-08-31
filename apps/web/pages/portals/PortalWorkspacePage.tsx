@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Building2,
   CalendarDays,
@@ -22,38 +22,14 @@ import type { PortalId } from '@pcr/domain';
 import AccessDenied from '../../components/layout/AccessDenied';
 import { useAuth } from '../../contexts/AuthContext';
 import { availablePortals, canOpenPortal, portalDefinition } from '../../services/platform/portalAccess';
+import { contextLabel, portalContexts } from '../../services/platform/portalEntitlementService';
+import { featureForLabel } from '../../services/platform/portalFeatureRegistry';
 
 const ICONS = [
   LayoutDashboard, ListTodo, Building2, ClipboardCheck, Wrench, HardHat, Users,
   KeyRound, CalendarDays, FileText, MessageSquare, ShieldCheck, ShoppingBag,
   PackageCheck, UserCog, Home,
 ] as const;
-
-const ADMIN_DESTINATIONS: Record<string, string> = {
-  Dashboard: '/app/dashboard',
-  Clients: '/app/admin/clients',
-  'Properties & Sites': '/app/admin/properties',
-  Inspections: '/app/admin/jobs',
-  Reports: '/app/admin/reports',
-  Maintenance: '/app/admin/maintenance',
-  'Users & Access': '/app/admin/users',
-  Integrations: '/app/admin/settings/integrations',
-  Settings: '/app/admin/settings',
-};
-
-const INSPECTOR_DESTINATIONS: Record<string, string> = {
-  Today: '/app/admin/jobs',
-  'My Schedule': '/app/admin/jobs/planner',
-  Assignments: '/app/admin/jobs',
-  Reports: '/app/admin/reports',
-  'Keys & Access': '/app/admin/keys',
-};
-
-function moduleDestination(portalId: PortalId, module: string): string {
-  if (portalId === 'admin' && ADMIN_DESTINATIONS[module]) return ADMIN_DESTINATIONS[module];
-  if (portalId === 'inspector' && INSPECTOR_DESTINATIONS[module]) return INSPECTOR_DESTINATIONS[module];
-  return `/${portalId}?module=${encodeURIComponent(module)}`;
-}
 
 const styles = {
   page: { minHeight: '100vh', background: '#f7f8fa', color: '#111827' },
@@ -65,18 +41,26 @@ const styles = {
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(235px, 1fr))', gap: 14 },
   card: { display: 'block', background: '#fff', color: '#111827', textDecoration: 'none', border: '1px solid #e5e7eb', borderRadius: 12, padding: 18, boxShadow: '0 1px 2px rgba(0,0,0,.04)' },
   icon: { width: 38, height: 38, borderRadius: 9, display: 'grid', placeItems: 'center', background: '#eef2ff', color: '#4338ca', marginBottom: 14 },
-  panel: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 22, marginBottom: 22 },
+  panel: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 18, marginBottom: 22 },
+  select: { border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', minWidth: 280, background: '#fff' },
 } as const;
 
 const PortalWorkspacePage: React.FC<{ portalId: PortalId }> = ({ portalId }) => {
-  const { userProfile } = useAuth();
-  const [searchParams] = useSearchParams();
+  const { userProfile, portalEntitlements } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const role = userProfile?.role as string | undefined;
   const portal = portalDefinition(portalId);
-  const portals = availablePortals(role);
-  const selectedModule = searchParams.get('module');
+  const portals = availablePortals(role, portalEntitlements);
+  const contexts = useMemo(() => portalContexts(portalEntitlements, portalId), [portalEntitlements, portalId]);
+  const selectedContext = contexts.find((item) => item.entitlementId === searchParams.get('context')) ?? contexts[0];
 
-  if (!canOpenPortal(role, portalId)) return <AccessDenied />;
+  if (!canOpenPortal(role, portalId, portalEntitlements)) return <AccessDenied />;
+
+  const selectContext = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('context', value); else next.delete('context');
+    setSearchParams(next);
+  };
 
   return (
     <main style={styles.page}>
@@ -98,25 +82,20 @@ const PortalWorkspacePage: React.FC<{ portalId: PortalId }> = ({ portalId }) => 
       </header>
 
       <section style={styles.content}>
-        {selectedModule && (
-          <div style={styles.panel}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.08em', color: '#6b7280' }}>{portal.name}</div>
-                <h2 style={{ margin: '4px 0 0', fontSize: 22 }}>{selectedModule}</h2>
-                <p style={{ margin: '8px 0 0', color: '#4b5563' }}>
-                  This workspace uses the shared ProInspect domain, API, Appwrite permissions, audit and evidence services.
-                </p>
-              </div>
-              <Link to={`/${portalId}`} style={{ color: '#4338ca', fontWeight: 600, textDecoration: 'none' }}>Back to portal home</Link>
+        <div style={{ ...styles.panel, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <strong>Current workspace</strong>
+            <div style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>
+              {selectedContext ? contextLabel(selectedContext) : portalId === 'admin' || portalId === 'inspector' ? 'Agency workspace' : 'No scoped entitlement has been selected.'}
             </div>
           </div>
-        )}
+          {contexts.length > 1 && <select aria-label="Portal context" value={selectedContext?.entitlementId ?? ''} onChange={(event) => selectContext(event.target.value)} style={styles.select}><option value="">Choose workspace</option>{contexts.map((item) => <option key={item.entitlementId} value={item.entitlementId}>{contextLabel(item)}</option>)}</select>}
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, marginBottom: 16, flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>{selectedModule ? 'Related workspaces' : 'Workspaces'}</h2>
-            <p style={{ margin: '6px 0 0', color: '#6b7280' }}>The navigation shown here is determined by your role and current portal entitlement.</p>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Workspaces</h2>
+            <p style={{ margin: '6px 0 0', color: '#6b7280' }}>Each workspace uses the same canonical records, API permissions and audit trail with a role-specific view.</p>
           </div>
           <div style={{ color: '#6b7280', fontSize: 13 }}>Signed in as {userProfile?.displayName ?? userProfile?.email ?? role}</div>
         </div>
@@ -124,12 +103,15 @@ const PortalWorkspacePage: React.FC<{ portalId: PortalId }> = ({ portalId }) => 
         <div style={styles.grid}>
           {portal.primaryNavigation.map((module, index) => {
             const Icon = ICONS[index % ICONS.length];
+            const feature = featureForLabel(portalId, module);
+            const query = selectedContext ? `?context=${encodeURIComponent(selectedContext.entitlementId)}` : '';
+            const destination = feature ? `/${portalId}/${feature.slug}${query}` : `/${portalId}`;
             return (
-              <Link key={module} to={moduleDestination(portalId, module)} style={styles.card}>
+              <Link key={module} to={destination} style={styles.card}>
                 <span style={styles.icon}><Icon size={20} /></span>
                 <strong style={{ display: 'block', fontSize: 15 }}>{module}</strong>
                 <span style={{ display: 'block', marginTop: 7, color: '#6b7280', fontSize: 13, lineHeight: 1.45 }}>
-                  Open the shared {module.toLowerCase()} capability for this portal and its permitted scope.
+                  {feature?.summary ?? `Open ${module.toLowerCase()} within your permitted portal scope.`}
                 </span>
               </Link>
             );
