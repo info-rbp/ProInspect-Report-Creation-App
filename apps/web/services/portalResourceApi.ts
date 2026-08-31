@@ -8,12 +8,13 @@ import {
 } from './buildingManagementApi';
 import { apiRequest, storedAgencyId } from './apiClient';
 
-export type PortalResourceSource = 'building' | 'platform' | 'core';
+export type PortalResourceSource = 'building' | 'platform' | 'core' | 'scoped';
 
 export interface PortalResourceContext {
   managedSiteId?: string;
   clientAccountId?: string;
   propertyId?: string;
+  unitId?: string;
   contractorId?: string;
   assignedUserId?: string;
   userId?: string;
@@ -35,76 +36,58 @@ function safeResource(resource: string): string {
   if (!value) throw new Error('A portal resource is required.');
   return value;
 }
-
-function platformPath(resource: string, id?: string, context: PortalResourceContext = {}): string {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(context)) if (value) query.set(key, value);
-  return `/api/v1/platform/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}${query.size ? `?${query.toString()}` : ''}`;
+function safeScopedResource(resource: string): string {
+  const segments = resource.split('/').map((part) => safeResource(part)).filter(Boolean);
+  if (segments.length < 2) throw new Error('A scoped portal resource requires an audience and resource.');
+  return segments.join('/');
 }
 
+function queryString(context: PortalResourceContext): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(context)) if (value) query.set(key, value);
+  return query.size ? `?${query.toString()}` : '';
+}
+function platformPath(resource: string, id?: string, context: PortalResourceContext = {}): string {
+  return `/api/v1/platform/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}${queryString(context)}`;
+}
+function scopedPath(resource: string, context: PortalResourceContext = {}): string {
+  return `/api/v1/portal-scope/${safeScopedResource(resource)}${queryString(context)}`;
+}
 function corePath(resource: string, id?: string): string {
   return `/api/v1/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}`;
 }
 
-export async function listPortalResource(
-  source: PortalResourceSource,
-  resource: string,
-  context: PortalResourceContext = {},
-): Promise<PortalResourceRecord[]> {
+export async function listPortalResource(source: PortalResourceSource, resource: string, context: PortalResourceContext = {}): Promise<PortalResourceRecord[]> {
   if (source === 'building') return listBuildingManagementRecords(resource, { managedSiteId: context.managedSiteId, limit: 100 });
   if (source === 'core') return apiRequest<PortalResourceRecord[]>(agency(), corePath(resource));
+  if (source === 'scoped') return apiRequest<PortalResourceRecord[]>(agency(), scopedPath(resource, context));
   return apiRequest<PortalResourceRecord[]>(agency(), platformPath(resource, undefined, context));
 }
 
-export async function createPortalResource(
-  source: PortalResourceSource,
-  resource: string,
-  data: Record<string, unknown>,
-  context: PortalResourceContext = {},
-): Promise<PortalResourceRecord> {
+export async function createPortalResource(source: PortalResourceSource, resource: string, data: Record<string, unknown>, context: PortalResourceContext = {}): Promise<PortalResourceRecord> {
   const body = { ...context, ...data };
   if (source === 'building') return createBuildingManagementRecord(resource, body);
   if (source === 'core') return apiRequest<PortalResourceRecord>(agency(), corePath(resource), { method: 'POST', body });
+  if (source === 'scoped') return apiRequest<PortalResourceRecord>(agency(), scopedPath(resource, context), { method: 'POST', body });
   return apiRequest<PortalResourceRecord>(agency(), platformPath(resource), { method: 'POST', body });
 }
 
-export async function updatePortalResource(
-  source: PortalResourceSource,
-  resource: string,
-  id: string,
-  expectedVersion: number,
-  patch: Record<string, unknown>,
-  context: PortalResourceContext = {},
-): Promise<PortalResourceRecord> {
+export async function updatePortalResource(source: PortalResourceSource, resource: string, id: string, expectedVersion: number, patch: Record<string, unknown>, context: PortalResourceContext = {}): Promise<PortalResourceRecord> {
   if (source === 'building') return updateBuildingManagementRecord(resource, id, expectedVersion, patch);
   if (source === 'core') return apiRequest<PortalResourceRecord>(agency(), corePath(resource, id), { method: 'PATCH', body: { ...patch, expectedVersion } });
+  if (source === 'scoped') throw new Error('Scoped portal records must use their dedicated lifecycle action.');
   return apiRequest<PortalResourceRecord>(agency(), platformPath(resource, id, context), { method: 'PATCH', body: { ...patch, expectedVersion } });
 }
 
 export async function listConversationMessages(conversationId: string): Promise<PortalResourceRecord[]> {
   return apiRequest<PortalResourceRecord[]>(agency(), `/api/v1/platform/conversations/${encodeURIComponent(conversationId)}/messages`);
 }
-
 export async function sendConversationMessage(conversationId: string, body: string): Promise<PortalResourceRecord> {
-  return apiRequest<PortalResourceRecord>(agency(), `/api/v1/platform/conversations/${encodeURIComponent(conversationId)}/messages`, {
-    method: 'POST', body: { body, channel: 'portal' },
-  });
+  return apiRequest<PortalResourceRecord>(agency(), `/api/v1/platform/conversations/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: { body, channel: 'portal' } });
 }
-
-export async function transitionPortalResource(
-  resource: 'defects' | 'operational-work-orders' | 'move-bookings' | 'access-device-requests',
-  id: string,
-  expectedVersion: number,
-  status: string,
-  details: Record<string, unknown> = {},
-): Promise<PortalResourceRecord> {
+export async function transitionPortalResource(resource: 'defects' | 'operational-work-orders' | 'move-bookings' | 'access-device-requests', id: string, expectedVersion: number, status: string, details: Record<string, unknown> = {}): Promise<PortalResourceRecord> {
   return transitionBuildingManagementRecord(resource, id, expectedVersion, status, details);
 }
-
-export async function signOutPortalContractor(
-  id: string,
-  expectedVersion: number,
-  details: { keyIssued: boolean; keyReturned: boolean; overrideReason?: string; signoutNotes?: string },
-): Promise<PortalResourceRecord> {
+export async function signOutPortalContractor(id: string, expectedVersion: number, details: { keyIssued: boolean; keyReturned: boolean; overrideReason?: string; signoutNotes?: string }): Promise<PortalResourceRecord> {
   return signOutContractorAttendance(id, expectedVersion, details);
 }
