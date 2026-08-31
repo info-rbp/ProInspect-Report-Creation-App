@@ -27,6 +27,7 @@
     "cloudflare:deploy": "npx wrangler deploy",
     "cloudflare:preview": "npx wrangler versions upload",
     "security:scan": "node scripts/scan-secrets.mjs",
+    "strata:verify-parity": "node scripts/verify-strata-feature-parity.mjs",
     "appwrite:generate": "node infrastructure/appwrite/scripts/generate-resources.mjs",
     "appwrite:validate": "npm run appwrite:generate && node infrastructure/appwrite/scripts/validate-config.mjs",
     "appwrite:prepare:development": "node infrastructure/appwrite/scripts/materialize-development-config.mjs",
