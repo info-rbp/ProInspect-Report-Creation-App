@@ -8,7 +8,7 @@ import {
 } from './buildingManagementApi';
 import { apiRequest, storedAgencyId } from './apiClient';
 
-export type PortalResourceSource = 'building' | 'platform';
+export type PortalResourceSource = 'building' | 'platform' | 'core';
 
 export interface PortalResourceContext {
   managedSiteId?: string;
@@ -30,12 +30,20 @@ function agency(): string {
   return value;
 }
 
+function safeResource(resource: string): string {
+  const value = resource.trim().replace(/[^a-z0-9-]/giu, '');
+  if (!value) throw new Error('A portal resource is required.');
+  return value;
+}
+
 function platformPath(resource: string, id?: string, context: PortalResourceContext = {}): string {
-  const safe = resource.trim().replace(/[^a-z0-9-]/giu, '');
-  if (!safe) throw new Error('A platform resource is required.');
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(context)) if (value) query.set(key, value);
-  return `/api/v1/platform/${safe}${id ? `/${encodeURIComponent(id)}` : ''}${query.size ? `?${query.toString()}` : ''}`;
+  return `/api/v1/platform/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}${query.size ? `?${query.toString()}` : ''}`;
+}
+
+function corePath(resource: string, id?: string): string {
+  return `/api/v1/${safeResource(resource)}${id ? `/${encodeURIComponent(id)}` : ''}`;
 }
 
 export async function listPortalResource(
@@ -43,9 +51,8 @@ export async function listPortalResource(
   resource: string,
   context: PortalResourceContext = {},
 ): Promise<PortalResourceRecord[]> {
-  if (source === 'building') {
-    return listBuildingManagementRecords(resource, { managedSiteId: context.managedSiteId, limit: 100 });
-  }
+  if (source === 'building') return listBuildingManagementRecords(resource, { managedSiteId: context.managedSiteId, limit: 100 });
+  if (source === 'core') return apiRequest<PortalResourceRecord[]>(agency(), corePath(resource));
   return apiRequest<PortalResourceRecord[]>(agency(), platformPath(resource, undefined, context));
 }
 
@@ -57,6 +64,7 @@ export async function createPortalResource(
 ): Promise<PortalResourceRecord> {
   const body = { ...context, ...data };
   if (source === 'building') return createBuildingManagementRecord(resource, body);
+  if (source === 'core') return apiRequest<PortalResourceRecord>(agency(), corePath(resource), { method: 'POST', body });
   return apiRequest<PortalResourceRecord>(agency(), platformPath(resource), { method: 'POST', body });
 }
 
@@ -69,8 +77,17 @@ export async function updatePortalResource(
   context: PortalResourceContext = {},
 ): Promise<PortalResourceRecord> {
   if (source === 'building') return updateBuildingManagementRecord(resource, id, expectedVersion, patch);
-  return apiRequest<PortalResourceRecord>(agency(), platformPath(resource, id, context), {
-    method: 'PATCH', body: { ...patch, expectedVersion },
+  if (source === 'core') return apiRequest<PortalResourceRecord>(agency(), corePath(resource, id), { method: 'PATCH', body: { ...patch, expectedVersion } });
+  return apiRequest<PortalResourceRecord>(agency(), platformPath(resource, id, context), { method: 'PATCH', body: { ...patch, expectedVersion } });
+}
+
+export async function listConversationMessages(conversationId: string): Promise<PortalResourceRecord[]> {
+  return apiRequest<PortalResourceRecord[]>(agency(), `/api/v1/platform/conversations/${encodeURIComponent(conversationId)}/messages`);
+}
+
+export async function sendConversationMessage(conversationId: string, body: string): Promise<PortalResourceRecord> {
+  return apiRequest<PortalResourceRecord>(agency(), `/api/v1/platform/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: 'POST', body: { body, channel: 'portal' },
   });
 }
 
