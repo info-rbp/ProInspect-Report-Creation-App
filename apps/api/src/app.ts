@@ -47,16 +47,13 @@ import { routeBuildingManagementRequest } from './backend/buildingManagementRout
 import { routeUnifiedPlatformRequest } from './backend/unifiedPlatformRoutes.js';
 import { routePortalScopedRequest } from './backend/portalScopedRoutes.js';
 import { routePortalExperienceRequest } from './backend/portalExperienceRoutes.js';
+import { routePortalOperationalCreateRequest } from './backend/portalOperationalCreateRoutes.js';
 import { buildOpenApiDocument } from './backend/openapi.js';
 import type { ApiDependencies } from './backend/types.js';
 import { authenticateAndAuthorise, SecurityError } from './security/authoriseRequest.js';
 import { createSecurityDependencies } from './security/defaultDependencies.js';
 import { SlidingWindowRateLimiter } from './security/rateLimit.js';
-import {
-  isCloudflareOriginProtectionConfigured,
-  isTrustedCloudflareEdge,
-  requestSourceIp,
-} from './security/trustedEdge.js';
+import { isCloudflareOriginProtectionConfigured, isTrustedCloudflareEdge, requestSourceIp } from './security/trustedEdge.js';
 
 const limiter = new SlidingWindowRateLimiter();
 function send(res: ServerResponse, response: ApiResponse, correlationId: string): void { res.writeHead(response.status, { 'content-type': 'application/json', 'x-correlation-id': correlationId, 'cache-control': 'no-store', ...response.headers }); res.end(JSON.stringify(response.body)); }
@@ -70,12 +67,8 @@ function applicationVersion(): string { return process.env.APP_VERSION?.trim() |
 export function createRequestHandler(dependencies: ApiDependencies = createSecurityDependencies()) {
   return async function requestHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const correlationId = req.headers['x-correlation-id']?.toString() ?? randomUUID();
-    if (isCloudflareOriginProtectionConfigured() && !isHealthRequest(req) && !isTrustedCloudflareEdge(req)) {
-      const error: DomainErrorShape = { code: 'EDGE_REQUIRED', message: 'Requests to this API must pass through the configured application edge.', status: 403, correlationId };
-      send(res, { status: 403, body: { error } }, correlationId); return;
-    }
-    const rateKey = `${requestSourceIp(req) ?? 'unknown'}:${req.url ?? '/'}`;
-    if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
+    if (isCloudflareOriginProtectionConfigured() && !isHealthRequest(req) && !isTrustedCloudflareEdge(req)) { const error: DomainErrorShape = { code: 'EDGE_REQUIRED', message: 'Requests to this API must pass through the configured application edge.', status: 403, correlationId }; send(res, { status: 403, body: { error } }, correlationId); return; }
+    const rateKey = `${requestSourceIp(req) ?? 'unknown'}:${req.url ?? '/'}`; if (!limiter.consume(rateKey)) { send(res, { status: 429, body: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', status: 429, correlationId } } }, correlationId); return; }
     try {
       if (isHealthRequest(req)) { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', commit: applicationVersion(), correlationId } }, correlationId); return; }
       if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: { ...buildOpenApiDocument(), financialBoundary: 'No trust accounting, payments, receipts, disbursements or reconciliation.' } }, correlationId); return; }
@@ -85,7 +78,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
       if (req.method === 'POST' && req.url === '/v1/security/authorise') { const requestBody = await readJson(req); const capability = requestBody.capability as SecurityCapability; const target = requestBody.target as AuthorisationTarget; const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId); send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return; }
       const peopleResponse = await routePeopleRequest(req, dependencies, correlationId); if (peopleResponse) { send(res, peopleResponse, correlationId); return; }
       if (isClientManagementRoute(req.url)) { const r = await routeClientManagementRequest(req, dependencies, correlationId); if (r) { send(res, r, correlationId); return; } }
-      const handlers = [routeClientPortalActionRequest, routePortalExperienceRequest, routePortalScopedRequest, routeUnifiedPlatformRequest, routeBuildingManagementRequest, routeCachedDashboardRequest, routeClientPortalRequest, routeRemoteInspectionAdminRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
+      const handlers = [routeClientPortalActionRequest, routePortalExperienceRequest, routePortalScopedRequest, routePortalOperationalCreateRequest, routeUnifiedPlatformRequest, routeBuildingManagementRequest, routeCachedDashboardRequest, routeClientPortalRequest, routeRemoteInspectionAdminRequest, routeESignCommandRequest, routePlatformEnhancementRequest, routeReportOperationsRequest, routeReportLifecycleActionRequest, routeShopifyIntegrationRequest, routeGoogleCalendarIntegrationRequest, routeInspectionOperationsRequest, routePropertyIntelligenceRequest, routePropertyDocumentRequest, routePropertyHistoryRequest, routeInspectionReportRequest] as const;
       for (const handler of handlers) { const response = await handler(req, dependencies, correlationId); if (response) { send(res, response, correlationId); return; } }
       const specialReportRoute = reportRoute(req.url); if (specialReportRoute) { const agency = req.headers['x-agency-id']?.toString().trim(); if (!agency) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); const response = await routeReportAggregateRequest(req, dependencies, correlationId, agency, specialReportRoute.reportId, specialReportRoute.command); if (response) { send(res, response, correlationId); return; } }
       const tailHandlers = [routeAnalysisRequest, routePriceBookUploadRequest, routeCanonicalMaintenancePricingRequest, routeMaintenanceCommercialRequest, routeMaintenanceCandidateCommercialRequest, routeMaintenanceCreateRequest, routeMaintenanceActionRequest, routeTenantDocumentRequest, routeTenantMigrationRequest, routeTenantActionSourceRequest, routeTenantActionQueueRequest, routeTenantOperationsRequest, routeTenantAutomationRequest, routeTenantPortalRequest, routeTenantInstructionGrantRequest, routeMaintenanceRequest, routeCatalogueRequest, routeTemplateRequest, routeReportPresentationRequest, routeBrandingAssetUploadRequest, routeSettingsRequest] as const;
