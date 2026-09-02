@@ -18,18 +18,22 @@ function isUserProfileRole(role: SecurityRole): role is UserRole {
 }
 
 export async function listAgencyUsers(): Promise<UserProfile[]> {
-  return (await listPeople())
-    .filter((person) => isUserProfileRole(person.role))
-    .map((person) => ({
+  const users: UserProfile[] = [];
+  for (const person of await listPeople()) {
+    const role = person.role;
+    if (!isUserProfileRole(role)) continue;
+    users.push({
       id: person.id,
       agencyId: person.agencyId,
       displayName: person.displayName,
       email: person.email,
-      role: person.role,
+      role,
       status: person.membershipStatus === 'active' ? 'active' : 'inactive',
       createdAt: person.identity?.createdAt ?? person.updatedAt,
       updatedAt: person.updatedAt,
-    }));
+    });
+  }
+  return users;
 }
 
 export async function listAvailableInspectors(): Promise<UserProfile[]> {
