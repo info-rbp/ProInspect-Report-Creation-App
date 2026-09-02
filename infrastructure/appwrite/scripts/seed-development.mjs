@@ -28,10 +28,15 @@ async function upsert(tableId, item, permissions = [], agencyScoped = true) {
 const agency = { ...seed.agency }; delete agency.agencyId;
 await upsert('agencies', agency, readForUsers(allUserIds), false);
 for (const site of seed.sites) await upsert('managed_sites', site, readForUsers(siteReaders(site.$id)));
+for (const clientRecord of seed.clients ?? []) await upsert('clients', clientRecord, readForUsers(['dev_admin', 'dev_client_user']));
 for (const property of seed.properties) {
   const readers = property.managedSiteId ? siteReaders(property.managedSiteId) : ['dev_admin', 'dev_client_user'];
   await upsert('properties', property, readForUsers(readers));
 }
+for (const unit of seed.units ?? []) await upsert('units', unit, readForUsers(['dev_admin', 'dev_building_manager', 'dev_relief_manager', 'dev_strata_manager', 'dev_council_member', 'dev_resident_owner', 'dev_resident_tenant', 'dev_client_user']));
+for (const occupancy of seed.occupancies ?? []) await upsert('occupancies', occupancy, readForUsers(['dev_admin', 'dev_building_manager', 'dev_relief_manager', 'dev_strata_manager', 'dev_resident_owner', 'dev_resident_tenant']));
+for (const contractor of seed.contractors ?? []) await upsert('contractors', contractor, readForUsers(['dev_admin', 'dev_building_manager', 'dev_relief_manager', 'dev_strata_manager', 'dev_contractor']));
+for (const relationship of seed.propertyClientRelationships ?? []) await upsert('property_client_relationships', relationship, readForUsers(['dev_admin', 'dev_client_user']));
 for (const definition of seed.serviceDefinitions) await upsert('service_definitions', definition, readForUsers(allUserIds));
 for (const [userId, role] of seed.identities) {
   const email = `${userId}@example.com`;
@@ -44,13 +49,14 @@ for (const [userId, role] of seed.identities) {
   await upsert('agency_memberships', {$id:`${userId}_agency`,userId,role,status:'active',mfaRequired:['proinspect_admin','reviewer'].includes(role)}, read);
 }
 for (const membership of seed.siteMemberships) await upsert('site_memberships', membership, readForUsers([membership.userId]));
+for (const entitlement of seed.portalEntitlements ?? []) await upsert('portal_entitlements', entitlement, readForUsers([entitlement.userId]));
 const operationalReaders = {
-  service_requests: ['dev_admin', 'dev_building_manager', 'dev_inspector'],
-  inspection_jobs: ['dev_admin', 'dev_inspector'],
-  maintenance_items: ['dev_admin', 'dev_building_manager', 'dev_strata_manager'],
+  service_requests: ['dev_admin', 'dev_building_manager', 'dev_inspector', 'dev_client_user'],
+  inspection_jobs: ['dev_admin', 'dev_inspector', 'dev_client_user', 'dev_resident_tenant'],
+  maintenance_items: ['dev_admin', 'dev_building_manager', 'dev_strata_manager', 'dev_client_user'],
   maintenance_work_orders: ['dev_admin', 'dev_building_manager', 'dev_contractor'],
   incidents: ['dev_admin', 'dev_building_manager', 'dev_strata_manager'],
-  resident_requests: ['dev_admin', 'dev_building_manager', 'dev_resident_tenant'],
+  resident_requests: ['dev_admin', 'dev_building_manager', 'dev_strata_manager', 'dev_resident_tenant'],
 };
 for (const { tableId, row } of seed.operationalRecords) await upsert(tableId, row, readForUsers(operationalReaders[tableId] ?? ['dev_admin']));
-console.log(`Seeded synthetic Development foundation data for ${seed.identities.length} identities and ${seed.siteMemberships.length} site memberships.`);
+console.log(`Seeded synthetic Development foundation data for ${seed.identities.length} identities, ${seed.siteMemberships.length} site memberships and ${(seed.portalEntitlements ?? []).length} portal entitlements.`);
