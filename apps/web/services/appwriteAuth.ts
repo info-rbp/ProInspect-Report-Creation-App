@@ -5,8 +5,7 @@ import {
   currentAccount,
   logoutCurrentSession,
 } from '@pcr/appwrite-client';
-import type { SecurityRole } from '@pcr/domain';
-import type { UserProfile } from '../types';
+import type { UserProfile } from '../types/index';
 import { asUnifiedRole } from './platform/portalAccess';
 
 export type AuthProviderMode = 'firebase' | 'appwrite';
@@ -72,7 +71,7 @@ export function appwriteProfile(record: AppwriteUserRecord): UserProfile {
     uid: record.$id,
     email: record.email ?? '',
     displayName: record.name || (typeof prefs.displayName === 'string' ? prefs.displayName : undefined),
-    role: role as SecurityRole,
+    role,
     ...(typeof prefs.agencyId === 'string' ? { agencyId: prefs.agencyId } : {}),
     ...(typeof prefs.providerId === 'string' ? { providerId: prefs.providerId } : {}),
     effectiveCapabilities: Array.isArray(prefs.effectiveCapabilities) ? prefs.effectiveCapabilities.map(String) : [],
