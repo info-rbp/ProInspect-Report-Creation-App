@@ -1,0 +1,39 @@
+name: Temporary portal test diagnostics
+
+on:
+  push:
+    branches:
+      - feat/seven-portal-completion-chatgpt
+
+permissions:
+  contents: write
+
+jobs:
+  diagnostics:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Capture unit and security test output
+        shell: bash
+        run: |
+          set +e
+          npm run test:all > portal-test-output.txt 2>&1
+          status=$?
+          set -e
+          tail -n 700 portal-test-output.txt > docs/architecture/portal-test-output.tmp.txt
+          echo "TEST_EXIT_STATUS=$status" >> docs/architecture/portal-test-output.tmp.txt
+      - name: Commit diagnostic output
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture/portal-test-output.tmp.txt
+          git commit -m "chore: capture portal test output"
+          git push origin HEAD:feat/seven-portal-completion-chatgpt
