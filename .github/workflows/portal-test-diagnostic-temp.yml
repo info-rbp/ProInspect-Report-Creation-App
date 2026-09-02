@@ -20,14 +20,30 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Capture unit and security test output
+      - name: Capture focused unit and security test output
         shell: bash
         run: |
           set +e
-          npm run test:run > portal-test-output.txt 2>&1
+          NO_COLOR=1 npm run test:run > portal-test-output.txt 2>&1
           status=$?
           set -e
-          tail -n 900 portal-test-output.txt > docs/architecture/portal-test-output.tmp.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('portal-test-output.txt').read_text(errors='replace')
+          text = re.sub(r'\x1b\[[0-9;]*m', '', text)
+          lines = text.splitlines()
+          keep = []
+          needles = ('FAIL ', 'Error:', 'TypeError:', 'AssertionError:', 'Cannot find package', 'Failed to load url', 'Test Files', 'Tests ', 'Serialized Error', 'Caused by:', ' ❯ ')
+          for index, line in enumerate(lines):
+              if any(needle in line for needle in needles):
+                  start = max(0, index - 2)
+                  end = min(len(lines), index + 5)
+                  block = '\n'.join(lines[start:end])
+                  if block not in keep:
+                      keep.append(block)
+          Path('docs/architecture/portal-test-output.tmp.txt').write_text('\n\n---\n\n'.join(keep) + '\n')
+          PY
           echo "TEST_EXIT_STATUS=$status" >> docs/architecture/portal-test-output.tmp.txt
       - name: Commit diagnostic output
         shell: bash
@@ -35,5 +51,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/architecture/portal-test-output.tmp.txt
-          git commit -m "chore: capture portal test output"
+          git commit -m "chore: capture focused portal test output"
           git push origin HEAD:feat/seven-portal-completion-chatgpt
