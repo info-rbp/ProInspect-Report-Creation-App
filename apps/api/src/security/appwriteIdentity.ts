@@ -1,5 +1,5 @@
-import { Account, Client } from '@pcr/appwrite-server';
-import type { IdentityVerifier, VerifiedIdentity } from './types.js';
+import { Account, Client } from 'node-appwrite';
+import type { IdentityVerifier, VerifiedIdentityToken } from './types.js';
 
 interface JwtPayload {
   iat?: number;
@@ -27,7 +27,7 @@ export class AppwriteIdentityVerifier implements IdentityVerifier {
     if (!this.projectId) throw new Error('APPWRITE_PROJECT_ID is required for Appwrite identity verification.');
   }
 
-  async verifyIdentityToken(token: string): Promise<VerifiedIdentity> {
+  async verifyIdentityToken(token: string): Promise<VerifiedIdentityToken> {
     if (!token || token.length < 20) throw Object.assign(new Error('A valid Appwrite JWT is required.'), { status: 401, code: 'AUTH_TOKEN_INVALID' });
     const client = new Client()
       .setEndpoint(this.endpoint as string)
