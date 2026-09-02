@@ -41,7 +41,7 @@ async function residentConversations(req: IncomingMessage, deps: ApiDependencies
   const agency = agencyId(req); const site = requiredParam(req, 'managedSiteId'); const principal = await residentPrincipal(req, deps, correlationId, agency, site);
   const conversationId = route[5]; const nested = route[6];
   if (conversationId && nested === 'messages') {
-    const conversation = await residentConversationAccess(deps, agency, principal, site, conversationId);
+    await residentConversationAccess(deps, agency, principal, site, conversationId);
     if (req.method === 'GET') return { status: 200, body: { data: await list(deps, 'conversationMessages', agency, { conversationId }), meta: { correlationId } } };
     if (req.method === 'POST') {
       const body = await readJson(req); const message = typeof body.body === 'string' ? body.body.trim() : ''; if (!message) throw new ApiError(400, 'MESSAGE_BODY_REQUIRED', 'Message body is required.');

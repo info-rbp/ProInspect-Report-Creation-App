@@ -1,4 +1,4 @@
-import type { AgencyOrganisationSettings, DashboardOverview, SecurityRole, UserRole } from '@pcr/domain';
+import type { AgencyOrganisationSettings, DashboardOverview, SecurityRole } from '@pcr/domain';
 
 export type { SecurityRole, UserRole } from '@pcr/domain';
 export type DashboardSectionKey = 'dashboard' | 'analytics' | 'clients' | 'properties' | 'jobs' | 'reports' | 'maintenance' | 'tenants' | 'communications' | 'compliance' | 'users' | 'templates' | 'settings';

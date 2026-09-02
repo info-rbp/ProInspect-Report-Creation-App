@@ -188,7 +188,7 @@ async function createContractorAttendance(req: IncomingMessage, deps: ApiDepende
 }
 
 async function getSiteResource(req: IncomingMessage, deps: ApiDependencies, correlationId: string, resource: string): Promise<ApiResponse> {
-  const agencyId = agencyHeader(req); const site = requireSite(req); const principal = await sitePrincipal(req, deps, correlationId, agencyId, site);
+  const agencyId = agencyHeader(req); const site = requireSite(req); await sitePrincipal(req, deps, correlationId, agencyId, site);
   if (resource === 'residents') {
     const [units, occupancies] = await Promise.all([list(deps, 'units', agencyId, { managedSiteId: site }), list(deps, 'occupancies', agencyId, { managedSiteId: site })]);
     return { status: 200, body: { data: [...units.map((item) => publicRecord(item, 'unit')), ...occupancies.map((item) => publicRecord(item, 'occupancy'))], meta: { correlationId } } };
