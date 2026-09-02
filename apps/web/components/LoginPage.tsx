@@ -15,6 +15,7 @@ interface LoginPageProps {
   onGoogleLogin?: () => Promise<void>;
   error?: string | null;
   isSubmitting?: boolean;
+  passwordRecoveryHref?: string;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({
@@ -22,6 +23,7 @@ const LoginPage: React.FC<LoginPageProps> = ({
   onGoogleLogin,
   error,
   isSubmitting = false,
+  passwordRecoveryHref,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -157,6 +159,7 @@ const LoginPage: React.FC<LoginPageProps> = ({
                 <label htmlFor="login-input-password" className="block text-xs font-semibold text-slate-700">
                   Password
                 </label>
+                {passwordRecoveryHref && <a href={passwordRecoveryHref} className="text-xs font-semibold text-indigo-700">Forgot password?</a>}
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />

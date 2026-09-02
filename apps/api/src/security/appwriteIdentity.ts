@@ -1,4 +1,4 @@
-import { Account, Client } from 'node-appwrite';
+import { Account, Client } from '@pcr/appwrite-server';
 import type { IdentityVerifier, VerifiedIdentityToken } from './types.js';
 
 interface JwtPayload {
@@ -44,11 +44,9 @@ export class AppwriteIdentityVerifier implements IdentityVerifier {
       };
       const payload = jwtPayload(token);
       const now = Math.floor(Date.now() / 1000);
-      const prefs = record.prefs ?? {};
       return {
         uid: record.$id,
         ...(record.email ? { email: record.email } : {}),
-        ...(typeof prefs.agencyId === 'string' ? { agencyId: prefs.agencyId } : {}),
         mfaVerified: record.mfa === true,
         authTime: typeof payload.auth_time === 'number' ? payload.auth_time : typeof payload.iat === 'number' ? payload.iat : now,
         issuedAt: typeof payload.iat === 'number' ? payload.iat : now,

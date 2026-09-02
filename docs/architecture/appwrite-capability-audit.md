@@ -2,34 +2,33 @@
 
 ## Scope and safety result
 
-This is the pre-remediation audit snapshot from 2026-08-29. The authenticated Appwrite account could access one organization and two projects. The only target selected for this work was the active Sydney project `ProInspect Development` (`proinspect-development`, region `syd`). The prohibited project `6a911f1e0031e90015b2` was not selected and no Production system was inspected or modified.
+This audit was refreshed on 2026-09-02. The only target selected was the active Sydney project `ProInspect Development` (`proinspect-development`, region `syd`). The prohibited project `6a911f1e0031e90015b2` was not inspected, and no Production system was modified.
 
-The starting repository state was clean `main` at `8ce1e31` (`feat(appwrite): reconcile source schemas`). The earlier foundation and source-reconciliation work was committed. The remote Development schema was not ahead of the committed schema.
+The refreshed source is the seven-portal merge candidate on `feat/seven-portal-completion-chatgpt`, combining the latest portal implementation with the strict unified-platform gates. The authoritative schema is generated from `tables/schema.mjs` plus `tables/unified-platform-extensions.mjs`.
 
 The machine-readable companion is [appwrite-capability-audit.json](./appwrite-capability-audit.json).
 
-## Live inventory before remediation
+## Live inventory after reconciliation
 
 | Resource | Actual state |
 | --- | --- |
-| Projects accessible | 2 |
 | Target databases | 1 (`proinspect_core`) |
-| Tables | 100 |
-| Columns | 1,746 |
-| Indexes | 306, all available |
+| Tables | 114 |
+| Columns | 2,008 |
+| Indexes | 366, all available |
 | Native relationship columns | 0; explicit IDs are the canonical design |
 | Buckets | 7 |
 | Teams | 2, with 0 memberships |
 | Functions | 0 |
 | Webhooks | 0 |
-| Registered platforms | 0 |
+| Registered platforms | 1 (`proinspect-localhost`) |
 | Messaging providers/topics | 0 / 0 |
 | API keys | 0 |
 | Development users | 10; 0 email-verified and 0 MFA-enrolled |
 
-All tables were enabled, had row security enabled, and had empty table permissions. The seven buckets had file security, encryption and antivirus enabled, empty bucket permissions, and matching size/extension policies. Remote and local table, column, index, bucket and Team IDs matched in both directions. Appwrite's normalised numeric bounds and formatted-string representation were not treated as schema drift.
+All tables are enabled, have row security enabled, and have empty table permissions. The seven buckets have file security, encryption and antivirus enabled, empty bucket permissions, and matching size/extension policies. Remote and local database, table, column, index, bucket and Team definitions match in both directions.
 
-Auth had email/password, invitations and JWT enabled. Anonymous, phone, magic URL and email OTP were disabled. TOTP, email and phone were available MFA factors; custom MFA was disabled. Password history (5), dictionary checks, personal-data checks, session invalidation, session alerts and a ten-session limit were enabled. SMTP was disabled. The built-in Appwrite OAuth provider was enabled; no third-party provider credentials were enabled.
+Auth has email/password, invitations and JWT enabled. Anonymous, phone, magic URL and email OTP are disabled. TOTP, email and phone are available MFA factors; custom MFA is disabled. SMTP is enabled. The built-in Appwrite and Google OAuth providers are enabled. The ten Development users currently show zero verified and zero MFA-enrolled users.
 
 ## Final capability matrix
 
@@ -43,9 +42,9 @@ Auth had email/password, invitations and JWT enabled. Anonymous, phone, magic UR
 | Site memberships | AVAILABLE | Deny-by-default table and live seed rows | None for foundation | ProInspect API |
 | RBAC/capabilities | PARTIAL | Server policy and negative unit tests | Active Appwrite identity/repository path and remaining domains | ProInspect API |
 | Teams | AVAILABLE | Two coarse administrative/operations teams | Approved membership policy only | Appwrite Teams |
-| TablesDB | AVAILABLE | 1 database, 100 tables, 1,746 columns | None | Appwrite TablesDB |
+| TablesDB | AVAILABLE | 1 database, 114 tables, 2,008 columns | None | Appwrite TablesDB |
 | Relationships | AVAILABLE | Explicit indexed IDs and migration parent checks | Per-command parent enforcement | ProInspect API |
-| Indexes | AVAILABLE | 306 available indexes | None | Appwrite TablesDB |
+| Indexes | AVAILABLE | 366 available indexes | None | Appwrite TablesDB |
 | Transactions | PARTIAL | ServiceRequest plus AuditEvent | Remaining multi-record workflows | ProInspect API |
 | Storage | AVAILABLE | Seven secured buckets | Temporary cleanup and large-file policy before Production | Appwrite Storage |
 | File permissions | AVAILABLE | File security and explicit read grants | Repeat per-domain denial tests | API / Storage |
@@ -59,7 +58,7 @@ Auth had email/password, invitations and JWT enabled. Anonymous, phone, magic UR
 | Migration framework | AVAILABLE | Dry run, deterministic IDs, checksums and idempotency | Batch checkpoints for real export | Migration tooling |
 | Reconciliation | AVAILABLE | Source matrices and live schema verification | Approved source export and thresholds | Migration tooling |
 | Development seed | AVAILABLE | Ten identities and scoped fixtures | Owner-controlled temporary password for repeat live auth | Development tooling |
-| Backups/recovery | PARTIAL | Reproducible schema and migration rollback design | Backup/restore rehearsal and file recovery | Platform / owner |
+| Backups/recovery | PARTIAL | Manual database archive and isolated 114-table/44-row restore rehearsal passed | File/bucket recovery and retention policy | Platform / owner |
 | Retention/legal hold | PARTIAL | Immutable report/audit concepts | Owner/legal policy | Owner / API |
 | Monitoring/logging | PARTIAL | Structured worker logs and status/exception/outbox tables | Appwrite alert/export and retry ownership | Operations |
 | Development web platform | AVAILABLE | Source-controlled `proinspect-localhost` for `localhost` | Add real Development domains only when confirmed | Appwrite settings |
@@ -99,7 +98,7 @@ No Production worker is changed by this audit.
 
 The missing localhost platform was added through the guarded Development push and is now source-controlled. The target guard requires the exact project ID, name and Sydney endpoint and explicitly rejects `6a911f1e0031e90015b2`. Control-plane verification covers Auth methods, MFA factors, platforms, Functions, webhooks, Messaging and key counts. Schema verification now fails on local-to-remote or remote-to-local database, table, column, index, bucket and Team drift.
 
-The live synthetic workflow passed email/password login and logout, membership resolution, TOTP enrolment/challenge/recovery codes, agency/site/resident/contractor/inspector isolation, privileged MFA denial, authorised and denied Storage access, atomic ServiceRequest plus AuditEvent creation, and a deliberate unique-index transaction failure with no partial visibility. The transient MFA user, sessions, files and rows were removed. Email verification and password recovery delivery remain blocked only by owner-supplied SMTP; their client initiation and completion helpers are implemented and tested locally.
+The current seven-persona workflow could not run because `APPWRITE_SEED_PASSWORD` was absent. The gate was not bypassed and the current `portal_entitlements` count is zero. Repository-side login/logout, verification, recovery, TOTP enrollment/challenge, recovery-code and provider-boundary tests pass, but live persona/MFA acceptance remains owner-blocked.
 
 ## Transactions, audit and migration
 
@@ -109,4 +108,4 @@ The first bounded migration remains Agency → Clients → Managed Sites → Pro
 
 ## Backup, recovery and retention
 
-Schema recreation and pre-authority-switch rollback through `migration_id_map` are defined. Appwrite backup entitlement/schedule, a Development restore rehearsal, binary file recovery, retention periods, legal hold, immutable audit retention and temporary-upload expiry remain unproven. Retention periods are an `OWNER DECISION REQUIRED`; SMTP credentials and real Development domains are `OWNER INPUT REQUIRED`.
+Manual archive `6a97aa6887f4a1c23bf6` completed for `proinspect_core`. Its isolated restore reached `ready` with 114 matching table definitions, 44 matching rows and representative agency/site/service-request readability. The temporary restore database was removed and the archive retained. Binary file recovery, retention periods, legal hold, immutable audit retention and temporary-upload expiry remain unproven. Retention periods are an `OWNER DECISION REQUIRED`; the controlled Development seed password and real Development domains are `OWNER INPUT REQUIRED`.

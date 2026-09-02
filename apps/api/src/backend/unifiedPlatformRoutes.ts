@@ -248,6 +248,26 @@ export async function routeUnifiedPlatformRequest(req: IncomingMessage, deps: Ap
   if (parts[0] !== 'api' || parts[1] !== 'v1' || parts[2] !== 'platform') return undefined;
   const resource = parts[3];
   if (!resource) return { status: 200, body: { name: 'ProInspect Unified Platform API', version: 'v1', resources: Object.keys(POLICIES) } };
+  if (resource === 'membership' && parts[4] === 'me' && req.method === 'GET') {
+    const agencyId = agencyHeader(req);
+    const principal = await authenticateAndAuthorise(req, deps, 'communication.read', { agencyId }, correlationId);
+    return {
+      status: 200,
+      body: {
+        data: {
+          uid: principal.uid,
+          agencyId: principal.agencyId,
+          role: principal.role,
+          mfaVerified: principal.mfaVerified,
+          siteIds: principal.siteIds ?? [],
+          propertyIds: principal.propertyIds ?? [],
+          clientAccountIds: principal.clientAccountIds ?? [],
+          ...(principal.contractorId ? { contractorId: principal.contractorId } : {}),
+        },
+        meta: { correlationId },
+      },
+    };
+  }
   if (resource === 'route-plans' && parts[4] && parts[5] === 'stops') return routePlanStops(req, deps, correlationId, parts[4]);
   const policy = POLICIES[resource];
   if (!policy) throw new ApiError(404, 'NOT_FOUND', 'Unified platform resource not found.');

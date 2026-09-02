@@ -13626,5 +13626,2138 @@
         ]
       }
     ]
+  },
+  {
+    "$id": "portal_entitlements",
+    "databaseId": "proinspect_core",
+    "name": "Portal Entitlements",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "portalId",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "sourceRole",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "clientAccountId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "unitId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "validFrom",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "validUntil",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "permissions",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "primary",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "userId",
+          "status"
+        ]
+      },
+      {
+        "key": "user_portal",
+        "type": "key",
+        "columns": [
+          "userId",
+          "portalId"
+        ]
+      },
+      {
+        "key": "site_portal",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "portalId"
+        ]
+      },
+      {
+        "key": "client_portal",
+        "type": "key",
+        "columns": [
+          "clientAccountId",
+          "portalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "contractor_compliance",
+    "databaseId": "proinspect_core",
+    "name": "Contractor Compliance",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "contractorId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "complianceType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "reference",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "issuedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "evidenceFileId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "complianceState",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "verifiedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "verifiedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "overrideBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "overrideUntil",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "overrideReason",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "requirements",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "contractor_state",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "complianceState"
+        ]
+      },
+      {
+        "key": "contractor_status",
+        "type": "key",
+        "columns": [
+          "contractorId",
+          "status"
+        ]
+      },
+      {
+        "key": "expiry_state",
+        "type": "key",
+        "columns": [
+          "expiresAt",
+          "complianceState"
+        ]
+      },
+      {
+        "key": "contractor_type_ref",
+        "type": "unique",
+        "columns": [
+          "contractorId",
+          "complianceType",
+          "reference"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "offer_partners",
+    "databaseId": "proinspect_core",
+    "name": "Offer Partners",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "logoFileId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "contactName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "contactEmail",
+        "type": "string",
+        "size": 320,
+        "required": false,
+        "format": "email"
+      },
+      {
+        "key": "contactPhone",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "agreementStatus",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "agreementStartsAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "agreementEndsAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "privacyConfiguration",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "commercialConfiguration",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agreement_status",
+        "type": "key",
+        "columns": [
+          "agreementStatus",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_name",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "name"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "offers",
+    "databaseId": "proinspect_core",
+    "name": "Offers",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "partnerId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "title",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "description",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "category",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "terms",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "validFrom",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "validUntil",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "audienceRules",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "locationRules",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "redemptionType",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "externalUrl",
+        "type": "string",
+        "size": 1024,
+        "required": false
+      },
+      {
+        "key": "promoCode",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "shopifyDiscountReference",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "redemptionLimit",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "partner_status",
+        "type": "key",
+        "columns": [
+          "partnerId",
+          "status"
+        ]
+      },
+      {
+        "key": "validity_status",
+        "type": "key",
+        "columns": [
+          "validFrom",
+          "validUntil",
+          "status"
+        ]
+      },
+      {
+        "key": "category_status",
+        "type": "key",
+        "columns": [
+          "category",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "offer_redemptions",
+    "databaseId": "proinspect_core",
+    "name": "Offer Redemptions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "offerId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "unitId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "redemptionToken",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "redeemedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "externalReference",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "consentSnapshot",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "offer_user_token",
+        "type": "unique",
+        "columns": [
+          "offerId",
+          "userId",
+          "redemptionToken"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "userId",
+          "status"
+        ]
+      },
+      {
+        "key": "offer_status",
+        "type": "key",
+        "columns": [
+          "offerId",
+          "status"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "conversations",
+    "databaseId": "proinspect_core",
+    "name": "Conversations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "subject",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "linkedEntityType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "linkedEntityId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "clientAccountId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assignedUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "conversationState",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "lastMessageAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "resolvedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "resolvedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "entity_state",
+        "type": "key",
+        "columns": [
+          "linkedEntityType",
+          "linkedEntityId",
+          "conversationState"
+        ]
+      },
+      {
+        "key": "assignee_state",
+        "type": "key",
+        "columns": [
+          "assignedUserId",
+          "conversationState"
+        ]
+      },
+      {
+        "key": "site_last_message",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "lastMessageAt"
+        ]
+      },
+      {
+        "key": "client_state",
+        "type": "key",
+        "columns": [
+          "clientAccountId",
+          "conversationState"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "conversation_participants",
+    "databaseId": "proinspect_core",
+    "name": "Conversation Participants",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "conversationId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "participantType",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "participantId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "role",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "joinedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "leftAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "lastReadAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "canReply",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "conversation_participant",
+        "type": "unique",
+        "columns": [
+          "conversationId",
+          "participantType",
+          "participantId"
+        ]
+      },
+      {
+        "key": "participant_status",
+        "type": "key",
+        "columns": [
+          "participantId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "conversation_messages",
+    "databaseId": "proinspect_core",
+    "name": "Conversation Messages",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "conversationId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "senderType",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "senderId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "channel",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "body",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "attachmentFileIds",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "providerMessageId",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "deliveryStatus",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "sentAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "deliveredAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "readAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "conversation_sent",
+        "type": "key",
+        "columns": [
+          "conversationId",
+          "sentAt"
+        ]
+      },
+      {
+        "key": "delivery_status",
+        "type": "key",
+        "columns": [
+          "deliveryStatus",
+          "sentAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "notification_preferences",
+    "databaseId": "proinspect_core",
+    "name": "Notification Preferences",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "emailEnabled",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "smsEnabled",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "pushEnabled",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "quietHoursStart",
+        "type": "string",
+        "size": 8,
+        "required": false
+      },
+      {
+        "key": "quietHoursEnd",
+        "type": "string",
+        "size": 8,
+        "required": false
+      },
+      {
+        "key": "timezone",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "urgentOverride",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "eventPreferences",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "user_preference",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "userId"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "userId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "appointment_availability",
+    "databaseId": "proinspect_core",
+    "name": "Appointment Availability",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "serviceDefinitionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "startAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "endAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "capacity",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "reserved",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "constraints",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "service_start",
+        "type": "key",
+        "columns": [
+          "serviceDefinitionId",
+          "startAt"
+        ]
+      },
+      {
+        "key": "user_start",
+        "type": "key",
+        "columns": [
+          "userId",
+          "startAt"
+        ]
+      },
+      {
+        "key": "site_start",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "startAt"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "appointment_bookings",
+    "databaseId": "proinspect_core",
+    "name": "Appointment Bookings",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "serviceRequestId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "availabilityId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "requestedByUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "assignedUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "startAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "endAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "bookingState",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "accessInstructions",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "rescheduleHistory",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "request_state",
+        "type": "key",
+        "columns": [
+          "serviceRequestId",
+          "bookingState"
+        ]
+      },
+      {
+        "key": "assignee_start",
+        "type": "key",
+        "columns": [
+          "assignedUserId",
+          "startAt"
+        ]
+      },
+      {
+        "key": "property_start",
+        "type": "key",
+        "columns": [
+          "propertyId",
+          "startAt"
+        ]
+      },
+      {
+        "key": "site_status",
+        "type": "key",
+        "columns": [
+          "managedSiteId",
+          "status"
+        ]
+      },
+      {
+        "key": "requester_status",
+        "type": "key",
+        "columns": [
+          "requestedByUserId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "route_plans",
+    "databaseId": "proinspect_core",
+    "name": "Route Plans",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "assignedUserId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "routeDate",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "routeState",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "originAddress",
+        "type": "string",
+        "size": 512,
+        "required": false
+      },
+      {
+        "key": "destinationAddress",
+        "type": "string",
+        "size": 512,
+        "required": false
+      },
+      {
+        "key": "estimatedDistanceKm",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "estimatedDurationMinutes",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "key": "publishedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "publishedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "optimisationMetadata",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "user_route_date",
+        "type": "unique",
+        "columns": [
+          "assignedUserId",
+          "routeDate"
+        ]
+      },
+      {
+        "key": "date_state",
+        "type": "key",
+        "columns": [
+          "routeDate",
+          "routeState"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "assignedUserId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "route_plan_stops",
+    "databaseId": "proinspect_core",
+    "name": "Route Plan Stops",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "routePlanId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "inspectionJobId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "appointmentBookingId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "sequence",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "plannedArrivalAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "travelMinutes",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "key": "distanceKm",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "stopState",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "actualArrivalAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "departedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "route_sequence",
+        "type": "unique",
+        "columns": [
+          "routePlanId",
+          "sequence"
+        ]
+      },
+      {
+        "key": "job_route",
+        "type": "key",
+        "columns": [
+          "inspectionJobId",
+          "routePlanId"
+        ]
+      },
+      {
+        "key": "route_status",
+        "type": "key",
+        "columns": [
+          "routePlanId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "offline_sync_receipts",
+    "databaseId": "proinspect_core",
+    "name": "Offline Sync Receipts",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "deviceId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "clientSubmissionId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "entityType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "entityId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "payloadHash",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "syncState",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "attempts",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "firstReceivedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "lastAttemptedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "completedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "conflictDetail",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "errorDetail",
+        "type": "longtext",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "device_submission",
+        "type": "unique",
+        "columns": [
+          "deviceId",
+          "clientSubmissionId"
+        ]
+      },
+      {
+        "key": "user_state",
+        "type": "key",
+        "columns": [
+          "userId",
+          "syncState"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "userId",
+          "status"
+        ]
+      },
+      {
+        "key": "entity_state",
+        "type": "key",
+        "columns": [
+          "entityType",
+          "entityId",
+          "syncState"
+        ]
+      }
+    ]
   }
 ]

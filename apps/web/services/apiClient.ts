@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth';
+import { configuredAuthProvider, currentAppwriteAuth } from './appwriteAuth';
 import { getAppCheckToken } from './appCheckService';
 import { apiBaseUrl } from './runtimeConfig';
 
@@ -52,18 +53,32 @@ export async function apiRequest<T>(agencyId: string | undefined, path: string, 
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown; idempotencyKey?: string;
 } = {}): Promise<T> {
   const baseUrl = apiBaseUrl();
-  let user;
-  try { user = getAuth().currentUser; } catch { user = null; }
-  if (!user) throw new Error('Sign in before accessing cloud records.');
-
-  // Force-refresh the ID token so newly provisioned agency/provider claims are used
-  // immediately after sign-in or an administrator changes a user's access.
-  const tokenResult = await user.getIdTokenResult(true);
-  const claimAgency = typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId.trim() || undefined : undefined;
-  const tenantAgency = user.tenantId?.trim() || undefined;
+  const provider = configuredAuthProvider();
+  let token: string;
+  let claimAgency: string | undefined;
+  let tenantAgency: string | undefined;
+  let providerSuperAdmin = false;
+  if (provider === 'appwrite') {
+    const current = await currentAppwriteAuth();
+    if (!current) throw new Error('Sign in before accessing cloud records.');
+    token = await current.user.getIdToken(true);
+    // Appwrite preferences bootstrap the requested agency only. The API resolves
+    // the active agency membership and all scope from server-side TablesDB rows.
+    claimAgency = current.profile.agencyId?.trim() || undefined;
+  } else {
+    let user;
+    try { user = getAuth().currentUser; } catch { user = null; }
+    if (!user) throw new Error('Sign in before accessing cloud records.');
+    // Force-refresh the ID token so newly provisioned agency/provider claims are used
+    // immediately after sign-in or an administrator changes a user's access.
+    const tokenResult = await user.getIdTokenResult(true);
+    token = tokenResult.token;
+    claimAgency = typeof tokenResult.claims.agencyId === 'string' ? tokenResult.claims.agencyId.trim() || undefined : undefined;
+    tenantAgency = user.tenantId?.trim() || undefined;
+    providerSuperAdmin = tokenResult.claims.providerId === 'proinspect'
+      && tokenResult.claims.providerRole === 'super_admin';
+  }
   const storedAgency = storedAgencyId();
-  const providerSuperAdmin = tokenResult.claims.providerId === 'proinspect'
-    && tokenResult.claims.providerRole === 'super_admin';
 
   // Signed identity data is authoritative for ordinary members. Only a provider
   // super administrator, whose provider status is itself signed into the token,
@@ -79,10 +94,10 @@ export async function apiRequest<T>(agencyId: string | undefined, path: string, 
   if (!resolvedAgencyId) throw new Error('The signed-in identity is not linked to an agency.');
   if (!agencyId && (claimAgency || tenantAgency)) persistAuthoritativeAgency(resolvedAgencyId);
 
-  const appCheckValue = await getAppCheckToken();
+  const appCheckValue = provider === 'firebase' ? await getAppCheckToken() : undefined;
   const method = init.method ?? 'GET';
   const headers: Record<string, string> = {
-    authorization: `Bearer ${tokenResult.token}`,
+    authorization: `Bearer ${token}`,
     'x-agency-id': resolvedAgencyId,
     accept: 'application/json',
   };

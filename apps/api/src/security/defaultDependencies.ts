@@ -1,4 +1,5 @@
 import { FirebaseIdentityVerifier } from './firebaseIdentity.js';
+import { AppwriteIdentityVerifier } from './appwriteIdentity.js';
 import { FirestoreMembershipRepository } from './membershipRepository.js';
 import { FirestoreAuditWriter } from './auditWriter.js';
 import { FirestoreOperationalRepository } from '../backend/firestoreRepository.js';
@@ -19,6 +20,14 @@ function appwriteOperationalMode(env: NodeJS.ProcessEnv): boolean {
 }
 
 export function createSecurityDependencies(env: NodeJS.ProcessEnv = process.env): ApiDependencies {
+  const authProvider = env.AUTH_PROVIDER?.trim().toLowerCase() || 'firebase';
+  if (!['firebase', 'appwrite'].includes(authProvider)) {
+    throw new Error(`Unsupported AUTH_PROVIDER '${authProvider}'. Use firebase or appwrite.`);
+  }
+  if (authProvider === 'appwrite' && env.APPWRITE_BACKEND_MODE?.trim().toLowerCase() !== 'appwrite') {
+    throw new Error('AUTH_PROVIDER=appwrite requires APPWRITE_BACKEND_MODE=appwrite.');
+  }
+
   let operationalRepository: OperationalRepository = new FirestoreOperationalRepository();
   let memberships = new FirestoreMembershipRepository();
   let audit = new FirestoreAuditWriter();
@@ -32,10 +41,12 @@ export function createSecurityDependencies(env: NodeJS.ProcessEnv = process.env)
 
   const repository = new SettingsAwareOperationalRepository(operationalRepository);
   return {
-    identityVerifier: new FirebaseIdentityVerifier(),
+    identityVerifier: authProvider === 'appwrite'
+      ? new AppwriteIdentityVerifier(env.APPWRITE_ENDPOINT, env.APPWRITE_PROJECT_ID)
+      : new FirebaseIdentityVerifier(),
     memberships,
     audit,
-    requireAppCheck: env.REQUIRE_APP_CHECK !== 'false' && env.NODE_ENV !== 'test',
+    requireAppCheck: authProvider === 'firebase' && env.REQUIRE_APP_CHECK !== 'false' && env.NODE_ENV !== 'test',
     repository,
     reports: new FirestoreReportAggregateStore(),
     idempotency: new FirestoreIdempotencyStore(),

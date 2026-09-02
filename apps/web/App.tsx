@@ -8,6 +8,9 @@ import NotFound from './components/layout/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import DashboardPage from './pages/DashboardPage';
 import LoginRoutePage from './pages/LoginRoutePage';
+import AppwriteForgotPasswordPage from './pages/auth/AppwriteForgotPasswordPage';
+import AppwriteResetPasswordPage from './pages/auth/AppwriteResetPasswordPage';
+import AppwriteVerifyEmailPage from './pages/auth/AppwriteVerifyEmailPage';
 import AdminHomePage from './pages/admin/AdminHomePage';
 import AnalyticsPage from './pages/admin/AnalyticsPage';
 import ClientBulkImportPage from './pages/admin/ClientBulkImportPage';
@@ -55,7 +58,7 @@ import PortalFeaturePage from './pages/portals/PortalFeaturePage';
 
 const App: React.FC = () => (
   <AuthProvider><BrowserRouter><Routes>
-    <Route path="/" element={<AuthRedirect />} /><Route path="/auth/login" element={<LoginRoutePage />} />
+    <Route path="/" element={<AuthRedirect />} /><Route path="/auth/login" element={<LoginRoutePage />} /><Route path="/auth/forgot-password" element={<AppwriteForgotPasswordPage />} /><Route path="/auth/verify-email" element={<AppwriteVerifyEmailPage />} /><Route path="/auth/reset-password" element={<AppwriteResetPasswordPage />} />
     <Route path="/external/work-request/:grantToken" element={<ExternalWorkRequestPage />} /><Route path="/external/tenant-instruction/:grantToken" element={<ExternalTenantInstructionPage />} /><Route path="/tenant-portal/:grantToken" element={<TenantPortalPage />} /><Route path="/tenant-portal/:grantToken/inspection/:assignmentId" element={<RemoteInspectionPage />} /><Route path="/external/client-approval/:grantToken" element={<ExternalClientApprovalPage />} /><Route path="/external/maintenance-quote/:grantToken" element={<ExternalMaintenanceQuotePage />} /><Route path="/report-access/:grantToken" element={<ReportRecipientPortalPage />} />
     <Route element={<ProtectedRoute />}>
       <Route path="/client-portal/:clientAccountId" element={<ClientPortalPage />} />

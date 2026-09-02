@@ -54,6 +54,7 @@ const LoginRoutePage: React.FC = () => {
   const {
     isAuthenticated,
     isLoadingAuth,
+    authProvider,
     mfaState,
     mfaEnrollmentDetails,
     login,
@@ -332,7 +333,8 @@ const LoginRoutePage: React.FC = () => {
       )}
       <LoginPage
         onLogin={handleLogin}
-        onGoogleLogin={handleGoogleLogin}
+        onGoogleLogin={authProvider === 'firebase' ? handleGoogleLogin : undefined}
+        passwordRecoveryHref={authProvider === 'appwrite' ? '/auth/forgot-password' : undefined}
         error={error}
         isSubmitting={isSubmitting}
       />

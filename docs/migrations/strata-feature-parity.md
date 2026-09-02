@@ -1,6 +1,6 @@
 # Strata feature parity contract
 
-The standalone Strata application cannot be archived until every capability below is either `MIGRATED` or explicitly `RETIRED` with owner approval. `FOUNDATION` means the canonical domain/Appwrite entity exists. `APPLICATION` means the unified API and portal route exist. `DATA` means D1/R2 production-shaped records have migrated and reconciled. `E2E` means the workflow has passed role, scope, lifecycle and evidence tests.
+The standalone Strata application cannot be archived until every capability below has a final status of `COMPLETE`, `RETIRED_WITH_APPROVAL`, `EXTERNAL_BY_DESIGN`, or `BLOCKED_OWNER_INPUT`. `ENGINEERING_INCOMPLETE` is an explicit non-final working status and must never be relabelled as owner-blocked. `FOUNDATION` means the canonical domain/Appwrite entity exists. `APPLICATION` means the unified API and portal route exist. `DATA` means D1/R2 production-shaped records have migrated and reconciled. `E2E` means the workflow has passed role, scope, lifecycle and evidence tests.
 
 | Capability | Canonical destination | Portals | Foundation | Application | Data | E2E |
 | --- | --- | --- | --- | --- | --- | --- |

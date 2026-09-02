@@ -1,39 +1,23 @@
-import type { SecurityRole, UserProfile, UserRole } from '../../types/platform';
+import type { UserProfile } from '../../types/platform';
+import { isInternalRole } from '@pcr/domain';
 import { listPeople } from './peopleService';
 
-const USER_PROFILE_ROLES = new Set<UserRole>([
-  'super_admin',
-  'proinspect_admin',
-  'operations',
-  'inspector',
-  'analyst',
-  'reviewer',
-  'tenant',
-  'landlord',
-  'shopify_customer',
-]);
-
-function isUserProfileRole(role: SecurityRole): role is UserRole {
-  return USER_PROFILE_ROLES.has(role as UserRole);
-}
-
 export async function listAgencyUsers(): Promise<UserProfile[]> {
-  const users: UserProfile[] = [];
+  const profiles: UserProfile[] = [];
   for (const person of await listPeople()) {
-    const role = person.role;
-    if (!isUserProfileRole(role)) continue;
-    users.push({
+    if (!isInternalRole(person.role)) continue;
+    profiles.push({
       id: person.id,
       agencyId: person.agencyId,
       displayName: person.displayName,
       email: person.email,
-      role,
+      role: person.role,
       status: person.membershipStatus === 'active' ? 'active' : 'inactive',
       createdAt: person.identity?.createdAt ?? person.updatedAt,
       updatedAt: person.updatedAt,
     });
   }
-  return users;
+  return profiles;
 }
 
 export async function listAvailableInspectors(): Promise<UserProfile[]> {

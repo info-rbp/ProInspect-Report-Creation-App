@@ -32,6 +32,17 @@ export interface PortalContext {
   primary: boolean;
 }
 
+export interface CurrentPortalMembership {
+  uid: string;
+  agencyId: string;
+  role: UnifiedRole;
+  mfaVerified: boolean;
+  siteIds: string[];
+  propertyIds: string[];
+  clientAccountIds: string[];
+  contractorId?: string;
+}
+
 function agency(): string {
   const agencyId = storedAgencyId();
   if (!agencyId) throw new Error('Select an agency before resolving portal access.');
@@ -40,6 +51,10 @@ function agency(): string {
 
 export async function listMyPortalEntitlements(): Promise<PortalEntitlementRecord[]> {
   return apiRequest<PortalEntitlementRecord[]>(agency(), '/api/v1/platform/portal-entitlements/me');
+}
+
+export async function getMyPortalMembership(): Promise<CurrentPortalMembership> {
+  return apiRequest<CurrentPortalMembership>(agency(), '/api/v1/platform/membership/me');
 }
 
 export function isActivePortalEntitlement(

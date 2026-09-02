@@ -110,6 +110,19 @@ function headers(key = 'platform-request-0001'): Record<string, string> {
 }
 
 describe('Unified platform API', () => {
+  it('returns the authoritative active membership for Appwrite browser bootstrap', async () => {
+    const repository = new MemoryRepository();
+    const response = await request(dependencies(repository, {
+      role: 'client_user', uid: 'client-user-a', clientAccountIds: ['client-a'],
+    }), '/api/v1/platform/membership/me', { headers: headers() });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: {
+        uid: 'client-user-a', agencyId: 'agency-a', role: 'client_user', clientAccountIds: ['client-a'],
+      },
+    });
+  });
+
   it('self-scopes resident offer redemptions and rejects another resident record', async () => {
     const repository = new MemoryRepository();
     await repository.create('offerRedemptions', 'agency-a', 'redemption-other', {

@@ -17,8 +17,22 @@ import {
   type TotpEnrollmentDetails,
 } from '../services/mfaService';
 import { resolveMfaSessionDecision, roleRequiresMfa } from '../services/mfaPolicy';
+import {
+  beginAppwriteTotpEnrollment,
+  completeAppwriteMfaSignIn,
+  completeAppwriteTotpEnrollment,
+  configuredAuthProvider,
+  currentAppwriteAuth,
+  isAppwriteMfaChallengeError,
+  sendAppwriteEmailVerification,
+  signInWithAppwrite,
+  signOutFromAppwrite,
+  type AuthProviderMode,
+  type PlatformAuthUser,
+} from '../services/appwriteAuth';
 import { getOrCreateUserProfile } from '../services/platform/userProfileService';
 import {
+  getMyPortalMembership,
   listMyPortalEntitlements,
   type PortalEntitlementRecord,
 } from '../services/platform/portalEntitlementService';
@@ -30,11 +44,12 @@ import {
   signInWithGoogle,
   signOutUser,
 } from '../services/storageService';
-import type { UserProfile, UserRole } from '../types/platform';
+import type { UserProfile, UserRole } from '../types/index';
 
 interface AuthContextValue {
-  currentUser: User | null;
+  currentUser: User | PlatformAuthUser | null;
   userProfile: UserProfile | null;
+  authProvider: AuthProviderMode;
   portalEntitlements: readonly PortalEntitlementRecord[];
   isAuthenticated: boolean;
   isLoadingAuth: boolean;
@@ -55,7 +70,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const authProvider = configuredAuthProvider();
+  const [currentUser, setCurrentUser] = useState<User | PlatformAuthUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [portalEntitlements, setPortalEntitlements] = useState<PortalEntitlementRecord[]>([]);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -76,10 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshPortalEntitlements = useCallback(async (): Promise<void> => {
-    if (!auth?.currentUser) {
-      setPortalEntitlements([]);
-      return;
-    }
     setIsLoadingPortalEntitlements(true);
     try {
       setPortalEntitlements(await listMyPortalEntitlements());
@@ -127,7 +139,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error('Your privileged session requires multi-factor authentication. Sign in again to continue.');
   };
 
+  const applyAppwriteUser = async (result: Awaited<ReturnType<typeof currentAppwriteAuth>>): Promise<void> => {
+    if (!result) {
+      clearLocalAuth();
+      return;
+    }
+    const { user, profile: bootstrapProfile } = result;
+    const membership = await getMyPortalMembership();
+    const profile: UserProfile = {
+      ...bootstrapProfile,
+      uid: membership.uid,
+      agencyId: membership.agencyId,
+      role: membership.role,
+    };
+    setCurrentUser(user);
+    setUserProfile(profile);
+    setMfaVerified(user.mfaVerified);
+    setMfaEnrollmentDetails(null);
+    if (profile.disabled) {
+      await signOutFromAppwrite();
+      clearLocalAuth();
+      throw new Error('This Appwrite account is disabled.');
+    }
+    if (roleRequiresMfa(profile.role) && !user.emailVerified) {
+      setPortalEntitlements([]);
+      setMfaState('email-verification');
+      return;
+    }
+    if (roleRequiresMfa(profile.role) && !user.mfaVerified) {
+      setPortalEntitlements([]);
+      setMfaState('enrollment');
+      return;
+    }
+    setMfaState('none');
+    await refreshPortalEntitlements();
+  };
+
   useEffect(() => {
+    if (authProvider === 'appwrite') {
+      void currentAppwriteAuth()
+        .then(applyAppwriteUser)
+        .catch((error) => {
+          console.error('Failed to restore the Appwrite session.', error);
+          clearLocalAuth();
+        })
+        .finally(() => setIsLoadingAuth(false));
+      return;
+    }
     if (!auth || !isFirebaseConfigured()) {
       clearLocalAuth();
       setIsLoadingAuth(false);
@@ -152,9 +210,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoadingAuth(false);
       }
     });
-  }, []);
+  }, [authProvider]);
 
   const login = async (email: string, password: string): Promise<void> => {
+    if (authProvider === 'appwrite') {
+      setMfaEnrollmentDetails(null);
+      try {
+        await applyAppwriteUser(await signInWithAppwrite(email.trim(), password));
+      } catch (error) {
+        if (isAppwriteMfaChallengeError(error)) {
+          setMfaState('challenge');
+          setCurrentUser(null);
+          setUserProfile(null);
+          setPortalEntitlements([]);
+          setMfaVerified(false);
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
     if (!auth || !isFirebaseConfigured()) throw new Error('Identity Platform must be configured before signing in.');
     ensureAppCheck();
     setMfaEnrollmentDetails(null);
@@ -176,6 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogleUser = async (): Promise<void> => {
+    if (authProvider === 'appwrite') throw new Error('Google sign-in is not configured for the Appwrite identity provider.');
     if (!auth || !isFirebaseConfigured()) throw new Error('Identity Platform must be configured before signing in.');
     ensureAppCheck();
     setMfaEnrollmentDetails(null);
@@ -197,6 +273,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeMfaLogin = async (code: string): Promise<void> => {
+    if (authProvider === 'appwrite') {
+      await applyAppwriteUser(await completeAppwriteMfaSignIn(code));
+      return;
+    }
     try {
       const firebaseUser = await completePendingTotpSignIn(code);
       await applyAuthenticatedUser(firebaseUser);
@@ -214,15 +294,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const beginMfaEnrollment = async (): Promise<TotpEnrollmentDetails> => {
     if (!currentUser || mfaState !== 'enrollment') throw new Error('There is no active MFA enrolment session.');
-    const details = await beginTotpEnrollment(currentUser);
+    if (authProvider === 'appwrite') {
+      const details = await beginAppwriteTotpEnrollment();
+      const value = {
+        secretKey: details.secret,
+        qrCodeUrl: details.uri,
+        accountName: currentUser.email || currentUser.uid,
+        issuer: 'ProInspect',
+      };
+      setMfaEnrollmentDetails(value);
+      return value;
+    }
+    const details = await beginTotpEnrollment(currentUser as User);
     setMfaEnrollmentDetails(details);
     return details;
   };
 
   const completeMfaEnrollment = async (code: string): Promise<void> => {
     if (!currentUser || mfaState !== 'enrollment') throw new Error('There is no active MFA enrolment session.');
+    if (authProvider === 'appwrite') {
+      await completeAppwriteTotpEnrollment(code);
+      await signOutFromAppwrite();
+      clearLocalAuth();
+      return;
+    }
     try {
-      await completeTotpEnrollment(currentUser, code);
+      await completeTotpEnrollment(currentUser as User, code);
     } catch (error) {
       if (requiresMfaRestart(error)) setMfaEnrollmentDetails(null);
       throw error;
@@ -233,17 +330,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const sendMfaVerificationEmail = async (): Promise<void> => {
     if (!currentUser || mfaState !== 'email-verification') throw new Error('There is no authenticated user awaiting email verification.');
-    await sendMfaEmailVerification(currentUser);
+    if (authProvider === 'appwrite') await sendAppwriteEmailVerification();
+    else await sendMfaEmailVerification(currentUser as User);
   };
 
   const logout = async (): Promise<void> => {
-    if (auth) await signOutUser();
+    if (authProvider === 'appwrite') await signOutFromAppwrite();
+    else if (auth) await signOutUser();
     clearLocalAuth();
   };
 
   const value = useMemo<AuthContextValue>(() => ({
     currentUser,
     userProfile,
+    authProvider,
     portalEntitlements,
     isAuthenticated: Boolean(
       currentUser
@@ -265,7 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     hasRole: (...roles) => hasAnyRole(userProfile?.role, roles),
     canAccess: (section) => canAccessSection(userProfile?.role, section),
-  }), [currentUser, isLoadingAuth, isLoadingPortalEntitlements, mfaEnrollmentDetails, mfaState, mfaVerified, portalEntitlements, refreshPortalEntitlements, userProfile]);
+  }), [authProvider, currentUser, isLoadingAuth, isLoadingPortalEntitlements, mfaEnrollmentDetails, mfaState, mfaVerified, portalEntitlements, refreshPortalEntitlements, userProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

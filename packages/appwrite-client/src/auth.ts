@@ -1,5 +1,9 @@
 import { AuthenticationFactor, AuthenticatorType, type Account, type Models } from 'appwrite';
 
+export function createAccountJwt(account: Account, duration = 900): Promise<Models.Jwt> {
+  return account.createJWT({ duration });
+}
+
 export function createEmailPasswordSession(account: Account, email: string, password: string): Promise<Models.Session> {
   return account.createEmailPasswordSession({ email: email.trim(), password });
 }
@@ -14,10 +18,6 @@ export function requestPasswordRecovery(account: Account, email: string, returnU
 
 export function currentAccount(account: Account): Promise<Models.User<Models.Preferences>> {
   return account.get();
-}
-
-export function createAccountJwt(account: Account, duration = 900) {
-  return account.createJWT({ duration });
 }
 
 export function completeEmailVerification(account: Account, userId: string, secret: string): Promise<Models.Token> {

@@ -4,9 +4,11 @@ export type { SecurityRole, UserRole } from '@pcr/domain';
 export type DashboardSectionKey = 'dashboard' | 'analytics' | 'clients' | 'properties' | 'jobs' | 'reports' | 'maintenance' | 'tenants' | 'communications' | 'compliance' | 'users' | 'templates' | 'settings';
 
 export interface UserProfile {
-  uid: string;
+  id: string;
+  uid?: string;
   email: string;
   role: SecurityRole;
+  status: 'active' | 'inactive' | 'archived';
   displayName?: string;
   photoURL?: string;
   agencyId?: string;
@@ -55,9 +57,9 @@ export interface UrgentItem { id: string; type: 'overdue' | 'urgent' | 'failed' 
 export interface UpcomingInspection { id: string; jobId: string; propertyAddress: string; inspectionType: string; scheduledAt: Date; inspector?: { id: string; name: string }; status: string; clientName?: string; }
 export interface StaffPerformance { userId: string; userName: string; role: string; inspectionsCompleted: number; reportsCompleted: number; averageCompletionTime: number; rating?: number; }
 
-export type DashboardViewModel = DashboardOverview & {
+export interface DashboardViewModel extends DashboardOverview {
   source: 'snapshot' | 'legacy';
-};
+}
 
 export type AgencySettingsViewModel = AgencyOrganisationSettings;
 
