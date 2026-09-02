@@ -16,6 +16,10 @@ export function currentAccount(account: Account): Promise<Models.User<Models.Pre
   return account.get();
 }
 
+export function createAccountJwt(account: Account, duration = 900) {
+  return account.createJWT({ duration });
+}
+
 export function completeEmailVerification(account: Account, userId: string, secret: string): Promise<Models.Token> {
   return account.updateEmailVerification({ userId, secret });
 }
