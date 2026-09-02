@@ -5,6 +5,7 @@ import type {
   DashboardOverview,
   DashboardRange,
   DashboardTrend,
+  SecurityRole,
   UserRole,
 } from '@pcr/domain';
 import type { IncomingMessage } from 'node:http';
@@ -15,6 +16,7 @@ import type { ApiDependencies, StoredRecord } from './types.js';
 const DAY_MS = 86_400_000;
 const REPORT_SLA_HOURS = 48;
 const MAINTENANCE_SLA_HOURS = 72;
+const DASHBOARD_ROLES = new Set<UserRole>(['super_admin', 'proinspect_admin', 'operations', 'inspector', 'analyst', 'reviewer', 'tenant', 'landlord', 'shopify_customer']);
 
 function routeParts(req: IncomingMessage): string[] { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
 function agencyHeader(req: IncomingMessage): string { const agencyId = req.headers['x-agency-id']?.toString().trim(); if (!agencyId) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); return agencyId; }
@@ -32,6 +34,7 @@ function countCreated(records: StoredRecord[], start: number, end: number): numb
 function durationHours(record: StoredRecord): number | undefined { const start = time(record.createdAt); const end = time(record.finalisedAt || record.closedAt || record.completedAt || record.updatedAt); if (start === undefined || end === undefined || end < start) return undefined; return (end - start) / 3_600_000; }
 function average(values: number[]): number | undefined { return values.length ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 : undefined; }
 function percentage(part: number, total: number): number | undefined { return total ? Math.round((part / total) * 1000) / 10 : undefined; }
+function dashboardRole(role: SecurityRole): UserRole { if (!DASHBOARD_ROLES.has(role as UserRole)) throw new ApiError(403, 'DASHBOARD_ROLE_REQUIRED', 'This role does not have access to the legacy internal dashboard.'); return role as UserRole; }
 function visibleAssignment(record: StoredRecord, role: UserRole, uid: string): boolean { if (role === 'inspector') return record.assignedInspectorId === uid; if (role === 'analyst') return record.assignedAnalystId === uid || record.ownerUid === uid; if (role === 'reviewer') return record.assignedReviewerId === uid; return true; }
 function attention(kind: DashboardAttentionItem['kind'], label: string, severity: DashboardAttentionItem['severity'], record: StoredRecord, deepLink: string): DashboardAttentionItem { return { id: `${kind}-${record.id}`, kind, label, severity, entityId: record.id, ...(typeof record.dueDate === 'string' ? { dueAt: record.dueDate } : typeof record.scheduledAt === 'string' ? { dueAt: record.scheduledAt } : {}), deepLink }; }
 
@@ -57,6 +60,7 @@ function capacity(jobs: StoredRecord[], reports: StoredRecord[], now: number): D
 async function buildOverview(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<DashboardOverview> {
   const agencyId = agencyHeader(req);
   const principal = await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId }, correlationId);
+  const role = dashboardRole(principal.role);
   const url = new URL(req.url ?? '/', 'http://localhost');
   const range = parseRange(url.searchParams.get('range'));
   const timezone = url.searchParams.get('timezone') || 'Australia/Perth';
@@ -65,8 +69,8 @@ async function buildOverview(req: IncomingMessage, dependencies: ApiDependencies
   const values = await Promise.all(names.map((name) => listAll(dependencies, name, agencyId)));
   const data = Object.fromEntries(names.map((name, index) => [name, values[index]])) as Record<(typeof names)[number], StoredRecord[]>;
 
-  const jobs = data.inspectionJobs.filter((item) => visibleAssignment(item, principal.role, principal.uid));
-  const reports = data.reports.filter((item) => visibleAssignment(item, principal.role, principal.uid));
+  const jobs = data.inspectionJobs.filter((item) => visibleAssignment(item, role, principal.uid));
+  const reports = data.reports.filter((item) => visibleAssignment(item, role, principal.uid));
   const activeJobs = jobs.filter((item) => !isTerminalJob(item));
   const todayKey = nowDate.toISOString().slice(0, 10); const tomorrowKey = new Date(now + DAY_MS).toISOString().slice(0, 10);
   const jobsToday = activeJobs.filter((item) => String(item.scheduledAt || '').slice(0, 10) === todayKey);
@@ -104,7 +108,7 @@ async function buildOverview(req: IncomingMessage, dependencies: ApiDependencies
   const maintenanceDurations = maintenanceClosed.map(durationHours).filter((item): item is number => item !== undefined);
   const resolvedQuotes = data.maintenanceQuotes.filter((item) => ['accepted', 'converted_to_work_order', 'declined', 'expired'].includes(recordStatus(item)) && (time(item.updatedAt) || 0) >= start);
   const acceptedInPeriod = resolvedQuotes.filter((item) => ['accepted', 'converted_to_work_order'].includes(recordStatus(item)));
-  const isAdmin = principal.role === 'super_admin' || principal.role === 'proinspect_admin';
+  const isAdmin = role === 'super_admin' || role === 'proinspect_admin';
 
   const trends: Record<string, DashboardTrend> = {
     inspectionsCreated: trend(countCreated(jobs, start, now + 1), countCreated(jobs, previousStart, start)),
@@ -124,7 +128,7 @@ async function buildOverview(req: IncomingMessage, dependencies: ApiDependencies
   ].slice(0, 40);
 
   return {
-    generatedAt: nowDate.toISOString(), range, timezone, role: principal.role,
+    generatedAt: nowDate.toISOString(), range, timezone, role,
     today: [
       metric('inspections_today', 'Inspections today', jobsToday.length, '/app/admin/jobs?tab=schedule'),
       metric('inspections_tomorrow', 'Inspections tomorrow', jobsTomorrow.length, '/app/admin/jobs?tab=schedule'),
@@ -178,7 +182,7 @@ async function buildOverview(req: IncomingMessage, dependencies: ApiDependencies
       maintenanceSlaCompliancePercent: percentage(maintenanceDurations.filter((hours) => hours <= MAINTENANCE_SLA_HOURS).length, maintenanceDurations.length),
       quoteAcceptancePercent: percentage(acceptedInPeriod.length, resolvedQuotes.length),
     },
-    capacity: capacity(data.inspectionJobs, data.reports, now).filter((row) => !['inspector', 'analyst', 'reviewer'].includes(principal.role) || (row.role === principal.role && row.userId === principal.uid)),
+    capacity: capacity(data.inspectionJobs, data.reports, now).filter((row) => !['inspector', 'analyst', 'reviewer'].includes(role) || (row.role === role && row.userId === principal.uid)),
     attention: attentionItems,
     integrations: [metric('integration_open', 'Open integration exceptions', integrationIssueCount, '/app/admin/settings/integrations', integrationIssueCount ? 'warning' : 'info')],
     trends,
