@@ -24,10 +24,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm run test:all > portal-test-output.txt 2>&1
+          npm run test:run > portal-test-output.txt 2>&1
           status=$?
           set -e
-          tail -n 700 portal-test-output.txt > docs/architecture/portal-test-output.tmp.txt
+          tail -n 900 portal-test-output.txt > docs/architecture/portal-test-output.tmp.txt
           echo "TEST_EXIT_STATUS=$status" >> docs/architecture/portal-test-output.tmp.txt
       - name: Commit diagnostic output
         shell: bash
