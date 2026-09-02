@@ -5,11 +5,27 @@
     {"$id":"dev_site_strata","name":"DEV TEST - Harbour Strata","siteType":"strata","status":"active","timezone":"Australia/Perth","streetAddress":"1 Test Parade","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia","strataPlanNumber":"DEV-SP-1"},
     {"$id":"dev_site_commercial","name":"DEV TEST - Commerce Centre","siteType":"commercial","status":"active","timezone":"Australia/Perth","streetAddress":"2 Test Avenue","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia"}
   ],
+  "clients": [
+    {"$id":"dev_client","name":"DEV TEST - Portfolio Client","clientType":"property_management_firm","accountType":"managed","status":"active","billingEmail":"dev_client_user@example.com"}
+  ],
   "properties": [
-    {"$id":"dev_property_unit_1","managedSiteId":"dev_site_strata","propertyType":"apartment","propertyUse":"residential","ownershipStructure":"strata","status":"active","streetAddress":"Unit 1, 1 Test Parade","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia","lotNumber":"1","unitNumber":"1"},
+    {"$id":"dev_property_unit_1","managedSiteId":"dev_site_strata","clientId":"dev_client","propertyType":"apartment","propertyUse":"residential","ownershipStructure":"strata","status":"active","streetAddress":"Unit 1, 1 Test Parade","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia","lotNumber":"1","unitNumber":"1"},
     {"$id":"dev_property_common","managedSiteId":"dev_site_strata","propertyType":"common_property","propertyUse":"strata_common_property","ownershipStructure":"common_property","status":"active","streetAddress":"Common Property, 1 Test Parade","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia"},
     {"$id":"dev_property_commercial","managedSiteId":"dev_site_commercial","propertyType":"office","propertyUse":"commercial","ownershipStructure":"freehold","status":"active","streetAddress":"Suite 2, 2 Test Avenue","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia"},
     {"$id":"dev_property_standalone","propertyType":"house","propertyUse":"residential","ownershipStructure":"freehold","status":"active","streetAddress":"3 Test Street","suburb":"Perth","state":"WA","postcode":"6000","country":"Australia"}
+  ],
+  "units": [
+    {"$id":"dev_unit_1","managedSiteId":"dev_site_strata","propertyId":"dev_property_unit_1","unitNumber":"1","lotNumber":"1","unitType":"residential","status":"active"}
+  ],
+  "occupancies": [
+    {"$id":"dev_occupancy_tenant","managedSiteId":"dev_site_strata","unitId":"dev_unit_1","personId":"dev_person_tenant","userId":"dev_resident_tenant","occupancyRole":"tenant","current":true,"status":"active"},
+    {"$id":"dev_occupancy_owner","managedSiteId":"dev_site_strata","unitId":"dev_unit_1","personId":"dev_person_owner","userId":"dev_resident_owner","occupancyRole":"owner","current":true,"status":"active"}
+  ],
+  "contractors": [
+    {"$id":"dev_contractor_profile","companyName":"DEV TEST - Electrical Contractor","contactName":"DEV TEST Contractor","contactEmail":"dev_contractor@example.com","tradeCategory":"electrical","licenceNumber":"DEV-LIC-1","emergencyAvailable":true,"sitesCovered":"[\"dev_site_strata\"]","status":"active"}
+  ],
+  "propertyClientRelationships": [
+    {"$id":"dev_property_client","propertyId":"dev_property_unit_1","clientId":"dev_client","relationshipType":"management","primary":true,"serviceScope":"DEV TEST - Full operational portal access","status":"active"}
   ],
   "identities": [
     ["dev_admin","proinspect_admin"],["dev_inspector","inspector"],["dev_building_manager","building_manager"],["dev_relief_manager","relief_building_manager"],["dev_strata_manager","strata_manager"],["dev_council_member","council_member"],["dev_resident_owner","resident_owner"],["dev_resident_tenant","resident_tenant"],["dev_client_user","client_user"],["dev_contractor","contractor_worker"]
@@ -25,16 +41,25 @@
     {"$id":"dev_client_site","userId":"dev_client_user","managedSiteId":"dev_site_strata","role":"client_user","status":"active"},
     {"$id":"dev_contractor_site","userId":"dev_contractor","managedSiteId":"dev_site_strata","role":"contractor_worker","status":"active"}
   ],
+  "portalEntitlements": [
+    {"$id":"dev_admin_portal","userId":"dev_admin","portalId":"admin","sourceRole":"proinspect_admin","primary":true,"status":"active"},
+    {"$id":"dev_inspector_portal","userId":"dev_inspector","portalId":"inspector","sourceRole":"inspector","managedSiteId":"dev_site_strata","primary":true,"status":"active"},
+    {"$id":"dev_building_portal","userId":"dev_building_manager","portalId":"building","sourceRole":"building_manager","managedSiteId":"dev_site_strata","primary":true,"status":"active"},
+    {"$id":"dev_strata_portal","userId":"dev_strata_manager","portalId":"strata","sourceRole":"strata_manager","managedSiteId":"dev_site_strata","primary":true,"status":"active"},
+    {"$id":"dev_resident_portal","userId":"dev_resident_tenant","portalId":"resident","sourceRole":"resident_tenant","managedSiteId":"dev_site_strata","propertyId":"dev_property_unit_1","unitId":"dev_unit_1","primary":true,"status":"active"},
+    {"$id":"dev_client_portal","userId":"dev_client_user","portalId":"client","sourceRole":"client_user","managedSiteId":"dev_site_strata","clientAccountId":"dev_client","propertyId":"dev_property_unit_1","primary":true,"status":"active"},
+    {"$id":"dev_contractor_portal","userId":"dev_contractor","portalId":"contractor","sourceRole":"contractor_worker","managedSiteId":"dev_site_strata","contractorId":"dev_contractor_profile","primary":true,"status":"active"}
+  ],
   "serviceDefinitions": [
     {"$id":"dev_service_routine","code":"DEV-ROUTINE","name":"DEV TEST - Routine Inspection","category":"inspection","workflowType":"inspection","status":"active","description":"Synthetic Development service definition."},
     {"$id":"dev_service_maintenance","code":"DEV-MAINT","name":"DEV TEST - Maintenance Request","category":"maintenance","workflowType":"maintenance","status":"active","description":"Synthetic Development service definition."}
   ],
   "operationalRecords": [
-    {"tableId":"service_requests","row":{"$id":"dev_service_request","serviceDefinitionId":"dev_service_routine","propertyId":"dev_property_unit_1","source":"development_seed","sourceReference":"DEV-SERVICE-1","requestedByUserId":"dev_admin","status":"received","paymentStatus":"not_required","schedulingStatus":"awaiting_booking","priority":"normal","notes":"DEV TEST - Synthetic request"}},
+    {"tableId":"service_requests","row":{"$id":"dev_service_request","managedSiteId":"dev_site_strata","clientId":"dev_client","serviceDefinitionId":"dev_service_routine","propertyId":"dev_property_unit_1","source":"development_seed","sourceReference":"DEV-SERVICE-1","requestedByUserId":"dev_admin","status":"received","paymentStatus":"not_required","schedulingStatus":"awaiting_booking","priority":"normal","notes":"DEV TEST - Synthetic request"}},
     {"tableId":"inspection_jobs","row":{"$id":"dev_inspection_job","serviceRequestId":"dev_service_request","propertyId":"dev_property_unit_1","inspectorId":"dev_inspector","reviewerId":"dev_admin","inspectionType":"Routine Inspection","scheduledDate":"2026-09-01T02:00:00.000Z","priority":"normal","status":"assigned","version":1}},
     {"tableId":"maintenance_items","row":{"$id":"dev_maintenance_item","managedSiteId":"dev_site_strata","propertyId":"dev_property_common","title":"DEV TEST - Repair common-area light","description":"Synthetic Development maintenance item.","category":"Electrical","priority":"routine","status":"triage_required","approvalStatus":"pending","version":1}},
-    {"tableId":"maintenance_work_orders","row":{"$id":"dev_work_order","maintenanceItemId":"dev_maintenance_item","contractorId":"dev_contractor","priority":"routine","status":"assigned","instructions":"DEV TEST - Inspect and quote only.","version":1}},
+    {"tableId":"maintenance_work_orders","row":{"$id":"dev_work_order","maintenanceItemId":"dev_maintenance_item","contractorId":"dev_contractor_profile","priority":"routine","status":"assigned","instructions":"DEV TEST - Inspect and quote only.","version":1}},
     {"tableId":"incidents","row":{"$id":"dev_incident","managedSiteId":"dev_site_strata","incidentType":"safety","severity":"low","occurredAt":"2026-08-29T01:00:00.000Z","reportedBy":"dev_building_manager","description":"DEV TEST - Synthetic incident","status":"open"}},
-    {"tableId":"resident_requests","row":{"$id":"dev_resident_request","managedSiteId":"dev_site_strata","propertyId":"dev_property_unit_1","residentUserId":"dev_resident_tenant","requestType":"general","priority":"normal","description":"DEV TEST - Synthetic resident request","status":"received"}}
+    {"tableId":"resident_requests","row":{"$id":"dev_resident_request","managedSiteId":"dev_site_strata","propertyId":"dev_property_unit_1","unitId":"dev_unit_1","residentUserId":"dev_resident_tenant","requestType":"general","priority":"normal","description":"DEV TEST - Synthetic resident request","status":"received"}}
   ]
 }
