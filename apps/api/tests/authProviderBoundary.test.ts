@@ -10,6 +10,7 @@ import {
   AppwriteUploadSessionIssuer,
 } from '../src/backend/appwriteAdapters.js';
 import { SettingsAwareOperationalRepository } from '../src/services/settingsAwareOperationalRepository.js';
+import { AppwritePeopleAdminService } from '../src/backend/appwritePeopleAdmin.js';
 
 describe('API identity provider boundary', () => {
   it('preserves Firebase as the explicit migration fallback', () => {
@@ -40,6 +41,7 @@ describe('API identity provider boundary', () => {
     expect(dependencies.idempotency).toBeInstanceOf(AppwriteIdempotencyStore);
     expect(dependencies.tasks).toBeInstanceOf(AppwriteTaskOutbox);
     expect(dependencies.uploads).toBeInstanceOf(AppwriteUploadSessionIssuer);
+    expect(dependencies.peopleAdmin).toBeInstanceOf(AppwritePeopleAdminService);
     expect(JSON.stringify(dependencies)).not.toContain('Firestore');
     expect(JSON.stringify(dependencies)).not.toContain('Firebase');
   });

@@ -2065,6 +2065,12 @@
         "required": false
       },
       {
+        "key": "analystId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
         "key": "reviewerId",
         "type": "string",
         "size": 36,
@@ -2113,6 +2119,22 @@
         "columns": [
           "inspectorId",
           "scheduledDate"
+        ]
+      },
+      {
+        "key": "analyst_status",
+        "type": "key",
+        "columns": [
+          "analystId",
+          "status"
+        ]
+      },
+      {
+        "key": "reviewer_status",
+        "type": "key",
+        "columns": [
+          "reviewerId",
+          "status"
         ]
       },
       {
@@ -2906,6 +2928,24 @@
         "required": true
       },
       {
+        "key": "inspectorId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "analystId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "reviewerId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
         "key": "currentVersionId",
         "type": "string",
         "size": 36,
@@ -2956,6 +2996,22 @@
         "type": "key",
         "columns": [
           "inspectionJobId",
+          "lifecycleStatus"
+        ]
+      },
+      {
+        "key": "analyst_status",
+        "type": "key",
+        "columns": [
+          "analystId",
+          "lifecycleStatus"
+        ]
+      },
+      {
+        "key": "reviewer_status",
+        "type": "key",
+        "columns": [
+          "reviewerId",
           "lifecycleStatus"
         ]
       }
@@ -3330,6 +3386,12 @@
         "required": false
       },
       {
+        "key": "assignedUserId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
         "key": "title",
         "type": "string",
         "size": 255,
@@ -3408,6 +3470,14 @@
         "type": "key",
         "columns": [
           "assignedContractorId",
+          "status"
+        ]
+      },
+      {
+        "key": "assignee_status",
+        "type": "key",
+        "columns": [
+          "assignedUserId",
           "status"
         ]
       }
@@ -8178,6 +8248,307 @@
         "type": "key",
         "columns": [
           "appwriteUserId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "people_invitations",
+    "databaseId": "proinspect_core",
+    "name": "People Invitations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "email",
+        "type": "string",
+        "size": 320,
+        "required": true,
+        "format": "email"
+      },
+      {
+        "key": "displayName",
+        "type": "string",
+        "size": 255,
+        "required": false
+      },
+      {
+        "key": "role",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "mfaRequired",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "invitedBy",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "acceptedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "cancelledAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_email_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "email",
+          "status"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "userId",
+          "status"
+        ]
+      },
+      {
+        "key": "expiry_status",
+        "type": "key",
+        "columns": [
+          "expiresAt",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "workforce_profiles",
+    "databaseId": "proinspect_core",
+    "name": "Workforce Profiles",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "active",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "disciplines",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "inspectionTypes",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "propertyUses",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "serviceAreas",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "commercialQualified",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "strataQualified",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "maxJobsPerDay",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "key": "maxActiveAnalyses",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "key": "maxActiveReviews",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "key": "defaultCalendarId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "workingHours",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "unavailableDates",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_user",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "userId"
+        ]
+      },
+      {
+        "key": "active_user",
+        "type": "key",
+        "columns": [
+          "active",
+          "userId"
         ]
       }
     ]

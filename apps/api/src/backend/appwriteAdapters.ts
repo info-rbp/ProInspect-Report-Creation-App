@@ -51,7 +51,7 @@ const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   maintenancePlans: 'maintenance_plans', wasteEvents: 'waste_events', incidents: 'incidents',
   bylawObservations: 'bylaw_observations', notices: 'notices', communications: 'communications', handovers: 'handovers',
   handoverChecklistItems: 'handover_checklist_items', operationalReportDrafts: 'operational_report_drafts', operationalReports: 'operational_reports',
-  people: 'people', tenants: 'tenants', tenancies: 'tenancies', tenancyParticipants: 'tenancy_participants', occupancies: 'occupancies',
+  people: 'people', peopleInvitations: 'people_invitations', workforceProfiles: 'workforce_profiles', tenants: 'tenants', tenancies: 'tenancies', tenancyParticipants: 'tenancy_participants', occupancies: 'occupancies',
   units: 'units', contractors: 'contractors', propertyClientRelationships: 'property_client_relationships', keyRegister: 'key_register',
   accessDeviceRequests: 'access_device_requests', defects: 'defects', operationalInspectionCheckpoints: 'operational_inspection_checkpoints',
   operationalInspectionResults: 'operational_inspection_results', serviceEvents: 'service_events', wasteServices: 'waste_services',
@@ -76,7 +76,7 @@ const VERSIONED_TABLES = new Set([
 ]);
 const FILTERABLE_COLUMNS = new Set([
   'managedSiteId', 'buildingId', 'locationId', 'unitId', 'propertyId', 'clientAccountId',
-  'contractorId', 'assignedUserId', 'assigneeUserId', 'requestedByUserId', 'residentUserId', 'inspectorId',
+  'contractorId', 'assignedUserId', 'assigneeUserId', 'requestedByUserId', 'residentUserId', 'inspectorId', 'analystId', 'reviewerId',
   'participantId', 'userId', 'status', 'linkedEntityType', 'linkedEntityId', 'conversationId', 'routePlanId',
   'offerId', 'serviceDefinitionId',
 ]);

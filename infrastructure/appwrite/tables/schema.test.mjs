@@ -38,9 +38,9 @@ describe('Appwrite schema', () => {
     for (const item of foundationReconciliation) expect(RECONCILIATION_STATUSES).toContain(item.status);
     const ids = new Set(allTables.map((item) => item.$id));
     for (const item of foundationReconciliation) expect(ids.has(item.table), item.table).toBe(true);
-    for (const required of ['people','tenants','tenancies','tenancy_participants','occupancies','units','contractors','key_register','access_device_requests','defects','operational_inspection_checkpoints','operational_inspection_results','tasks','documents','form_submissions','property_operating_settings','portal_entitlements','contractor_compliance','offer_partners','offers','offer_redemptions','conversations','conversation_participants','conversation_messages','notification_preferences','appointment_availability','appointment_bookings','route_plans','route_plan_stops','offline_sync_receipts']) {
+    for (const required of ['people','tenants','tenancies','tenancy_participants','occupancies','units','contractors','key_register','access_device_requests','defects','operational_inspection_checkpoints','operational_inspection_results','tasks','documents','form_submissions','property_operating_settings','portal_entitlements','contractor_compliance','offer_partners','offers','offer_redemptions','conversations','conversation_participants','conversation_messages','notification_preferences','appointment_availability','appointment_bookings','route_plans','route_plan_stops','offline_sync_receipts','people_invitations','workforce_profiles']) {
       expect(ids.has(required), required).toBe(true);
     }
-    expect(allTables).toHaveLength(116);
+    expect(allTables).toHaveLength(118);
   });
 });
