@@ -82,7 +82,6 @@ export const ROUTE_POLICIES: Record<string, RoutePolicy> = {
   'work-requests': { collection: 'workRequests', readCapability: 'maintenance.read', target },
   'tenant-instructions': { collection: 'tenantInstructions', readCapability: 'tenant_instruction.manage', target },
   'external-contacts': { collection: 'externalContacts', readCapability: 'external_contact.manage', writeCapability: 'external_contact.manage', target },
-  'external-access-grants': { collection: 'externalAccessGrants', readCapability: 'maintenance.read', writeCapability: 'maintenance.manage', target },
   'client-approvals': { collection: 'clientApprovals', readCapability: 'client_approval.manage', writeCapability: 'client_approval.manage', target },
 };
 

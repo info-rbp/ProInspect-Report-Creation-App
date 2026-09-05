@@ -6,6 +6,7 @@ import { FirestoreOperationalRepository } from '../backend/firestoreRepository.j
 import { FirestoreReportAggregateStore } from '../backend/reportAggregateStore.js';
 import { FirestoreReportVersionReader } from '../backend/firestoreReportVersionReader.js';
 import { FirestoreNotificationDeliveryStore } from '../backend/firestoreNotificationDeliveryStore.js';
+import { FirestoreExternalGrantStore } from '../backend/firestoreExternalGrantStore.js';
 import { FirestoreIdempotencyStore } from '../backend/idempotency.js';
 import {
   FirebaseUploadSessionIssuer,
@@ -23,10 +24,12 @@ import {
   AppwriteUploadSessionIssuer,
   createAppwriteApiServices,
 } from '../backend/appwriteAdapters.js';
+import { AppwriteExternalGrantStore } from '../backend/appwriteExternalGrantStore.js';
 import { AppwritePeopleAdminService } from '../backend/appwritePeopleAdmin.js';
 import { SettingsAwareOperationalRepository } from '../services/settingsAwareOperationalRepository.js';
 import type {
   ApiDependencies,
+  ExternalGrantStore,
   IdempotencyStore,
   NotificationDeliveryStore,
   OperationalRepository,
@@ -73,6 +76,8 @@ export function createSecurityDependencies(
     new FirestoreReportVersionReader();
   let notificationDelivery: NotificationDeliveryStore =
     new FirestoreNotificationDeliveryStore();
+  let externalGrants: ExternalGrantStore =
+    new FirestoreExternalGrantStore();
   let idempotency: IdempotencyStore =
     new FirestoreIdempotencyStore();
   let tasks: TaskDispatcher = new FirestoreTaskOutbox();
@@ -88,6 +93,7 @@ export function createSecurityDependencies(
     reports = new AppwriteReportAggregateStore(appwrite);
     reportVersions = new AppwriteReportVersionReader(appwrite);
     notificationDelivery = new AppwriteNotificationDeliveryStore(appwrite);
+    externalGrants = new AppwriteExternalGrantStore(appwrite);
     idempotency = new AppwriteIdempotencyStore(appwrite);
     tasks = new AppwriteTaskOutbox(appwrite);
     uploads = new AppwriteUploadSessionIssuer(appwrite);
@@ -115,6 +121,7 @@ export function createSecurityDependencies(
     reports,
     reportVersions,
     notificationDelivery,
+    externalGrants,
     idempotency,
     tasks,
     uploads,

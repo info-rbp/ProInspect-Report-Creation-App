@@ -1,5 +1,6 @@
 import type {
   ApiDependencies,
+  ExternalGrantStore,
   NotificationDeliveryStore,
   ReportVersionReader,
 } from './types.js';
@@ -31,4 +32,15 @@ export function requireNotificationDeliveryStore(
     throw missingDependency('notificationDelivery');
   }
   return dependencies.notificationDelivery;
+}
+
+
+export function requireExternalGrantStore(
+  dependencies: ApiDependencies,
+): ExternalGrantStore {
+  if (!dependencies.externalGrants) {
+    throw missingDependency('externalGrants');
+  }
+
+  return dependencies.externalGrants;
 }

@@ -14,7 +14,7 @@ import {
   type SecurityCapability,
 } from '@pcr/domain';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
-import { resolveFirestoreReportGrant } from './firestoreReportGrantResolver.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
 
@@ -405,15 +405,18 @@ async function createDistribution(
       updatedAt: now,
     };
     await dependencies.repository.create('reportDistributions', agencyId, distributionId, distribution as unknown as Record<string, unknown>, principal.uid);
-    await dependencies.repository.create('externalAccessGrants', agencyId, grantId, {
+    await requireExternalGrantStore(
+      dependencies,
+    ).issue({
+      id: grantId,
+      agencyId,
       resourceType: 'report_distribution',
       resourceId: distributionId,
       recipientEmail,
       tokenHash: hash(rawToken),
       expiresAt,
-      createdBy: principal.uid,
-      createdAt: now,
-    }, principal.uid);
+      actorId: principal.uid,
+    });
     const notificationId = randomUUID();
     const notification = {
       type: 'report_distribution',
@@ -468,8 +471,24 @@ async function revokeDistribution(
     const now = new Date().toISOString();
     const updated = await dependencies.repository.update('reportDistributions', agencyId, distributionId, { status: 'revoked', revokedAt: now, updatedAt: now }, Number(distribution.version), principal.uid);
     if (typeof distribution.accessGrantId === 'string') {
-      const grant = await dependencies.repository.get('externalAccessGrants', agencyId, distribution.accessGrantId);
-      if (grant) await dependencies.repository.update('externalAccessGrants', agencyId, grant.id as string, { revokedAt: now }, Number(grant.version), principal.uid);
+      const grantStore =
+        requireExternalGrantStore(dependencies);
+
+      const grant = await grantStore.get(
+        agencyId,
+        'report_distribution',
+        distribution.accessGrantId,
+      );
+
+      if (grant) {
+        await grantStore.revoke(
+          agencyId,
+          'report_distribution',
+          grant.id,
+          grant.version,
+          principal.uid,
+        );
+      }
     }
     await audit(dependencies, agencyId, principal.uid, principal.role, 'report.issue', reportId, 'report.distribution.revoked', correlationId, { distributionId });
     return { status: 200, body: { data: updated, meta: { correlationId } } };
@@ -580,7 +599,13 @@ async function publicReportPortal(
   correlationId: string,
   rawToken: string,
 ): Promise<ApiResponse> {
-  const grant = await resolveFirestoreReportGrant(rawToken);
+  const grant =
+    await requireExternalGrantStore(
+      dependencies,
+    ).resolve(
+      rawToken,
+      ['report_distribution'],
+    );
   const distribution = await dependencies.repository.get('reportDistributions', grant.agencyId, grant.resourceId);
   if (!distribution) throw new ApiError(404, 'REPORT_DISTRIBUTION_NOT_FOUND', 'Report distribution no longer exists.');
   const reportId = String(distribution.reportId);
@@ -589,20 +614,29 @@ async function publicReportPortal(
   if (!aggregate) throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report no longer exists.');
   const externalActor = `external:${grant.id}`;
 
+  const recipientEmail =
+    grant.recipientEmail?.trim().toLowerCase();
+
+  if (!recipientEmail) {
+    throw new ApiError(
+      409,
+      'GRANT_RECIPIENT_REQUIRED',
+      'Report access grant is missing its recipient email.',
+    );
+  }
+
   if (req.method === 'GET') {
     const now = new Date().toISOString();
     if (distribution.status === 'sent' || distribution.status === 'delivered') {
       await dependencies.repository.update('reportDistributions', grant.agencyId, distribution.id as string, { status: 'viewed', viewedAt: now, updatedAt: now }, Number(distribution.version), externalActor);
     }
-    const grantRecord = await dependencies.repository.get('externalAccessGrants', grant.agencyId, grant.id as string);
-    if (grantRecord) await dependencies.repository.update('externalAccessGrants', grant.agencyId, grant.id as string, { lastAccessedAt: now }, Number(grantRecord.version), externalActor);
     const priorResponses = (await filteredRecords(dependencies, 'reportRecipientResponses', grant.agencyId, reportId)).filter((record) => record.distributionId === distribution.id);
     const acknowledgements = (await filteredRecords(dependencies, 'reportAcknowledgements', grant.agencyId, reportId)).filter((record) => record.distributionId === distribution.id);
     return {
       status: 200,
       body: {
         data: {
-          distribution: { ...distribution, recipientEmail: grant.recipientEmail },
+          distribution: { ...distribution, recipientEmail },
           report: {
             id: aggregate.report.id,
             reportVersionId,
@@ -640,7 +674,7 @@ async function publicReportPortal(
         reportId,
         reportVersionId,
         distributionId: distribution.id as string,
-        recipientEmail: grant.recipientEmail,
+        recipientEmail,
         recipientRole: distribution.recipientRole as ReportDistributionRecipientRole,
         acknowledgementType,
         ...(typeof body.note === 'string' && body.note.trim() ? { note: body.note.trim() } : {}),
@@ -677,7 +711,7 @@ async function publicReportPortal(
         reportId,
         reportVersionId,
         distributionId: distribution.id as string,
-        recipientEmail: grant.recipientEmail,
+        recipientEmail,
         recipientRole: distribution.recipientRole as ReportDistributionRecipientRole,
         ...(generalNote ? { generalNote } : {}),
         comments,

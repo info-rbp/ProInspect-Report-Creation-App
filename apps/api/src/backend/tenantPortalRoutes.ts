@@ -14,21 +14,49 @@ import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies, StoredRecord } from './types.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
+import type {
+  ApiDependencies,
+  ExternalGrantRecord,
+  StoredRecord,
+} from './types.js';
 
-interface TenantPortalGrant {
-  id: string;
-  agencyId: string;
-  tenantId: string;
-  tenancyId: string;
-  recipientEmail: string;
-  tokenHash: string;
-  expiresAt: string;
-  revokedAt?: string;
-  lastAccessedAt?: string;
-  createdBy: string;
-  createdAt: string;
-  version?: number;
+type TenantPortalGrant =
+  ExternalGrantRecord & {
+    resourceType: 'tenant_portal';
+    tenantId: string;
+    tenancyId: string;
+    recipientEmail: string;
+  };
+
+function tenantPortalGrant(
+  grant: ExternalGrantRecord,
+): TenantPortalGrant {
+  const tenantId = grant.tenantId?.trim();
+  const tenancyId = grant.tenancyId?.trim();
+  const recipientEmail =
+    grant.recipientEmail?.trim().toLowerCase();
+
+  if (
+    grant.resourceType !== 'tenant_portal'
+    || !tenantId
+    || !tenancyId
+    || !recipientEmail
+  ) {
+    throw new ApiError(
+      409,
+      'PORTAL_GRANT_SCOPE_INCOMPLETE',
+      'Tenant portal grant is missing required scope.',
+    );
+  }
+
+  return {
+    ...grant,
+    resourceType: 'tenant_portal',
+    tenantId,
+    tenancyId,
+    recipientEmail,
+  };
 }
 
 function adminApp() {
@@ -95,15 +123,19 @@ function externalPrincipal(grant: TenantPortalGrant): AuthenticatedPrincipal {
   return { uid: `external:${grant.id}`, agencyId: grant.agencyId, role: 'operations', mfaVerified: false, tokenIssuedAt: Math.floor(Date.now() / 1000) };
 }
 
-async function resolveGrant(rawToken: string): Promise<TenantPortalGrant> {
-  const snapshot = await firestoreDb(adminApp()).collectionGroup('tenantPortalGrants').where('tokenHash', '==', hashToken(rawToken)).limit(2).get();
-  if (snapshot.empty || snapshot.size !== 1) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Tenant portal link is invalid or expired.');
-  const document = snapshot.docs[0];
-  const grant = document.data() as TenantPortalGrant;
-  if (grant.revokedAt) throw new ApiError(401, 'GRANT_TOKEN_REVOKED', 'Tenant portal link has been revoked.');
-  if (new Date(grant.expiresAt).getTime() <= Date.now()) throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Tenant portal link has expired.');
-  await document.ref.update({ lastAccessedAt: new Date().toISOString() });
-  return grant;
+async function resolveGrant(
+  rawToken: string,
+  dependencies: ApiDependencies,
+): Promise<TenantPortalGrant> {
+  const grant =
+    await requireExternalGrantStore(
+      dependencies,
+    ).resolve(
+      rawToken,
+      ['tenant_portal'],
+    );
+
+  return tenantPortalGrant(grant);
 }
 
 async function assertVerifiedParticipant(dependencies: ApiDependencies, agencyId: string, tenantId: string, tenancyId: string, recipientEmail: string) {
@@ -134,14 +166,49 @@ async function queueInvitation(dependencies: ApiDependencies, principalId: strin
   await dependencies.tasks.dispatch('notification', agencyId, notificationId, notification);
 }
 
-async function createGrant(dependencies: ApiDependencies, agencyId: string, tenantId: string, tenancyId: string, recipientEmail: string, expiresInHours: number, principalId: string) {
-  const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
+async function createGrant(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  tenantId: string,
+  tenancyId: string,
+  recipientEmail: string,
+  expiresInHours: number,
+  principalId: string,
+) {
+  const rawToken =
+    `${randomUUID()}${randomUUID()
+      .replaceAll('-', '')}`;
+
   const grantId = randomUUID();
-  const expiresAt = new Date(Date.now() + expiresInHours * 3_600_000).toISOString();
-  const grant = await dependencies.repository.create('tenantPortalGrants', agencyId, grantId, {
-    tenantId, tenancyId, recipientEmail, tokenHash: hashToken(rawToken), expiresAt,
-  }, principalId);
-  return { grant, rawToken, accessUrl: `/tenant-portal/${rawToken}` };
+
+  const expiresAt =
+    new Date(
+      Date.now()
+      + expiresInHours * 3_600_000,
+    ).toISOString();
+
+  const grant = tenantPortalGrant(
+    await requireExternalGrantStore(
+      dependencies,
+    ).issue({
+      id: grantId,
+      agencyId,
+      resourceType: 'tenant_portal',
+      resourceId: tenancyId,
+      tenantId,
+      tenancyId,
+      recipientEmail,
+      tokenHash: hashToken(rawToken),
+      expiresAt,
+      actorId: principalId,
+    }),
+  );
+
+  return {
+    grant,
+    rawToken,
+    accessUrl: `/tenant-portal/${rawToken}`,
+  };
 }
 
 async function generateGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
@@ -165,7 +232,13 @@ async function listGrants(req: IncomingMessage, dependencies: ApiDependencies, c
   const url = new URL(req.url ?? '/', 'http://localhost');
   const tenantId = url.searchParams.get('tenantId')?.trim();
   const tenancyId = url.searchParams.get('tenancyId')?.trim();
-  let grants = await listAll(dependencies, 'tenantPortalGrants', agencyId);
+  let grants =
+    await requireExternalGrantStore(
+      dependencies,
+    ).list(
+      agencyId,
+      'tenant_portal',
+    );
   if (tenantId) grants = grants.filter((item) => item.tenantId === tenantId);
   if (tenancyId) grants = grants.filter((item) => item.tenancyId === tenancyId);
   const data = grants.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map((item) => ({ id: item.id, tenantId: item.tenantId, tenancyId: item.tenancyId, recipientEmail: item.recipientEmail, expiresAt: item.expiresAt, revokedAt: item.revokedAt, lastAccessedAt: item.lastAccessedAt, createdAt: item.createdAt }));
@@ -173,28 +246,155 @@ async function listGrants(req: IncomingMessage, dependencies: ApiDependencies, c
   return { status: 200, body: { data, meta: { correlationId, total: data.length } } };
 }
 
-async function revokeGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, grantId: string): Promise<ApiResponse> {
+async function revokeGrant(
+  req: IncomingMessage,
+  dependencies: ApiDependencies,
+  correlationId: string,
+  grantId: string,
+): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
-  const principal = await authenticateAndAuthorise(req, dependencies, 'tenant.portal.manage', { agencyId }, correlationId);
-  const grant = await dependencies.repository.get('tenantPortalGrants', agencyId, grantId);
-  if (!grant) throw new ApiError(404, 'PORTAL_GRANT_NOT_FOUND', 'Tenant portal grant not found.');
-  const updated = await dependencies.repository.update('tenantPortalGrants', agencyId, grantId, { revokedAt: new Date().toISOString() }, Number(grant.version || 1), principal.uid);
-  return { status: 200, body: { data: updated, meta: { correlationId } } };
+
+  const principal =
+    await authenticateAndAuthorise(
+      req,
+      dependencies,
+      'tenant.portal.manage',
+      { agencyId },
+      correlationId,
+    );
+
+  const grantStore =
+    requireExternalGrantStore(dependencies);
+
+  const grant = await grantStore.get(
+    agencyId,
+    'tenant_portal',
+    grantId,
+  );
+
+  if (!grant) {
+    throw new ApiError(
+      404,
+      'PORTAL_GRANT_NOT_FOUND',
+      'Tenant portal grant not found.',
+    );
+  }
+
+  const updated = await grantStore.revoke(
+    agencyId,
+    'tenant_portal',
+    grant.id,
+    grant.version,
+    principal.uid,
+  );
+
+  return {
+    status: 200,
+    body: {
+      data: updated,
+      meta: { correlationId },
+    },
+  };
 }
 
-async function replaceGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, grantId: string): Promise<ApiResponse> {
+async function replaceGrant(
+  req: IncomingMessage,
+  dependencies: ApiDependencies,
+  correlationId: string,
+  grantId: string,
+): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
   const body = await readJson(req);
-  const principal = await authenticateAndAuthorise(req, dependencies, 'tenant.portal.manage', { agencyId }, correlationId);
-  const old = await dependencies.repository.get('tenantPortalGrants', agencyId, grantId);
-  if (!old) throw new ApiError(404, 'PORTAL_GRANT_NOT_FOUND', 'Tenant portal grant not found.');
-  const recipient = validEmail(String(old.recipientEmail || ''));
-  await assertVerifiedParticipant(dependencies, agencyId, String(old.tenantId), String(old.tenancyId), recipient);
-  await dependencies.repository.update('tenantPortalGrants', agencyId, grantId, { revokedAt: new Date().toISOString(), replacedAt: new Date().toISOString() }, Number(old.version || 1), principal.uid);
-  const expiresInHours = typeof body.expiresInHours === 'number' && Number.isFinite(body.expiresInHours) ? Math.min(Math.max(Math.floor(body.expiresInHours), 1), 24 * 30) : 24 * 7;
-  const created = await createGrant(dependencies, agencyId, String(old.tenantId), String(old.tenancyId), recipient, expiresInHours, principal.uid);
-  await queueInvitation(dependencies, principal.uid, agencyId, String(old.tenantId), String(old.tenancyId), recipient, created.accessUrl, String(created.grant.expiresAt));
-  return { status: 201, body: { data: { grantId: created.grant.id, grantToken: created.rawToken, expiresAt: created.grant.expiresAt, accessUrl: created.accessUrl }, meta: { correlationId } } };
+
+  const principal =
+    await authenticateAndAuthorise(
+      req,
+      dependencies,
+      'tenant.portal.manage',
+      { agencyId },
+      correlationId,
+    );
+
+  const grantStore =
+    requireExternalGrantStore(dependencies);
+
+  const oldRecord = await grantStore.get(
+    agencyId,
+    'tenant_portal',
+    grantId,
+  );
+
+  if (!oldRecord) {
+    throw new ApiError(
+      404,
+      'PORTAL_GRANT_NOT_FOUND',
+      'Tenant portal grant not found.',
+    );
+  }
+
+  const old = tenantPortalGrant(oldRecord);
+
+  await assertVerifiedParticipant(
+    dependencies,
+    agencyId,
+    old.tenantId,
+    old.tenancyId,
+    old.recipientEmail,
+  );
+
+  await grantStore.revoke(
+    agencyId,
+    'tenant_portal',
+    old.id,
+    old.version,
+    principal.uid,
+  );
+
+  const expiresInHours =
+    typeof body.expiresInHours === 'number'
+    && Number.isFinite(body.expiresInHours)
+      ? Math.min(
+          Math.max(
+            Math.floor(body.expiresInHours),
+            1,
+          ),
+          24 * 30,
+        )
+      : 24 * 7;
+
+  const created = await createGrant(
+    dependencies,
+    agencyId,
+    old.tenantId,
+    old.tenancyId,
+    old.recipientEmail,
+    expiresInHours,
+    principal.uid,
+  );
+
+  await queueInvitation(
+    dependencies,
+    principal.uid,
+    agencyId,
+    old.tenantId,
+    old.tenancyId,
+    old.recipientEmail,
+    created.accessUrl,
+    created.grant.expiresAt,
+  );
+
+  return {
+    status: 201,
+    body: {
+      data: {
+        grantId: created.grant.id,
+        grantToken: created.rawToken,
+        expiresAt: created.grant.expiresAt,
+        accessUrl: created.accessUrl,
+      },
+      meta: { correlationId },
+    },
+  };
 }
 
 async function documentDownloadUrl(document: StoredRecord): Promise<string | undefined> {
@@ -355,7 +555,10 @@ export async function routeTenantPortalRequest(req: IncomingMessage, dependencie
   if (parts[2] === 'tenant-portal-grants' && parts[3] && parts[4] === 'revoke' && req.method === 'POST') return revokeGrant(req, dependencies, correlationId, parts[3]);
   if (parts[2] === 'tenant-portal-grants' && parts[3] && parts[4] === 'replace' && req.method === 'POST') return replaceGrant(req, dependencies, correlationId, parts[3]);
   if (parts[2] !== 'external' || parts[3] !== 'tenant-portal' || !parts[4]) return undefined;
-  const grant = await resolveGrant(decodeURIComponent(parts[4]));
+  const grant = await resolveGrant(
+    decodeURIComponent(parts[4]),
+    dependencies,
+  );
   if (req.method === 'GET' && !parts[5]) return portalGet(grant, dependencies, correlationId);
   if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && !parts[7]) return evidenceUploadSession(req, grant, dependencies, correlationId);
   if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && parts[7] && parts[8] === 'complete') return evidenceComplete(grant, dependencies, correlationId, decodeURIComponent(parts[7]));

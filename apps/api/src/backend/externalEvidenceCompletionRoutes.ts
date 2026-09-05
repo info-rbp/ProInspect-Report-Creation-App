@@ -2,45 +2,36 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
-import type { ExternalAccessGrant, UploadSessionRecord } from '@pcr/domain';
+import type { UploadSessionRecord } from '@pcr/domain';
 import { firestoreDb } from '../firestoreDatabase.js';
 import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies } from './types.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
+import type {
+  ApiDependencies,
+  ExternalGrantRecord,
+} from './types.js';
 
-type VersionedGrant = ExternalAccessGrant & { version: number };
+type VersionedGrant = ExternalGrantRecord;
 
 function adminApp() {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
 }
 
-function hashToken(value: string): string {
-  return createHash('sha256').update(value.trim()).digest('hex');
-}
-
-async function resolveGrant(rawToken: string): Promise<VersionedGrant> {
-  const snapshot = await firestoreDb(adminApp())
-    .collectionGroup('externalAccessGrants')
-    .where('tokenHash', '==', hashToken(rawToken))
-    .limit(2)
-    .get();
-  if (snapshot.empty) {
-    throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Access link is invalid or expired.');
-  }
-  if (snapshot.size !== 1) {
-    throw new ApiError(401, 'AMBIGUOUS_GRANT_TOKEN', 'Access link cannot be resolved safely.');
-  }
-  const grant = snapshot.docs[0].data() as VersionedGrant;
-  if (!['work_request', 'tenant_instruction', 'report_distribution'].includes(String(grant.resourceType))) {
-    throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'This access link cannot complete evidence.');
-  }
-  if (grant.revokedAt) {
-    throw new ApiError(401, 'GRANT_TOKEN_REVOKED', 'Access link has been revoked.');
-  }
-  if (new Date(grant.expiresAt).getTime() <= Date.now()) {
-    throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Access link has expired.');
-  }
-  return grant;
+async function resolveGrant(
+  rawToken: string,
+  dependencies: ApiDependencies,
+): Promise<VersionedGrant> {
+  return requireExternalGrantStore(
+    dependencies,
+  ).resolve(
+    rawToken,
+    [
+      'work_request',
+      'tenant_instruction',
+      'report_distribution',
+    ],
+  );
 }
 
 export async function routeExternalEvidenceCompletionRequest(
@@ -66,7 +57,10 @@ export async function routeExternalEvidenceCompletionRequest(
     throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'External evidence completion requires POST.');
   }
 
-  const grant = await resolveGrant(decodeURIComponent(parts[4]));
+  const grant = await resolveGrant(
+    decodeURIComponent(parts[4]),
+    dependencies,
+  );
   const uploadId = decodeURIComponent(parts[6]);
   const database = firestoreDb(adminApp());
   const sessionSnapshot = await database

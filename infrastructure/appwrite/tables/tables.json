@@ -13206,6 +13206,185 @@
     ]
   },
   {
+    "$id": "external_access_grants",
+    "databaseId": "proinspect_core",
+    "name": "External Access Grants",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "resourceType",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "resourceId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "tokenHash",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "recipientEmail",
+        "type": "string",
+        "size": 320,
+        "required": false,
+        "format": "email"
+      },
+      {
+        "key": "tenantId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "tenancyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "externalContactId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "purpose",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "revokedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "revokedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "lastAccessedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "replacedByGrantId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "token_hash",
+        "type": "unique",
+        "columns": [
+          "tokenHash"
+        ]
+      },
+      {
+        "key": "agency_type",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "resourceType"
+        ]
+      },
+      {
+        "key": "agency_resource",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "resourceType",
+          "resourceId"
+        ]
+      },
+      {
+        "key": "expiry_status",
+        "type": "key",
+        "columns": [
+          "expiresAt",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
     "$id": "audit_events",
     "databaseId": "proinspect_core",
     "name": "Audit Events",

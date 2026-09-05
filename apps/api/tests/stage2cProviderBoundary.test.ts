@@ -79,36 +79,4 @@ describe('Stage 2C provider boundary', () => {
     },
   );
 
-  it(
-    'keeps report grant Firestore authority isolated for Stage 2D',
-    () => {
-      const route = readFileSync(
-        resolve(
-          root,
-          'src/backend/reportOperationsRoutes.ts',
-        ),
-        'utf8',
-      );
-
-      const fallback = readFileSync(
-        resolve(
-          root,
-          'src/backend/firestoreReportGrantResolver.ts',
-        ),
-        'utf8',
-      );
-
-      expect(route).not.toMatch(
-        /firestoreDb\s*\(/u,
-      );
-
-      expect(route).toContain(
-        'resolveFirestoreReportGrant',
-      );
-
-      expect(fallback).toMatch(
-        /firestoreDb\s*\(/u,
-      );
-    },
-  );
 });

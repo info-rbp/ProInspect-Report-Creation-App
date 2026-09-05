@@ -17,7 +17,6 @@ import {
   type ApprovalRequirement,
   type Client,
   type ClientApproval,
-  type ExternalAccessGrant,
   type MaintenanceCandidate,
   type MaintenanceCategory,
   type MaintenanceEstimate,
@@ -44,6 +43,7 @@ import {
   type ReportComponentRecord,
 } from '@pcr/domain';
 import type { ApiDependencies, StoredRecord } from '../backend/types.js';
+import { requireExternalGrantStore } from '../backend/runtimeDependencyGuards.js';
 
 
 function timestamp(): string {
@@ -1088,17 +1088,6 @@ export async function sendMaintenanceQuoteForApproval(
     createdAt: now,
     updatedAt: now,
   };
-  const grant: ExternalAccessGrant = {
-    id: grantId,
-    agencyId: input.agencyId,
-    resourceType: 'client_approval',
-    resourceId: approvalId,
-    recipientEmail,
-    tokenHash: grantHash(rawToken),
-    expiresAt,
-    createdBy: input.actorId,
-    createdAt: now,
-  };
   await dependencies.repository.create(
     'clientApprovals',
     input.agencyId,
@@ -1106,13 +1095,18 @@ export async function sendMaintenanceQuoteForApproval(
     approval as unknown as Record<string, unknown>,
     input.actorId,
   );
-  await dependencies.repository.create(
-    'externalAccessGrants',
-    input.agencyId,
-    grantId,
-    grant as unknown as Record<string, unknown>,
-    input.actorId,
-  );
+  await requireExternalGrantStore(
+    dependencies,
+  ).issue({
+    id: grantId,
+    agencyId: input.agencyId,
+    resourceType: 'client_approval',
+    resourceId: approvalId,
+    recipientEmail,
+    tokenHash: grantHash(rawToken),
+    expiresAt,
+    actorId: input.actorId,
+  });
   const quoteStored = await dependencies.repository.update(
     'maintenanceQuotes',
     input.agencyId,

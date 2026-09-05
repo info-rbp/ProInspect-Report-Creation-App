@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import {
   MAINTENANCE_CATEGORIES,
   MAINTENANCE_PRIORITIES,
@@ -18,16 +17,16 @@ import {
   type WorkRequest,
   type WorkRequestStatus,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies, StoredRecord } from './types.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
+import type {
+  ApiDependencies,
+  ExternalGrantRecord,
+  StoredRecord,
+} from './types.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 
 type Versioned<T> = T & { version: number };
-
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 async function readJsonPayload(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
@@ -95,35 +94,32 @@ function portalResourceType(portalType: string): ExternalAccessGrant['resourceTy
 }
 
 async function resolveExternalGrant(
+  dependencies: ApiDependencies,
   rawToken: string,
   portalType: string,
-): Promise<Versioned<ExternalAccessGrant>> {
-  const expectedResourceType = portalResourceType(portalType);
-  if (!expectedResourceType) throw new ApiError(404, 'NOT_FOUND', 'External portal not found.');
+): Promise<ExternalGrantRecord> {
+  const expectedResourceType =
+    portalResourceType(portalType);
 
-  const tokenHash = hashGrantToken(rawToken);
-  const snapshot = await firestoreDb(adminApp())
-    .collectionGroup('externalAccessGrants')
-    .where('tokenHash', '==', tokenHash)
-    .limit(2)
-    .get();
+  if (!expectedResourceType) {
+    throw new ApiError(
+      404,
+      'NOT_FOUND',
+      'External portal not found.',
+    );
+  }
 
-  if (snapshot.empty) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Access link is invalid or expired.');
-  if (snapshot.size !== 1) throw new ApiError(401, 'AMBIGUOUS_GRANT_TOKEN', 'Access link cannot be resolved safely.');
-
-  const document = snapshot.docs[0];
-  const grant = document.data() as Versioned<ExternalAccessGrant>;
-  if (grant.resourceType !== expectedResourceType) throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'Access link is not valid for this resource type.');
-  if (grant.revokedAt) throw new ApiError(401, 'GRANT_TOKEN_REVOKED', 'Access link has been revoked.');
-  if (new Date(grant.expiresAt).getTime() <= Date.now()) throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Access link has expired.');
-
-  await document.ref.update({ lastAccessedAt: new Date().toISOString() });
-  return grant;
+  return requireExternalGrantStore(
+    dependencies,
+  ).resolve(
+    rawToken,
+    [expectedResourceType],
+  );
 }
 
 async function auditExternal(
   dependencies: ApiDependencies,
-  grant: ExternalAccessGrant,
+  grant: ExternalGrantRecord,
   event: string,
   correlationId: string,
 ): Promise<void> {
@@ -159,7 +155,11 @@ async function routeExternalPortal(
   portalType: string,
   rawToken: string,
 ): Promise<ApiResponse> {
-  const grant = await resolveExternalGrant(rawToken, portalType);
+  const grant = await resolveExternalGrant(
+    dependencies,
+    rawToken,
+    portalType,
+  );
   const externalActor = `external:${grant.id}`;
 
   if (portalType === 'work-requests') {
@@ -516,19 +516,22 @@ export async function routeMaintenanceRequest(
 
     const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
     const grantId = randomUUID();
-    const timestamp = new Date().toISOString();
-    const grant: ExternalAccessGrant = {
-      id: grantId,
-      agencyId,
-      resourceType,
-      resourceId,
-      recipientEmail,
-      tokenHash: hashGrantToken(rawToken),
-      expiresAt: new Date(Date.now() + expiresInHours * 3_600_000).toISOString(),
-      createdBy: principal.uid,
-      createdAt: timestamp,
-    };
-    await dependencies.repository.create('externalAccessGrants', agencyId, grantId, grant as unknown as Record<string, unknown>, principal.uid);
+    const grant =
+      await requireExternalGrantStore(
+        dependencies,
+      ).issue({
+        id: grantId,
+        agencyId,
+        resourceType,
+        resourceId,
+        recipientEmail,
+        tokenHash: hashGrantToken(rawToken),
+        expiresAt: new Date(
+          Date.now()
+          + expiresInHours * 3_600_000,
+        ).toISOString(),
+        actorId: principal.uid,
+      });
 
     const collection = resourceType === 'work_request' ? 'workRequests' : resourceType === 'tenant_instruction' ? 'tenantInstructions' : 'clientApprovals';
     await dependencies.repository.update(collection, agencyId, resourceId, { accessGrantId: grantId }, resource.version, principal.uid);
@@ -551,8 +554,43 @@ export async function routeMaintenanceRequest(
   if (req.method === 'POST' && parts[2] === 'external-access-grants' && parts[3] && parts[4] === 'revoke') {
     const agencyId = getAgencyIdFromHeader(req);
     const principal = await authenticateAndAuthorise(req, dependencies, 'maintenance.manage', { agencyId }, correlationId);
-    const grant = await loadVersioned<ExternalAccessGrant>(dependencies, 'externalAccessGrants', agencyId, parts[3]);
-    const updated = await dependencies.repository.update('externalAccessGrants', agencyId, grant.id, { revokedAt: new Date().toISOString() }, grant.version, principal.uid);
+    const grantStore =
+      requireExternalGrantStore(dependencies);
+
+    const grantTypes = [
+      'work_request',
+      'tenant_instruction',
+      'client_approval',
+    ] as const;
+
+    const candidates = await Promise.all(
+      grantTypes.map(
+        (resourceType) =>
+          grantStore.get(
+            agencyId,
+            resourceType,
+            parts[3],
+          ),
+      ),
+    );
+
+    const grant = candidates.find(Boolean);
+
+    if (!grant) {
+      throw new ApiError(
+        404,
+        'GRANT_NOT_FOUND',
+        'External access grant was not found.',
+      );
+    }
+
+    const updated = await grantStore.revoke(
+      agencyId,
+      grant.resourceType,
+      grant.id,
+      grant.version,
+      principal.uid,
+    );
     return { status: 200, body: { data: updated, meta: { correlationId } } };
   }
 

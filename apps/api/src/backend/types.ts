@@ -128,6 +128,85 @@ export interface NotificationDeliveryStore {
   update(input: NotificationDeliveryUpdate): Promise<void>;
 }
 
+
+export type ExternalGrantResourceType =
+  | 'work_request'
+  | 'tenant_instruction'
+  | 'client_approval'
+  | 'report_distribution'
+  | 'contractor_quote_request'
+  | 'tenant_portal'
+  | 'remote_inspection';
+
+export interface ExternalGrantRecord {
+  id: string;
+  agencyId: string;
+  resourceType: ExternalGrantResourceType;
+  resourceId: string;
+  tokenHash: string;
+  expiresAt: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  recipientEmail?: string;
+  tenantId?: string;
+  tenancyId?: string;
+  externalContactId?: string;
+  purpose?: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  lastAccessedAt?: string;
+  replacedByGrantId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+export interface ExternalGrantIssueInput {
+  id: string;
+  agencyId: string;
+  resourceType: ExternalGrantResourceType;
+  resourceId: string;
+  tokenHash: string;
+  expiresAt: string;
+  actorId: string;
+  recipientEmail?: string;
+  tenantId?: string;
+  tenancyId?: string;
+  externalContactId?: string;
+  purpose?: string;
+}
+
+export interface ExternalGrantStore {
+  issue(
+    input: ExternalGrantIssueInput,
+  ): Promise<ExternalGrantRecord>;
+
+  resolve(
+    rawToken: string,
+    allowedResourceTypes:
+      readonly ExternalGrantResourceType[],
+  ): Promise<ExternalGrantRecord>;
+
+  get(
+    agencyId: string,
+    resourceType: ExternalGrantResourceType,
+    id: string,
+  ): Promise<ExternalGrantRecord | undefined>;
+
+  list(
+    agencyId: string,
+    resourceType: ExternalGrantResourceType,
+  ): Promise<ExternalGrantRecord[]>;
+
+  revoke(
+    agencyId: string,
+    resourceType: ExternalGrantResourceType,
+    id: string,
+    expectedVersion: number,
+    actorId: string,
+  ): Promise<ExternalGrantRecord>;
+}
+
 export interface IdempotencyResult {
   status: number;
   body: unknown;
@@ -173,6 +252,7 @@ export interface ApiDependencies extends SecurityDependencies {
   reports: ReportAggregateStore;
   reportVersions?: ReportVersionReader;
   notificationDelivery?: NotificationDeliveryStore;
+  externalGrants?: ExternalGrantStore;
   idempotency: IdempotencyStore;
   tasks: TaskDispatcher;
   uploads: UploadSessionIssuer;
