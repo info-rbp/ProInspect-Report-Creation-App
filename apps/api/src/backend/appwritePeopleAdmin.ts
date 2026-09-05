@@ -199,8 +199,7 @@ export class AppwritePeopleAdminService implements PeopleAdminService {
         : {}),
       ...(objectValue(row.workingHours)
         ? {
-            workingHours: objectValue(row.workingHours)
-              as WorkforceProfile['workingHours'],
+            workingHours: objectValue(row.workingHours) as WorkforceProfile['workingHours'],
           }
         : {}),
       ...(stringArray(row.unavailableDates).length
