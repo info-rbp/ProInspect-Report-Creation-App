@@ -23,8 +23,12 @@ import type {
   IdempotencyStore,
   OperationalRepository,
   Page,
+  NotificationDeliveryStore,
+  NotificationDeliveryUpdate,
   ReportAggregateStore,
   ReportTransitionCommand,
+  ReportVersionReader,
+  ReportVersionSnapshot,
   StoredRecord,
   TaskDispatcher,
   TaskKind,
@@ -193,6 +197,272 @@ function parseReportSnapshot(value: unknown): ReportAggregate {
 function reportContentHash(snapshot: string): string {
   return createHash('sha256').update(snapshot).digest('hex');
 }
+
+function reportVersionFromRow(
+  row: Record<string, unknown>,
+): ReportVersionSnapshot {
+  const aggregate = parseReportSnapshot(row.snapshot);
+  const id = String(row.$id ?? '');
+  const createdAt = String(
+    row.createdAt ?? row.$createdAt ?? new Date(0).toISOString(),
+  );
+  const updatedAt = String(
+    row.updatedAt ?? row.$updatedAt ?? createdAt,
+  );
+
+  return {
+    id,
+    agencyId: String(row.agencyId ?? ''),
+    reportId: String(row.reportId ?? aggregate.report.id),
+    version: Number(row.version ?? aggregate.report.version ?? 0),
+    immutable: row.immutable === true,
+    status: String(
+      row.status ?? aggregate.report.lifecycleStatus ?? 'draft',
+    ),
+    createdAt,
+    updatedAt,
+    aggregate: {
+      ...aggregate,
+      report: {
+        ...aggregate.report,
+        currentVersionId: id,
+        version: Number(row.version ?? aggregate.report.version ?? 0),
+      },
+    },
+    ...(typeof row.contentHash === 'string'
+      ? { contentHash: row.contentHash }
+      : {}),
+    ...(typeof row.createdBy === 'string'
+      ? { createdBy: row.createdBy }
+      : {}),
+    ...(typeof row.updatedBy === 'string'
+      ? { updatedBy: row.updatedBy }
+      : {}),
+    ...(typeof row.finalisedAt === 'string'
+      ? { finalisedAt: row.finalisedAt }
+      : {}),
+    ...(typeof row.supersedesVersionId === 'string'
+      ? { supersedesVersionId: row.supersedesVersionId }
+      : {}),
+  };
+}
+
+export class AppwriteReportVersionReader implements ReportVersionReader {
+  constructor(private readonly services: AppwriteServerServices) {}
+
+  async get(
+    agencyId: string,
+    reportId: string,
+    versionId: string,
+  ): Promise<ReportVersionSnapshot | undefined> {
+    try {
+      const row = await this.services.tables.getRow({
+        databaseId: this.services.databaseId,
+        tableId: 'report_versions',
+        rowId: versionId,
+      }) as unknown as Record<string, unknown>;
+
+      if (
+        row.agencyId !== agencyId
+        || row.reportId !== reportId
+      ) {
+        return undefined;
+      }
+
+      return reportVersionFromRow(row);
+    } catch (error) {
+      if (appwriteErrorCode(error) === 404) return undefined;
+      throw error;
+    }
+  }
+
+  async list(
+    agencyId: string,
+    reportId: string,
+  ): Promise<ReportVersionSnapshot[]> {
+    const values: ReportVersionSnapshot[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const result = await this.services.tables.listRows({
+        databaseId: this.services.databaseId,
+        tableId: 'report_versions',
+        queries: [
+          Query.equal('reportId', [reportId]),
+          Query.limit(100),
+          ...(cursor ? [Query.cursorAfter(cursor)] : []),
+        ],
+      });
+
+      const rows = result.rows as unknown as Record<string, unknown>[];
+
+      for (const row of rows) {
+        if (row.agencyId !== agencyId) continue;
+        values.push(reportVersionFromRow(row));
+      }
+
+      cursor = rows.length === 100
+        ? String(rows.at(-1)?.$id ?? '')
+        : undefined;
+    } while (cursor);
+
+    return values.sort(
+      (left, right) =>
+        left.version - right.version
+        || left.createdAt.localeCompare(right.createdAt),
+    );
+  }
+}
+
+export class AppwriteNotificationDeliveryStore
+implements NotificationDeliveryStore {
+  constructor(private readonly services: AppwriteServerServices) {}
+
+  private async row(
+    tableId: string,
+    rowId: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    try {
+      return await this.services.tables.getRow({
+        databaseId: this.services.databaseId,
+        tableId,
+        rowId,
+      }) as unknown as Record<string, unknown>;
+    } catch (error) {
+      if (appwriteErrorCode(error) === 404) return undefined;
+      throw error;
+    }
+  }
+
+  async update(input: NotificationDeliveryUpdate): Promise<void> {
+    const now = new Date().toISOString();
+    const actorId = 'system:notification-callback';
+
+    const notification = await this.row(
+      'notifications',
+      input.notificationId,
+    );
+
+    if (
+      notification
+      && notification.agencyId === input.agencyId
+    ) {
+      await this.services.tables.updateRow({
+        databaseId: this.services.databaseId,
+        tableId: 'notifications',
+        rowId: input.notificationId,
+        data: {
+          deliveryStatus: input.status,
+          updatedAt: now,
+          updatedBy: actorId,
+          ...(input.status === 'sent' || input.status === 'delivered'
+            ? { sentAt: now }
+            : {}),
+        },
+      });
+    }
+
+    if (input.communicationId) {
+      const communication = await this.row(
+        'tenant_communications',
+        input.communicationId,
+      );
+
+      if (
+        communication
+        && communication.agencyId === input.agencyId
+      ) {
+        await this.services.tables.updateRow({
+          databaseId: this.services.databaseId,
+          tableId: 'tenant_communications',
+          rowId: input.communicationId,
+          data: {
+            updatedAt: now,
+            updatedBy: actorId,
+            ...(input.status === 'sent' || input.status === 'delivered'
+              ? { sentAt: now }
+              : {}),
+            ...(input.status === 'delivered'
+              ? { deliveredAt: now }
+              : {}),
+          },
+        });
+      }
+    }
+
+    const metadata = input.metadata ?? {};
+    const provider = String(metadata.provider ?? 'notification')
+      .slice(0, 64);
+    const providerStatus = String(
+      metadata.providerStatus ?? input.status,
+    );
+
+    const externalDeliveryId = String(
+      metadata.providerMessageId
+      ?? `${input.notificationId}:${providerStatus}`,
+    ).slice(0, 255);
+
+    const deliveryId = createHash('sha256')
+      .update(
+        `${input.agencyId}:${provider}:${externalDeliveryId}`,
+      )
+      .digest('hex')
+      .slice(0, 36);
+
+    const existing = await this.row(
+      'integration_deliveries',
+      deliveryId,
+    );
+
+    const detail = JSON.stringify(metadata);
+
+    if (existing) {
+      await this.services.tables.updateRow({
+        databaseId: this.services.databaseId,
+        tableId: 'integration_deliveries',
+        rowId: deliveryId,
+        data: {
+          deliveryStatus: input.status,
+          attempts: Number(existing.attempts ?? 0) + 1,
+          lastAttemptedAt: now,
+          errorState: detail,
+          updatedAt: now,
+          updatedBy: actorId,
+          ...(input.status === 'delivered'
+            ? { deliveredAt: now }
+            : {}),
+        },
+      });
+      return;
+    }
+
+    await this.services.tables.createRow({
+      databaseId: this.services.databaseId,
+      tableId: 'integration_deliveries',
+      rowId: deliveryId,
+      permissions: [],
+      data: {
+        agencyId: input.agencyId,
+        status: 'active',
+        provider,
+        eventId: input.notificationId,
+        externalDeliveryId,
+        deliveryStatus: input.status,
+        attempts: 1,
+        lastAttemptedAt: now,
+        errorState: detail,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: actorId,
+        updatedBy: actorId,
+        ...(input.status === 'delivered'
+          ? { deliveredAt: now }
+          : {}),
+      },
+    });
+  }
+}
+
 
 export class AppwriteReportAggregateStore implements ReportAggregateStore {
   constructor(private readonly services: AppwriteServerServices) {}

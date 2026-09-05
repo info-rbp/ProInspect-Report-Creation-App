@@ -74,7 +74,7 @@ export function createRequestHandler(dependencies: ApiDependencies = createSecur
     try {
       if (isHealthRequest(req)) { send(res, { status: 200, body: { status: 'ok', service: 'pcr-api', version: 'v1', commit: applicationVersion(), correlationId } }, correlationId); return; }
       if (req.method === 'GET' && req.url === '/api/v1/openapi.json') { send(res, { status: 200, body: { ...buildOpenApiDocument(), financialBoundary: 'No trust accounting, payments, receipts, disbursements or reconciliation.' } }, correlationId); return; }
-      const notificationCallback = await routeNotificationCallbackRequest(req, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
+      const notificationCallback = await routeNotificationCallbackRequest(req, dependencies, correlationId); if (notificationCallback) { send(res, notificationCallback, correlationId); return; }
       const esignWebhook = await routeESignExternalWebhook(req, dependencies, correlationId); if (esignWebhook) { send(res, esignWebhook, correlationId); return; }
       const remotePortal = await routeRemoteInspectionPortalRequest(req, dependencies, correlationId); if (remotePortal) { send(res, remotePortal, correlationId); return; }
       if (req.method === 'POST' && req.url === '/v1/security/authorise') { const requestBody = await readJson(req); const capability = requestBody.capability as SecurityCapability; const target = requestBody.target as AuthorisationTarget; const principal = await authenticateAndAuthorise(req, dependencies, capability, target, correlationId); send(res, { status: 200, body: { principal: { uid: principal.uid, agencyId: principal.agencyId, role: principal.role }, allowed: true } }, correlationId); return; }

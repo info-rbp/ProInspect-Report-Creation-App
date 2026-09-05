@@ -4,6 +4,8 @@ import { FirestoreMembershipRepository } from './membershipRepository.js';
 import { FirestoreAuditWriter } from './auditWriter.js';
 import { FirestoreOperationalRepository } from '../backend/firestoreRepository.js';
 import { FirestoreReportAggregateStore } from '../backend/reportAggregateStore.js';
+import { FirestoreReportVersionReader } from '../backend/firestoreReportVersionReader.js';
+import { FirestoreNotificationDeliveryStore } from '../backend/firestoreNotificationDeliveryStore.js';
 import { FirestoreIdempotencyStore } from '../backend/idempotency.js';
 import {
   FirebaseUploadSessionIssuer,
@@ -15,6 +17,8 @@ import {
   AppwriteMembershipRepository,
   AppwriteOperationalRepository,
   AppwriteReportAggregateStore,
+  AppwriteReportVersionReader,
+  AppwriteNotificationDeliveryStore,
   AppwriteTaskOutbox,
   AppwriteUploadSessionIssuer,
   createAppwriteApiServices,
@@ -24,8 +28,10 @@ import { SettingsAwareOperationalRepository } from '../services/settingsAwareOpe
 import type {
   ApiDependencies,
   IdempotencyStore,
+  NotificationDeliveryStore,
   OperationalRepository,
   ReportAggregateStore,
+  ReportVersionReader,
   TaskDispatcher,
   UploadSessionIssuer,
 } from '../backend/types.js';
@@ -63,6 +69,10 @@ export function createSecurityDependencies(
   let audit = new FirestoreAuditWriter();
   let reports: ReportAggregateStore =
     new FirestoreReportAggregateStore();
+  let reportVersions: ReportVersionReader =
+    new FirestoreReportVersionReader();
+  let notificationDelivery: NotificationDeliveryStore =
+    new FirestoreNotificationDeliveryStore();
   let idempotency: IdempotencyStore =
     new FirestoreIdempotencyStore();
   let tasks: TaskDispatcher = new FirestoreTaskOutbox();
@@ -76,6 +86,8 @@ export function createSecurityDependencies(
     memberships = new AppwriteMembershipRepository(appwrite);
     audit = new AppwriteAuditWriter(appwrite);
     reports = new AppwriteReportAggregateStore(appwrite);
+    reportVersions = new AppwriteReportVersionReader(appwrite);
+    notificationDelivery = new AppwriteNotificationDeliveryStore(appwrite);
     idempotency = new AppwriteIdempotencyStore(appwrite);
     tasks = new AppwriteTaskOutbox(appwrite);
     uploads = new AppwriteUploadSessionIssuer(appwrite);
@@ -101,6 +113,8 @@ export function createSecurityDependencies(
       && env.NODE_ENV !== 'test',
     repository,
     reports,
+    reportVersions,
+    notificationDelivery,
     idempotency,
     tasks,
     uploads,

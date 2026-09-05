@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import {
   inferMaintenanceIssueType,
   sanitizeProhibitedCausation,
@@ -11,11 +10,7 @@ import {
   type ReportComponentRecord,
 } from '@pcr/domain';
 import type { ApiDependencies, StoredRecord } from '../backend/types.js';
-import { firestoreDb } from '../firestoreDatabase.js';
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function timestamp(): string {
   return new Date().toISOString();
@@ -89,44 +84,38 @@ function recommendedActionFor(component: ReportComponentRecord, issueType: Retur
 }
 
 async function immutableAggregate(
+  dependencies: ApiDependencies,
   agencyId: string,
   reportId: string,
   versionId: string,
   report: ReportAggregate['report'],
 ): Promise<ReportAggregate> {
-  const database = firestoreDb(adminApp());
-  const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
-  const version = await versionRef.get();
-  if (!version.exists || version.get('immutable') !== true) {
-    throw Object.assign(new Error('The report version is not an immutable extraction source.'), {
-      code: 'REPORT_VERSION_NOT_IMMUTABLE',
-      status: 409,
-    });
+  const version = await dependencies.reportVersions!.get(
+    agencyId,
+    reportId,
+    versionId,
+  );
+
+  if (!version?.immutable) {
+    throw Object.assign(
+      new Error(
+        'The report version is not an immutable extraction source.',
+      ),
+      {
+        code: 'REPORT_VERSION_NOT_IMMUTABLE',
+        status: 409,
+      },
+    );
   }
-  const areasSnapshot = await versionRef.collection('areas').orderBy('sequence').get();
-  const areas: ReportAggregate['areas'] = [];
-  for (const areaDocument of areasSnapshot.docs) {
-    const area = areaDocument.data() as Record<string, unknown>;
-    const componentSnapshot = await areaDocument.ref.collection('components').get();
-    const components = componentSnapshot.docs.map((document) => {
-      const stored = document.data() as ReportComponentRecord;
-      const copy = { ...stored } as Record<string, unknown>;
-      for (const field of ['agencyId', 'reportId', 'areaId', 'createdAt', 'updatedAt', 'version', 'versionId']) delete copy[field];
-      return copy as ReportAggregate['areas'][number]['components'][number];
-    });
-    areas.push({
-      id: String(area.id || areaDocument.id),
-      name: String(area.name || areaDocument.id),
-      ...(typeof area.canonicalAreaDefinitionId === 'string' ? { canonicalAreaDefinitionId: area.canonicalAreaDefinitionId } : {}),
-      ...(typeof area.canonicalAreaDefinitionVersion === 'number' ? { canonicalAreaDefinitionVersion: area.canonicalAreaDefinitionVersion } : {}),
-      ...(typeof area.templateAreaReferenceId === 'string' ? { templateAreaReferenceId: area.templateAreaReferenceId } : {}),
-      sequence: Number(area.sequence || areas.length + 1),
-      overallCommentary: typeof area.overallCommentary === 'string' ? area.overallCommentary : '',
-      photoReferences: Array.isArray(area.photoReferences) ? area.photoReferences as never[] : [],
-      components,
-    });
-  }
-  return { report: { ...report, currentVersionId: versionId }, areas };
+
+  return {
+    ...version.aggregate,
+    report: {
+      ...version.aggregate.report,
+      ...report,
+      currentVersionId: versionId,
+    },
+  };
 }
 
 function canonicalFingerprint(input: {
@@ -175,7 +164,13 @@ export async function extractCanonicalMaintenanceForReport(
     });
   }
   const aggregate = sourceVersionId
-    ? await immutableAggregate(input.agencyId, input.reportId, sourceVersionId, live.report)
+    ? await immutableAggregate(
+        dependencies,
+        input.agencyId,
+        input.reportId,
+        sourceVersionId,
+        live.report,
+      )
     : live;
   const [existingCandidates, existingItems] = await Promise.all([
     listAll(dependencies, 'maintenanceCandidates', input.agencyId),

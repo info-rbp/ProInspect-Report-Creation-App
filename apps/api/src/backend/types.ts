@@ -81,6 +81,53 @@ export interface ReportAggregateStore {
   ): Promise<Record<string, unknown>>;
 }
 
+export interface ReportVersionSnapshot {
+  id: string;
+  agencyId: string;
+  reportId: string;
+  version: number;
+  immutable: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  aggregate: ReportAggregate;
+  contentHash?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  finalisedAt?: string;
+  supersedesVersionId?: string;
+}
+
+export interface ReportVersionReader {
+  get(
+    agencyId: string,
+    reportId: string,
+    versionId: string,
+  ): Promise<ReportVersionSnapshot | undefined>;
+  list(
+    agencyId: string,
+    reportId: string,
+  ): Promise<ReportVersionSnapshot[]>;
+}
+
+export type NotificationDeliveryStatus =
+  | 'queued'
+  | 'sent'
+  | 'delivered'
+  | 'failed';
+
+export interface NotificationDeliveryUpdate {
+  agencyId: string;
+  notificationId: string;
+  communicationId?: string;
+  status: NotificationDeliveryStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface NotificationDeliveryStore {
+  update(input: NotificationDeliveryUpdate): Promise<void>;
+}
+
 export interface IdempotencyResult {
   status: number;
   body: unknown;
@@ -124,6 +171,8 @@ export interface UploadSessionIssuer {
 export interface ApiDependencies extends SecurityDependencies {
   repository: OperationalRepository;
   reports: ReportAggregateStore;
+  reportVersions?: ReportVersionReader;
+  notificationDelivery?: NotificationDeliveryStore;
   idempotency: IdempotencyStore;
   tasks: TaskDispatcher;
   uploads: UploadSessionIssuer;

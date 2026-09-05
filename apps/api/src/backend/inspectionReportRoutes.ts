@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import {
   canonicalComponentOccurrenceIdentity,
   canonicalInspectionType,
@@ -11,7 +10,6 @@ import {
   type ReportLifecycleStatus,
   type ReportPhotoReference,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import {
   canonicalInspectionTemplateFromRecord,
   templateAppliesToProperty,
@@ -28,9 +26,6 @@ import { routeSpecialisedCloseoutRequest } from './specialisedCloseoutRoutesMoun
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, StoredRecord } from './types.js';
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function agencyHeader(req: IncomingMessage): string {
   const agencyId = req.headers['x-agency-id']?.toString().trim();
@@ -82,9 +77,47 @@ async function resolveEntryBaseline(
   tenancyId?: string,
 ): Promise<Record<string, unknown> | undefined> {
   const page = await dependencies.repository.list('reports', agencyId, 100);
-  return page.items
-    .filter((report) => baselineEligible(report, propertyId, tenancyId))
-    .sort((left, right) => String(right.finalisedAt ?? right.updatedAt ?? '').localeCompare(String(left.finalisedAt ?? left.updatedAt ?? '')))[0];
+  const resolved = await Promise.all(
+    page.items.map(async (report) => {
+      const versionId =
+        typeof report.currentVersionId === 'string'
+          ? report.currentVersionId.trim()
+          : '';
+      if (!versionId) return undefined;
+      const version = await dependencies.reportVersions!.get(
+        agencyId,
+        report.id,
+        versionId,
+      );
+      if (!version?.immutable) return undefined;
+      return {
+        ...report,
+        ...version.aggregate.report,
+        id: report.id,
+        currentVersionId: version.id,
+        finalisedAt:
+          version.finalisedAt
+          ?? version.aggregate.report.finalisedAt
+          ?? report.finalisedAt,
+      } as Record<string, unknown>;
+    }),
+  );
+
+  return resolved
+    .filter(
+      (report): report is Record<string, unknown> =>
+        Boolean(
+          report
+          && baselineEligible(report, propertyId, tenancyId),
+        ),
+    )
+    .sort(
+      (left, right) =>
+        String(right.finalisedAt ?? right.updatedAt ?? '')
+          .localeCompare(
+            String(left.finalisedAt ?? left.updatedAt ?? ''),
+          ),
+    )[0];
 }
 
 interface IndexedBaselineComponent extends BaselineComponentSnapshot {
@@ -104,15 +137,23 @@ interface BaselineIndex {
 }
 
 async function loadBaselineVersion(
+  dependencies: ApiDependencies,
   agencyId: string,
   reportId: string,
   versionId: string,
 ): Promise<BaselineIndex> {
-  const database = firestoreDb(adminApp());
-  const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
-  const versionSnapshot = await versionRef.get();
-  if (!versionSnapshot.exists || versionSnapshot.get('immutable') !== true) {
-    throw new ApiError(409, 'BASELINE_VERSION_INVALID', 'The selected Entry baseline version is not immutable.');
+  const version = await dependencies.reportVersions!.get(
+    agencyId,
+    reportId,
+    versionId,
+  );
+
+  if (!version?.immutable) {
+    throw new ApiError(
+      409,
+      'BASELINE_VERSION_INVALID',
+      'The selected Entry baseline version is not immutable.',
+    );
   }
 
   const result: BaselineIndex = {
@@ -121,56 +162,80 @@ async function loadBaselineVersion(
     bySemantic: new Map(),
     ambiguousSemantic: new Set(),
   };
-  const areaSnapshot = await versionRef.collection('areas').get();
-  for (const areaDocument of areaSnapshot.docs) {
-    const area = areaDocument.data() as Record<string, unknown>;
-    const areaId = String(area.id ?? areaDocument.id);
-    const canonicalAreaDefinitionId = typeof area.canonicalAreaDefinitionId === 'string'
-      ? area.canonicalAreaDefinitionId
-      : undefined;
-    const canonicalAreaDefinitionVersion = typeof area.canonicalAreaDefinitionVersion === 'number'
-      ? area.canonicalAreaDefinitionVersion
-      : undefined;
-    const componentSnapshot = await areaDocument.ref.collection('components').get();
-    for (const componentDocument of componentSnapshot.docs) {
-      const component = componentDocument.data() as Record<string, unknown>;
+
+  for (const area of version.aggregate.areas) {
+    const areaId = String(area.id);
+    const canonicalAreaDefinitionId =
+      area.canonicalAreaDefinitionId;
+    const canonicalAreaDefinitionVersion =
+      area.canonicalAreaDefinitionVersion;
+
+    for (const component of area.components) {
       const indexed: IndexedBaselineComponent = {
-        id: String(component.id ?? componentDocument.id),
+        id: String(component.id),
         areaId,
-        ...(canonicalAreaDefinitionId ? { canonicalAreaDefinitionId } : {}),
-        ...(canonicalAreaDefinitionVersion ? { canonicalAreaDefinitionVersion } : {}),
-        ...(typeof component.canonicalComponentDefinitionId === 'string'
-          ? { canonicalComponentDefinitionId: component.canonicalComponentDefinitionId }
+        ...(canonicalAreaDefinitionId
+          ? { canonicalAreaDefinitionId }
           : {}),
-        ...(typeof component.canonicalComponentDefinitionVersion === 'number'
-          ? { canonicalComponentDefinitionVersion: component.canonicalComponentDefinitionVersion }
+        ...(canonicalAreaDefinitionVersion
+          ? { canonicalAreaDefinitionVersion }
           : {}),
-        conditionCategory: (component.conditionCategory ?? 'unable_to_confirm') as BaselineComponentSnapshot['conditionCategory'],
-        cleanlinessCategory: (component.cleanlinessCategory ?? 'unable_to_confirm') as BaselineComponentSnapshot['cleanlinessCategory'],
-        workingStatus: (component.workingStatus ?? 'not_applicable') as BaselineComponentSnapshot['workingStatus'],
-        testStatus: (component.testStatus ?? 'not_applicable') as BaselineComponentSnapshot['testStatus'],
-        commentary: typeof component.commentary === 'string' ? component.commentary : '',
+        ...(component.canonicalComponentDefinitionId
+          ? {
+              canonicalComponentDefinitionId:
+                component.canonicalComponentDefinitionId,
+            }
+          : {}),
+        ...(component.canonicalComponentDefinitionVersion
+          ? {
+              canonicalComponentDefinitionVersion:
+                component.canonicalComponentDefinitionVersion,
+            }
+          : {}),
+        conditionCategory:
+          component.conditionCategory ?? 'unable_to_confirm',
+        cleanlinessCategory:
+          component.cleanlinessCategory ?? 'unable_to_confirm',
+        workingStatus:
+          component.workingStatus ?? 'not_applicable',
+        testStatus:
+          component.testStatus ?? 'not_applicable',
+        commentary: component.commentary ?? '',
         defects: Array.isArray(component.defects)
-          ? component.defects.filter((defect): defect is string => typeof defect === 'string')
+          ? component.defects
           : [],
         photoReferences: Array.isArray(component.photoReferences)
           ? component.photoReferences as ReportPhotoReference[]
           : [],
       };
 
-      result.byLegacyInstance.set(`${areaId}|${indexed.id}`, indexed);
-      const occurrence = canonicalComponentOccurrenceIdentity({
-        id: areaId,
-        canonicalAreaDefinitionId,
-        canonicalAreaDefinitionVersion,
-      }, indexed);
-      if (occurrence) result.byOccurrence.set(occurrence, indexed);
+      result.byLegacyInstance.set(
+        `${areaId}|${indexed.id}`,
+        indexed,
+      );
 
-      const semantic = canonicalSemanticComponentIdentity({
-        id: areaId,
-        canonicalAreaDefinitionId,
-        canonicalAreaDefinitionVersion,
-      }, indexed);
+      const occurrence = canonicalComponentOccurrenceIdentity(
+        {
+          id: areaId,
+          canonicalAreaDefinitionId,
+          canonicalAreaDefinitionVersion,
+        },
+        indexed,
+      );
+
+      if (occurrence) {
+        result.byOccurrence.set(occurrence, indexed);
+      }
+
+      const semantic = canonicalSemanticComponentIdentity(
+        {
+          id: areaId,
+          canonicalAreaDefinitionId,
+          canonicalAreaDefinitionVersion,
+        },
+        indexed,
+      );
+
       if (semantic) {
         if (result.bySemantic.has(semantic)) {
           result.ambiguousSemantic.add(semantic);
@@ -181,6 +246,7 @@ async function loadBaselineVersion(
       }
     }
   }
+
   return result;
 }
 
@@ -433,7 +499,7 @@ export async function routeInspectionReportRequest(
       legacyPlaceholder = true;
       areas = bindPendingLegacyBaseline(areas);
     } else {
-      areas = bindBaseline(areas, await loadBaselineVersion(agencyId, String(baseline.id), String(baseline.currentVersionId)));
+      areas = bindBaseline(areas, await loadBaselineVersion(dependencies, agencyId, String(baseline.id), String(baseline.currentVersionId)));
     }
   }
 
