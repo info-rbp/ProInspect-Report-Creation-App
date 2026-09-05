@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { AppwriteIdentityVerifier } from '../src/security/appwriteIdentity.js';
 import { FirebaseIdentityVerifier } from '../src/security/firebaseIdentity.js';
 import { createSecurityDependencies } from '../src/security/defaultDependencies.js';
+import {
+  AppwriteIdempotencyStore,
+  AppwriteReportAggregateStore,
+  AppwriteTaskOutbox,
+  AppwriteUploadSessionIssuer,
+} from '../src/backend/appwriteAdapters.js';
+import { SettingsAwareOperationalRepository } from '../src/services/settingsAwareOperationalRepository.js';
 
 describe('API identity provider boundary', () => {
   it('preserves Firebase as the explicit migration fallback', () => {
@@ -28,6 +35,13 @@ describe('API identity provider boundary', () => {
     });
     expect(dependencies.identityVerifier).toBeInstanceOf(AppwriteIdentityVerifier);
     expect(dependencies.requireAppCheck).toBe(false);
+    expect(dependencies.repository).toBeInstanceOf(SettingsAwareOperationalRepository);
+    expect(dependencies.reports).toBeInstanceOf(AppwriteReportAggregateStore);
+    expect(dependencies.idempotency).toBeInstanceOf(AppwriteIdempotencyStore);
+    expect(dependencies.tasks).toBeInstanceOf(AppwriteTaskOutbox);
+    expect(dependencies.uploads).toBeInstanceOf(AppwriteUploadSessionIssuer);
+    expect(JSON.stringify(dependencies)).not.toContain('Firestore');
+    expect(JSON.stringify(dependencies)).not.toContain('Firebase');
   });
 
   it('rejects unknown identity providers', () => {

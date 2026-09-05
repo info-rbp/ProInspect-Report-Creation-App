@@ -1,13 +1,35 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   Query,
   createAppwriteServerServices,
   loadAppwriteServerConfig,
   type AppwriteServerServices,
 } from '@pcr/appwrite-server';
-import type { AgencyMembership } from '@pcr/domain';
+import {
+  IMMUTABLE_REPORT_STATUSES,
+  REPORT_CONTENT_LOCKED_STATUSES,
+  calculateWorkflowGateContext,
+  transitionReport,
+  WorkflowError,
+  type AgencyMembership,
+  type AuthenticatedPrincipal,
+  type ReportAggregate,
+  type UserRole,
+} from '@pcr/domain';
 import type { AuditWriter, MembershipRepository, SecurityAuditEvent } from '../security/types.js';
-import type { OperationalRepository, Page, StoredRecord } from './types.js';
+import { IdempotencyConflictError, IdempotencyInProgressError } from './idempotency.js';
+import type {
+  IdempotencyResult,
+  IdempotencyStore,
+  OperationalRepository,
+  Page,
+  ReportAggregateStore,
+  ReportTransitionCommand,
+  StoredRecord,
+  TaskDispatcher,
+  TaskKind,
+  UploadSessionIssuer,
+} from './types.js';
 
 const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   agencies: 'agencies', managedSites: 'managed_sites', userProfiles: 'user_profiles',
@@ -34,7 +56,8 @@ const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   accessDeviceRequests: 'access_device_requests', defects: 'defects', operationalInspectionCheckpoints: 'operational_inspection_checkpoints',
   operationalInspectionResults: 'operational_inspection_results', serviceEvents: 'service_events', wasteServices: 'waste_services',
   tasks: 'tasks', calendarEvents: 'calendar_events', documents: 'documents', inventoryItems: 'inventory_items', notifications: 'notifications',
-  formSubmissions: 'form_submissions', propertyOperatingSettings: 'property_operating_settings', operationalQuotes: 'operational_quotes',
+  formSubmissions: 'form_submissions', idempotencyKeys: 'idempotency_keys', uploadSessions: 'upload_sessions',
+  propertyOperatingSettings: 'property_operating_settings', operationalQuotes: 'operational_quotes',
   operationalApprovals: 'operational_approvals', operationalWorkOrders: 'operational_work_orders', reportReviewComments: 'report_review_comments',
   reportDistributions: 'report_distributions', reportAcknowledgements: 'report_acknowledgements', reportRecipientResponses: 'report_recipient_responses',
   reportSupersessions: 'report_supersessions', tenantCommunications: 'tenant_communications', tenancyDocuments: 'tenancy_documents',
@@ -141,6 +164,318 @@ export class AppwriteOperationalRepository implements OperationalRepository {
     if (VERSIONED_TABLES.has(mappedTable)) patch.version = (typeof current.version === 'number' && current.version < 10_000_000_000 ? current.version : 0) + 1;
     const row = await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: mappedTable, rowId: id, data: patch });
     return publicRecord(row as unknown as Record<string, unknown>);
+  }
+}
+
+function appwriteErrorCode(error: unknown): number | undefined {
+  return error && typeof error === 'object' && 'code' in error
+    ? Number((error as { code?: unknown }).code)
+    : undefined;
+}
+
+function reportError(code: string, status: number, message: string): Error {
+  return Object.assign(new Error(message), { code, status });
+}
+
+function reportSnapshot(aggregate: ReportAggregate): string {
+  return JSON.stringify(aggregate);
+}
+
+function parseReportSnapshot(value: unknown): ReportAggregate {
+  if (typeof value !== 'string') throw reportError('REPORT_SNAPSHOT_MISSING', 500, 'The report snapshot is missing.');
+  const parsed = JSON.parse(value) as Partial<ReportAggregate>;
+  if (!parsed.report || !Array.isArray(parsed.areas)) {
+    throw reportError('REPORT_SNAPSHOT_INVALID', 500, 'The report snapshot is invalid.');
+  }
+  return parsed as ReportAggregate;
+}
+
+function reportContentHash(snapshot: string): string {
+  return createHash('sha256').update(snapshot).digest('hex');
+}
+
+export class AppwriteReportAggregateStore implements ReportAggregateStore {
+  constructor(private readonly services: AppwriteServerServices) {}
+
+  private async row(reportId: string, transactionId?: string): Promise<Record<string, unknown> | undefined> {
+    try {
+      return await this.services.tables.getRow({
+        databaseId: this.services.databaseId,
+        tableId: 'reports',
+        rowId: reportId,
+        transactionId,
+      }) as unknown as Record<string, unknown>;
+    } catch (error) {
+      if (appwriteErrorCode(error) === 404) return undefined;
+      throw error;
+    }
+  }
+
+  private async aggregate(row: Record<string, unknown>, transactionId?: string): Promise<ReportAggregate> {
+    const versionId = String(row.currentVersionId ?? '');
+    if (!versionId) throw reportError('REPORT_SNAPSHOT_MISSING', 500, 'The report has no current Appwrite snapshot.');
+    const version = await this.services.tables.getRow({
+      databaseId: this.services.databaseId,
+      tableId: 'report_versions',
+      rowId: versionId,
+      transactionId,
+    }) as unknown as Record<string, unknown>;
+    const aggregate = parseReportSnapshot(version.snapshot);
+    return {
+      ...aggregate,
+      report: {
+        ...aggregate.report,
+        lifecycleStatus: String(row.lifecycleStatus) as ReportAggregate['report']['lifecycleStatus'],
+        currentVersionId: versionId,
+        version: Number(row.version),
+        createdAt: String(row.createdAt ?? aggregate.report.createdAt),
+        updatedAt: String(row.updatedAt ?? aggregate.report.updatedAt),
+        ...(typeof row.finalisedAt === 'string' ? { finalisedAt: row.finalisedAt } : {}),
+      },
+    };
+  }
+
+  async load(agencyId: string, reportId: string): Promise<ReportAggregate | undefined> {
+    const row = await this.row(reportId);
+    if (!row || row.agencyId !== agencyId) return undefined;
+    return this.aggregate(row);
+  }
+
+  async saveDraft(
+    aggregate: ReportAggregate,
+    expectedVersion: number | undefined,
+    actorId: string,
+  ): Promise<ReportAggregate> {
+    const transaction = await this.services.tables.createTransaction({ ttl: 60 });
+    const transactionId = transaction.$id;
+    try {
+      const existing = await this.row(aggregate.report.id, transactionId);
+      if (existing && existing.agencyId !== aggregate.report.agencyId) throw reportError('NOT_FOUND', 404, 'Report not found.');
+      const lifecycle = existing
+        ? String(existing.lifecycleStatus) as ReportAggregate['report']['lifecycleStatus']
+        : aggregate.report.lifecycleStatus;
+      if (existing && (IMMUTABLE_REPORT_STATUSES.has(lifecycle) || REPORT_CONTENT_LOCKED_STATUSES.has(lifecycle))) {
+        throw reportError('REPORT_IMMUTABLE', 409, 'Locked or finalised report content must be superseded.');
+      }
+      if (existing && expectedVersion === undefined) throw reportError('EXPECTED_VERSION_REQUIRED', 400, 'expectedVersion is required.');
+      if (existing && Number(existing.version) !== expectedVersion) throw reportError('VERSION_CONFLICT', 409, 'The report changed. Reload and retry.');
+      if (!existing && expectedVersion !== undefined) throw reportError('VERSION_CONFLICT', 409, 'The report does not yet exist.');
+
+      const timestamp = new Date().toISOString();
+      const nextVersion = existing ? Number(existing.version) + 1 : 1;
+      const versionId = randomUUID();
+      const stored: ReportAggregate = {
+        ...aggregate,
+        report: {
+          ...aggregate.report,
+          lifecycleStatus: lifecycle,
+          currentVersionId: versionId,
+          version: nextVersion,
+          createdAt: String(existing?.createdAt ?? aggregate.report.createdAt ?? timestamp),
+          updatedAt: timestamp,
+        },
+      };
+      const snapshot = reportSnapshot(stored);
+      await this.services.tables.createRow({
+        databaseId: this.services.databaseId,
+        tableId: 'report_versions',
+        rowId: versionId,
+        transactionId,
+        permissions: [],
+        data: {
+          agencyId: aggregate.report.agencyId, reportId: aggregate.report.id, version: nextVersion,
+          contentHash: reportContentHash(snapshot), snapshot, immutable: false, status: 'draft',
+          createdAt: timestamp, updatedAt: timestamp, createdBy: actorId, updatedBy: actorId,
+          ...(existing?.currentVersionId ? { supersedesVersionId: String(existing.currentVersionId) } : {}),
+        },
+      });
+      const reportData = {
+        agencyId: aggregate.report.agencyId, status: 'active', lifecycleStatus: lifecycle,
+        currentVersionId: versionId, version: nextVersion,
+        createdAt: String(existing?.createdAt ?? timestamp), updatedAt: timestamp,
+        createdBy: String(existing?.createdBy ?? actorId), updatedBy: actorId,
+        ...(aggregate.report.inspectionJobId ? { inspectionJobId: aggregate.report.inspectionJobId } : {}),
+        ...(aggregate.report.propertyId ? { propertyId: aggregate.report.propertyId } : {}),
+      };
+      if (existing) {
+        await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: 'reports', rowId: aggregate.report.id, transactionId, data: reportData });
+      } else {
+        await this.services.tables.createRow({ databaseId: this.services.databaseId, tableId: 'reports', rowId: aggregate.report.id, transactionId, permissions: [], data: reportData });
+      }
+      await this.services.tables.updateTransaction({ transactionId, commit: true });
+      return stored;
+    } catch (error) {
+      await this.services.tables.updateTransaction({ transactionId, rollback: true }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async transition(agencyId: string, command: ReportTransitionCommand): Promise<Record<string, unknown>> {
+    const transaction = await this.services.tables.createTransaction({ ttl: 60 });
+    const transactionId = transaction.$id;
+    try {
+      const row = await this.row(command.reportId, transactionId);
+      if (!row || row.agencyId !== agencyId) throw reportError('NOT_FOUND', 404, 'Report not found.');
+      const aggregate = await this.aggregate(row, transactionId);
+      if (IMMUTABLE_REPORT_STATUSES.has(aggregate.report.lifecycleStatus) && command.status !== 'archived') {
+        throw reportError('REPORT_IMMUTABLE', 409, 'Finalised report data cannot return to an editable state.');
+      }
+      const gate = calculateWorkflowGateContext(aggregate);
+      let event;
+      try {
+        event = transitionReport({
+          entityId: command.reportId, current: aggregate.report.lifecycleStatus, requested: command.status,
+          currentVersion: Number(row.version), expectedVersion: command.expectedVersion,
+          actorId: command.actorId, actorRole: command.actorRole as UserRole,
+          correlationId: command.correlationId, context: gate.context,
+          ...(command.reason ? { reason: command.reason } : {}),
+        });
+      } catch (error) {
+        if (error instanceof WorkflowError) throw reportError(error.code, error.code === 'VERSION_CONFLICT' ? 409 : 422, error.message);
+        throw error;
+      }
+      const timestamp = event.occurredAt;
+      const versionId = randomUUID();
+      const next: ReportAggregate = {
+        ...aggregate,
+        report: {
+          ...aggregate.report, lifecycleStatus: event.to, currentVersionId: versionId,
+          version: event.resultingVersion, updatedAt: timestamp,
+          ...(event.to === 'finalised' ? { finalisedAt: timestamp } : {}),
+        },
+      };
+      const snapshot = reportSnapshot(next);
+      await this.services.tables.createRow({
+        databaseId: this.services.databaseId, tableId: 'report_versions', rowId: versionId,
+        transactionId, permissions: [], data: {
+          agencyId, reportId: command.reportId, version: event.resultingVersion,
+          contentHash: reportContentHash(snapshot), snapshot,
+          immutable: IMMUTABLE_REPORT_STATUSES.has(event.to), status: event.to,
+          createdAt: timestamp, updatedAt: timestamp, createdBy: command.actorId, updatedBy: command.actorId,
+          supersedesVersionId: String(row.currentVersionId),
+          ...(event.to === 'finalised' ? { finalisedAt: timestamp } : {}),
+        },
+      });
+      await this.services.tables.updateRow({
+        databaseId: this.services.databaseId, tableId: 'reports', rowId: command.reportId,
+        transactionId, data: {
+          lifecycleStatus: event.to, currentVersionId: versionId, version: event.resultingVersion,
+          updatedAt: timestamp, updatedBy: command.actorId,
+          ...(event.to === 'finalised' ? { finalisedAt: timestamp, finalisedBy: command.actorId } : {}),
+        },
+      });
+      await this.services.tables.createRow({
+        databaseId: this.services.databaseId, tableId: 'audit_events', rowId: randomUUID(),
+        transactionId, permissions: [], data: {
+          agencyId, actorUserId: command.actorId, actorType: 'user', actorRole: command.actorRole,
+          action: 'report.lifecycle_transition', entityType: 'report', entityId: command.reportId,
+          source: 'proinspect_api', outcome: 'allowed', status: 'recorded', correlationId: command.correlationId,
+          previousState: JSON.stringify({ lifecycleStatus: event.from, version: Number(row.version) }),
+          newState: JSON.stringify({ lifecycleStatus: event.to, version: event.resultingVersion, versionId }),
+          createdAt: timestamp, updatedAt: timestamp, createdBy: command.actorId, updatedBy: command.actorId,
+        },
+      });
+      await this.services.tables.updateTransaction({ transactionId, commit: true });
+      return { transition: event, report: next.report, versionId };
+    } catch (error) {
+      await this.services.tables.updateTransaction({ transactionId, rollback: true }).catch(() => undefined);
+      throw error;
+    }
+  }
+}
+
+export class AppwriteIdempotencyStore implements IdempotencyStore {
+  constructor(private readonly services: AppwriteServerServices) {}
+
+  async execute(
+    agencyId: string,
+    operation: string,
+    key: string,
+    payloadHash: string,
+    action: () => Promise<IdempotencyResult>,
+  ): Promise<{ replayed: boolean; result: IdempotencyResult }> {
+    const keyHash = createHash('sha256').update(key).digest('hex');
+    const rowId = createHash('sha256').update(`${agencyId}:${operation}:${keyHash}`).digest('hex').slice(0, 36);
+    const read = async () => this.services.tables.getRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId }) as unknown as Promise<Record<string, unknown>>;
+    let existing: Record<string, unknown> | undefined;
+    try { existing = await read(); } catch (error) { if (appwriteErrorCode(error) !== 404) throw error; }
+    if (existing) return this.replay(existing, operation, payloadHash);
+    const timestamp = new Date().toISOString();
+    try {
+      await this.services.tables.createRow({
+        databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId, permissions: [],
+        data: {
+          agencyId, operation, keyHash, payloadHash, executionState: 'processing', status: 'active',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          createdAt: timestamp, updatedAt: timestamp, createdBy: 'proinspect_api', updatedBy: 'proinspect_api',
+        },
+      });
+    } catch (error) {
+      if (appwriteErrorCode(error) !== 409) throw error;
+      return this.replay(await read(), operation, payloadHash);
+    }
+    try {
+      const result = await action();
+      await this.services.tables.updateRow({
+        databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId,
+        data: { executionState: 'completed', responseStatus: result.status, responseBody: JSON.stringify(result.body), updatedAt: new Date().toISOString() },
+      });
+      return { replayed: false, result };
+    } catch (error) {
+      await this.services.tables.deleteRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private replay(row: Record<string, unknown>, operation: string, payloadHash: string): { replayed: boolean; result: IdempotencyResult } {
+    if (row.operation !== operation || row.payloadHash !== payloadHash) {
+      throw new IdempotencyConflictError('The idempotency key was already used with a different request.');
+    }
+    if (row.executionState !== 'completed' || typeof row.responseBody !== 'string') {
+      throw new IdempotencyInProgressError('A request using this idempotency key is already in progress.');
+    }
+    return { replayed: true, result: { status: Number(row.responseStatus), body: JSON.parse(row.responseBody) } };
+  }
+}
+
+export class AppwriteTaskOutbox implements TaskDispatcher {
+  constructor(private readonly services: AppwriteServerServices) {}
+  async dispatch(kind: TaskKind, agencyId: string, taskId: string, payload: Record<string, unknown>): Promise<void> {
+    const timestamp = new Date().toISOString();
+    await this.services.tables.createRow({
+      databaseId: this.services.databaseId, tableId: 'integration_outbox', rowId: taskId, permissions: [],
+      data: {
+        agencyId, eventType: `${kind}.requested`, entityType: kind, entityId: taskId,
+        payload: JSON.stringify(payload), deliveryStatus: 'pending', attempts: 0, availableAt: timestamp,
+        status: 'active', createdAt: timestamp, updatedAt: timestamp, createdBy: 'proinspect_api', updatedBy: 'proinspect_api',
+      },
+    });
+  }
+}
+
+export class AppwriteUploadSessionIssuer implements UploadSessionIssuer {
+  constructor(private readonly services: AppwriteServerServices) {}
+  async create(agencyId: string, uploadId: string, input: Record<string, unknown>, principal: AuthenticatedPrincipal): Promise<Record<string, unknown>> {
+    const timestamp = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const bucketId = typeof input.bucketId === 'string' ? input.bucketId : 'inspection-evidence';
+    const fileId = randomUUID();
+    await this.services.tables.createRow({
+      databaseId: this.services.databaseId, tableId: 'upload_sessions', rowId: uploadId, permissions: [],
+      data: {
+        agencyId, userId: principal.uid, bucketId, fileId,
+        originalFilename: String(input.fileName), mimeType: String(input.contentType), size: Number(input.size),
+        checksum: String(input.sha256), expiresAt, status: 'awaiting_binary',
+        createdAt: timestamp, updatedAt: timestamp, createdBy: principal.uid, updatedBy: principal.uid,
+        ...(typeof input.managedSiteId === 'string' ? { managedSiteId: input.managedSiteId } : {}),
+        ...(typeof input.propertyId === 'string' ? { propertyId: input.propertyId } : {}),
+        ...(typeof input.inspectionJobId === 'string' ? { inspectionJobId: input.inspectionJobId } : {}),
+        ...(typeof input.reportId === 'string' ? { reportId: input.reportId } : {}),
+        ...(typeof input.externalResourceType === 'string' ? { entityType: input.externalResourceType } : {}),
+        ...(typeof input.externalResourceId === 'string' ? { entityId: input.externalResourceId } : {}),
+      },
+    });
+    return { id: uploadId, agencyId, bucketId, fileId, expiresAt, status: 'awaiting_binary', uploadProvider: 'appwrite' };
   }
 }
 

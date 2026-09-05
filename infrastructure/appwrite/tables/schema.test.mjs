@@ -41,6 +41,6 @@ describe('Appwrite schema', () => {
     for (const required of ['people','tenants','tenancies','tenancy_participants','occupancies','units','contractors','key_register','access_device_requests','defects','operational_inspection_checkpoints','operational_inspection_results','tasks','documents','form_submissions','property_operating_settings','portal_entitlements','contractor_compliance','offer_partners','offers','offer_redemptions','conversations','conversation_participants','conversation_messages','notification_preferences','appointment_availability','appointment_bookings','route_plans','route_plan_stops','offline_sync_receipts']) {
       expect(ids.has(required), required).toBe(true);
     }
-    expect(allTables).toHaveLength(114);
+    expect(allTables).toHaveLength(116);
   });
 });

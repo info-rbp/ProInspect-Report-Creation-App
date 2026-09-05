@@ -10956,6 +10956,306 @@
     ]
   },
   {
+    "$id": "idempotency_keys",
+    "databaseId": "proinspect_core",
+    "name": "Idempotency Keys",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "operation",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "keyHash",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "payloadHash",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "executionState",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "responseStatus",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "key": "responseBody",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_operation_key",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "operation",
+          "keyHash"
+        ]
+      },
+      {
+        "key": "state_expiry",
+        "type": "key",
+        "columns": [
+          "executionState",
+          "expiresAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "upload_sessions",
+    "databaseId": "proinspect_core",
+    "name": "Upload Sessions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "userId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "bucketId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "fileId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "managedSiteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "inspectionJobId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "reportId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "entityType",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "entityId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "originalFilename",
+        "type": "string",
+        "size": 512,
+        "required": true
+      },
+      {
+        "key": "mimeType",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "size",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "checksum",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "expiresAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "completedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "bucket_file",
+        "type": "unique",
+        "columns": [
+          "bucketId",
+          "fileId"
+        ]
+      },
+      {
+        "key": "user_status",
+        "type": "key",
+        "columns": [
+          "userId",
+          "status"
+        ]
+      },
+      {
+        "key": "entity_status",
+        "type": "key",
+        "columns": [
+          "entityType",
+          "entityId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
     "$id": "property_operating_settings",
     "databaseId": "proinspect_core",
     "name": "Property Operating Settings",
