@@ -58,7 +58,7 @@
     "firebase": "^12.6.0",
     "heic2any": "^0.0.4",
     "idb": "8.0.0",
-    "lucide-react": "^0.556.0",
+    "lucide-react": "^1.39.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-router-dom": "^7.17.0",
