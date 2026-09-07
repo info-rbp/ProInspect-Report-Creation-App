@@ -39,6 +39,8 @@ export async function uploadExternalEvidence(grantToken: string, file: File): Pr
     photoId: string;
     status: string;
     resumableUploadUrl?: string;
+    binaryUploadUrl?: string;
+    completionUrl?: string;
     duplicatePhotoId?: string;
   }>(`/api/v1/external/evidence/${encodeURIComponent(grantToken)}/upload-session`, {
     method: 'POST',
@@ -49,21 +51,12 @@ export async function uploadExternalEvidence(grantToken: string, file: File): Pr
   if (session.status === 'duplicate' && session.duplicatePhotoId) {
     return { photoId: session.duplicatePhotoId, uploadSessionId: session.id, sha256 };
   }
-  if (!session.resumableUploadUrl) throw new Error('Evidence upload service is not configured.');
-
-  const upload = await fetch(session.resumableUploadUrl, {
-    method: 'PUT',
-    headers: {
-      'content-type': contentType,
-      'content-range': `bytes 0-${file.size - 1}/${file.size}`,
-    },
-    body: file,
-  });
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '';
+  const uploadUrl = session.binaryUploadUrl ? `${baseUrl.replace(/\/$/u, '')}${session.binaryUploadUrl}` : session.resumableUploadUrl;
+  if (!uploadUrl) throw new Error('Evidence upload service is not configured.');
+  const upload = await fetch(uploadUrl, { method: 'PUT', headers: session.binaryUploadUrl ? { 'content-type': contentType } : { 'content-type': contentType, 'content-range': `bytes 0-${file.size - 1}/${file.size}` }, body: file });
   if (!upload.ok) throw new Error(`Evidence upload failed with ${upload.status}.`);
-
-  const completed = await externalRequest<{ photoId: string; sha256: string; generation: string }>(
-    `/api/v1/external/evidence/${encodeURIComponent(grantToken)}/upload-session/${encodeURIComponent(session.id)}/complete`,
-    { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
-  );
+  const completionPath = session.completionUrl || `/api/v1/external/evidence/${encodeURIComponent(grantToken)}/upload-session/${encodeURIComponent(session.id)}/complete`;
+  const completed = await externalRequest<{ photoId: string; sha256: string; generation: string }>(completionPath, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   return { photoId: completed.photoId, uploadSessionId: session.id, sha256: completed.sha256, generation: completed.generation };
 }

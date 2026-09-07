@@ -7,6 +7,7 @@ import { FirestoreReportAggregateStore } from '../backend/reportAggregateStore.j
 import { FirestoreReportVersionReader } from '../backend/firestoreReportVersionReader.js';
 import { FirestoreNotificationDeliveryStore } from '../backend/firestoreNotificationDeliveryStore.js';
 import { FirestoreExternalGrantStore } from '../backend/firestoreExternalGrantStore.js';
+import { FirestoreEvidenceStore } from '../backend/firestoreEvidenceStore.js';
 import { FirestoreIdempotencyStore } from '../backend/idempotency.js';
 import {
   FirebaseUploadSessionIssuer,
@@ -25,10 +26,12 @@ import {
   createAppwriteApiServices,
 } from '../backend/appwriteAdapters.js';
 import { AppwriteExternalGrantStore } from '../backend/appwriteExternalGrantStore.js';
+import { AppwriteEvidenceStore } from '../backend/appwriteEvidenceStore.js';
 import { AppwritePeopleAdminService } from '../backend/appwritePeopleAdmin.js';
 import { SettingsAwareOperationalRepository } from '../services/settingsAwareOperationalRepository.js';
 import type {
   ApiDependencies,
+  EvidenceStore,
   ExternalGrantStore,
   IdempotencyStore,
   NotificationDeliveryStore,
@@ -78,6 +81,7 @@ export function createSecurityDependencies(
     new FirestoreNotificationDeliveryStore();
   let externalGrants: ExternalGrantStore =
     new FirestoreExternalGrantStore();
+  let evidence: EvidenceStore = new FirestoreEvidenceStore();
   let idempotency: IdempotencyStore =
     new FirestoreIdempotencyStore();
   let tasks: TaskDispatcher = new FirestoreTaskOutbox();
@@ -94,6 +98,7 @@ export function createSecurityDependencies(
     reportVersions = new AppwriteReportVersionReader(appwrite);
     notificationDelivery = new AppwriteNotificationDeliveryStore(appwrite);
     externalGrants = new AppwriteExternalGrantStore(appwrite);
+    evidence = new AppwriteEvidenceStore(appwrite);
     idempotency = new AppwriteIdempotencyStore(appwrite);
     tasks = new AppwriteTaskOutbox(appwrite);
     uploads = new AppwriteUploadSessionIssuer(appwrite);
@@ -122,6 +127,7 @@ export function createSecurityDependencies(
     reportVersions,
     notificationDelivery,
     externalGrants,
+    evidence,
     idempotency,
     tasks,
     uploads,

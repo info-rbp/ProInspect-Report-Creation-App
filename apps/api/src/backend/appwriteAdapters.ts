@@ -38,7 +38,7 @@ import type {
 const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   agencies: 'agencies', managedSites: 'managed_sites', userProfiles: 'user_profiles',
   agencyMemberships: 'agency_memberships', siteMemberships: 'site_memberships', clients: 'clients',
-  clientContacts: 'client_contacts', properties: 'properties', buildings: 'buildings',
+  clientContacts: 'client_contacts', clientApprovals: 'client_approvals', properties: 'properties', buildings: 'buildings',
   propertyLevels: 'property_levels', propertyAreas: 'property_areas', serviceDefinitions: 'service_definitions',
   serviceRequests: 'service_requests', serviceRequestItems: 'service_request_items', shopifyServiceMappings: 'shopify_service_mappings',
   inspectionRequests: 'inspection_requests', inspectionJobs: 'inspection_jobs', inspectionTemplates: 'inspection_templates',
@@ -116,6 +116,32 @@ function writeData(input: Record<string, unknown>, actorId: string, existing?: R
   return value;
 }
 
+
+function collectionWriteData(
+  collection: string,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  if (collection !== 'clientApprovals') return input;
+  return {
+    ...input,
+    ...(Array.isArray(input.evidencePhotoIds)
+      ? { evidencePhotoIds: JSON.stringify(input.evidencePhotoIds) }
+      : {}),
+  };
+}
+
+function collectionReadRecord(
+  collection: string,
+  row: Record<string, unknown>,
+): StoredRecord {
+  const value = publicRecord(row);
+  if (collection === 'clientApprovals' && typeof value.evidencePhotoIds === 'string') {
+    try { value.evidencePhotoIds = JSON.parse(value.evidencePhotoIds) as unknown[]; }
+    catch { value.evidencePhotoIds = []; }
+  }
+  return value;
+}
+
 export function createAppwriteApiServices(env: NodeJS.ProcessEnv = process.env): AppwriteServerServices {
   return createAppwriteServerServices(loadAppwriteServerConfig(env));
 }
@@ -136,14 +162,14 @@ export class AppwriteOperationalRepository implements OperationalRepository {
     });
     const queries = [Query.equal('agencyId', [agencyId]), ...filterQueries, Query.limit(limit), ...(cursor ? [Query.cursorAfter(cursor)] : [])];
     const result = await this.services.tables.listRows({ databaseId: this.services.databaseId, tableId: tableId(collection), queries });
-    const items = result.rows.map((row) => publicRecord(row as unknown as Record<string, unknown>));
+    const items = result.rows.map((row) => collectionReadRecord(collection, row as unknown as Record<string, unknown>));
     return { items, ...(items.length === limit ? { nextCursor: items.at(-1)?.id } : {}) };
   }
 
   async get(collection: string, agencyId: string, id: string): Promise<StoredRecord | undefined> {
     try {
       const row = await this.services.tables.getRow({ databaseId: this.services.databaseId, tableId: tableId(collection), rowId: id });
-      const record = publicRecord(row as unknown as Record<string, unknown>);
+      const record = collectionReadRecord(collection, row as unknown as Record<string, unknown>);
       return record.agencyId === agencyId ? record : undefined;
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && Number((error as { code?: unknown }).code) === 404) return undefined;
@@ -154,9 +180,9 @@ export class AppwriteOperationalRepository implements OperationalRepository {
   async create(collection: string, agencyId: string, id: string, data: Record<string, unknown>, actorId: string): Promise<StoredRecord> {
     const row = await this.services.tables.createRow({
       databaseId: this.services.databaseId, tableId: tableId(collection), rowId: id,
-      data: writeData({ ...data, agencyId }, actorId), permissions: [],
+      data: writeData(collectionWriteData(collection, { ...data, agencyId }), actorId), permissions: [],
     });
-    return publicRecord(row as unknown as Record<string, unknown>);
+    return collectionReadRecord(collection, row as unknown as Record<string, unknown>);
   }
 
   async update(collection: string, agencyId: string, id: string, data: Record<string, unknown>, expectedVersion: number, actorId: string): Promise<StoredRecord> {
@@ -164,10 +190,10 @@ export class AppwriteOperationalRepository implements OperationalRepository {
     if (!current) throw Object.assign(new Error('Record not found.'), { code: 'NOT_FOUND', status: 404 });
     if (current.version !== expectedVersion) throw Object.assign(new Error('Record changed. Reload and retry.'), { code: 'VERSION_CONFLICT', status: 409 });
     const mappedTable = tableId(collection);
-    const patch = writeData(data, actorId, current);
+    const patch = writeData(collectionWriteData(collection, data), actorId, current);
     if (VERSIONED_TABLES.has(mappedTable)) patch.version = (typeof current.version === 'number' && current.version < 10_000_000_000 ? current.version : 0) + 1;
     const row = await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: mappedTable, rowId: id, data: patch });
-    return publicRecord(row as unknown as Record<string, unknown>);
+    return collectionReadRecord(collection, row as unknown as Record<string, unknown>);
   }
 }
 

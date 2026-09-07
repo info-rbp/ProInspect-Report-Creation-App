@@ -1,5 +1,6 @@
 import type {
   ApiDependencies,
+  EvidenceStore,
   ExternalGrantStore,
   NotificationDeliveryStore,
   ReportVersionReader,
@@ -34,6 +35,13 @@ export function requireNotificationDeliveryStore(
   return dependencies.notificationDelivery;
 }
 
+
+export function requireEvidenceStore(
+  dependencies: ApiDependencies,
+): EvidenceStore {
+  if (!dependencies.evidence) throw missingDependency('evidence');
+  return dependencies.evidence;
+}
 
 export function requireExternalGrantStore(
   dependencies: ApiDependencies,

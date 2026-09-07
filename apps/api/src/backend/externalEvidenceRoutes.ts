@@ -265,8 +265,10 @@ export async function routeExternalEvidenceRequest(
     metadata: { uploadId, fileName: body.fileName, sha256: body.sha256 },
   });
 
-  return {
-    status: 201,
-    body: { data: { ...session, photoId: uploadId }, meta: { correlationId } },
-  };
+  const encodedToken = encodeURIComponent(decodeURIComponent(parts[4]));
+  const providerUrls = session.uploadProvider === 'appwrite' ? {
+    binaryUploadUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/binary`,
+    completionUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/complete`,
+  } : {};
+  return { status: 201, body: { data: { ...session, ...providerUrls, photoId: uploadId }, meta: { correlationId } } };
 }

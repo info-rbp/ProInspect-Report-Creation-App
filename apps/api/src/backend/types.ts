@@ -207,6 +207,34 @@ export interface ExternalGrantStore {
   ): Promise<ExternalGrantRecord>;
 }
 
+
+export interface EvidenceUploadSessionRecord {
+  id: string; agencyId: string; userId: string; bucketId: string; fileId: string;
+  originalFilename: string; mimeType: string; size: number; checksum: string;
+  expiresAt: string; status: string; propertyId?: string; managedSiteId?: string;
+  inspectionJobId?: string; reportId?: string; entityType?: string; entityId?: string;
+  completedAt?: string;
+}
+export interface EvidenceFileRecord {
+  id: string; agencyId: string; bucketId: string; fileId: string; entityType: string;
+  entityId: string; mimeType: string; originalFilename: string; size: number;
+  checksum: string; uploadedBy: string; createdAt: string; updatedAt: string;
+  generation: string; propertyId?: string; managedSiteId?: string;
+}
+export interface EvidenceStoreUploadInput {
+  agencyId: string; uploadId: string; actorId: string; entityType: string;
+  entityId: string; contentType?: string; bytes: Uint8Array;
+}
+export interface EvidenceStoreCompletionInput {
+  agencyId: string; uploadId: string; actorId: string; entityType: string;
+  entityId: string; source: string; category?: string;
+}
+export interface EvidenceStore {
+  getSession(agencyId: string, uploadId: string): Promise<EvidenceUploadSessionRecord>;
+  uploadBinary(input: EvidenceStoreUploadInput): Promise<EvidenceUploadSessionRecord>;
+  complete(input: EvidenceStoreCompletionInput): Promise<EvidenceFileRecord>;
+}
+
 export interface IdempotencyResult {
   status: number;
   body: unknown;
@@ -253,6 +281,7 @@ export interface ApiDependencies extends SecurityDependencies {
   reportVersions?: ReportVersionReader;
   notificationDelivery?: NotificationDeliveryStore;
   externalGrants?: ExternalGrantStore;
+  evidence?: EvidenceStore;
   idempotency: IdempotencyStore;
   tasks: TaskDispatcher;
   uploads: UploadSessionIssuer;

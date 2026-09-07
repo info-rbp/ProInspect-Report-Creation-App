@@ -106,14 +106,17 @@ export async function submitTenantPortalMaintenance(grantToken: string, input: {
 export async function uploadTenantPortalEvidence(grantToken: string, file: File): Promise<{ photoId: string; sha256?: string; generation?: string }> {
   const sha256 = await fileSha256(file);
   const contentType = contentTypeFor(file);
-  const session = await externalRequest<{ id: string; status: string; resumableUploadUrl?: string; duplicatePhotoId?: string }>(`/api/v1/external/tenant-portal/${encodeURIComponent(grantToken)}/evidence/upload-session`, {
+  const session = await externalRequest<{ id: string; status: string; resumableUploadUrl?: string; binaryUploadUrl?: string; completionUrl?: string; duplicatePhotoId?: string }>(`/api/v1/external/tenant-portal/${encodeURIComponent(grantToken)}/evidence/upload-session`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fileName: file.name, contentType, size: file.size, sha256 }),
   });
   if (session.status === 'duplicate' && session.duplicatePhotoId) return { photoId: session.duplicatePhotoId, sha256 };
-  if (!session.resumableUploadUrl) throw new Error('Evidence upload service is not configured.');
-  const upload = await fetch(session.resumableUploadUrl, { method: 'PUT', headers: { 'content-type': contentType, 'content-range': `bytes 0-${file.size - 1}/${file.size}` }, body: file });
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '';
+  const uploadUrl = session.binaryUploadUrl ? `${baseUrl.replace(/\/$/u, '')}${session.binaryUploadUrl}` : session.resumableUploadUrl;
+  if (!uploadUrl) throw new Error('Evidence upload service is not configured.');
+  const upload = await fetch(uploadUrl, { method: 'PUT', headers: session.binaryUploadUrl ? { 'content-type': contentType } : { 'content-type': contentType, 'content-range': `bytes 0-${file.size - 1}/${file.size}` }, body: file });
   if (!upload.ok) throw new Error(`Evidence upload failed with ${upload.status}.`);
-  return externalRequest(`/api/v1/external/tenant-portal/${encodeURIComponent(grantToken)}/evidence/upload-session/${encodeURIComponent(session.id)}/complete`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  const completionPath = session.completionUrl || `/api/v1/external/tenant-portal/${encodeURIComponent(grantToken)}/evidence/upload-session/${encodeURIComponent(session.id)}/complete`;
+  return externalRequest(completionPath, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 }
 
 export async function signTenantPortalDocument(grantToken: string, documentId: string, signatureName: string): Promise<unknown> {

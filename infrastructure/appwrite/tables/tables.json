@@ -3814,6 +3814,208 @@
     ]
   },
   {
+    "$id": "client_approvals",
+    "databaseId": "proinspect_core",
+    "name": "Client Approvals",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "propertyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "maintenanceItemId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "clientId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "clientContactId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "recipientEmail",
+        "type": "string",
+        "size": 320,
+        "required": true,
+        "format": "email"
+      },
+      {
+        "key": "summary",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "recommendedAction",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "priority",
+        "type": "string",
+        "size": 32,
+        "required": true
+      },
+      {
+        "key": "evidencePhotoIds",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "clientNotes",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "respondedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "accessGrantId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "quoteId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "quoteVersionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "quoteNumber",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "amount",
+        "type": "double",
+        "required": false
+      },
+      {
+        "key": "currency",
+        "type": "string",
+        "size": 3,
+        "required": false
+      },
+      {
+        "key": "quoteExpiresAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "decisionTokenVerifiedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "item_status",
+        "type": "key",
+        "columns": [
+          "maintenanceItemId",
+          "status"
+        ]
+      },
+      {
+        "key": "client_status",
+        "type": "key",
+        "columns": [
+          "clientId",
+          "status"
+        ]
+      },
+      {
+        "key": "recipient_status",
+        "type": "key",
+        "columns": [
+          "recipientEmail",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
     "$id": "maintenance_work_orders",
     "databaseId": "proinspect_core",
     "name": "Maintenance Work Orders",
@@ -14338,6 +14540,12 @@
         "type": "string",
         "size": 255,
         "required": false
+      },
+      {
+        "key": "storageVersion",
+        "type": "string",
+        "size": 128,
+        "required": false
       }
     ],
     "indexes": [
@@ -16497,30 +16705,58 @@
         "key": "userId",
         "type": "string",
         "size": 36,
-        "required": true
+        "required": false
       },
       {
         "key": "deviceId",
         "type": "string",
         "size": 128,
-        "required": true
+        "required": false
       },
       {
         "key": "clientSubmissionId",
         "type": "string",
         "size": 128,
+        "required": false
+      },
+      {
+        "key": "inspectionJobId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "operationId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "operation",
+        "type": "string",
+        "size": 64,
         "required": true
       },
       {
         "key": "entityType",
         "type": "string",
         "size": 64,
-        "required": true
+        "required": false
       },
       {
         "key": "entityId",
         "type": "string",
         "size": 36,
+        "required": false
+      },
+      {
+        "key": "baseVersion",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "resultVersion",
+        "type": "integer",
         "required": false
       },
       {
@@ -16530,20 +16766,41 @@
         "required": true
       },
       {
+        "key": "resultHash",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "receivedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "appliedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "conflictReason",
+        "type": "longtext",
+        "required": false
+      },
+      {
         "key": "syncState",
         "type": "string",
         "size": 32,
-        "required": true
+        "required": false
       },
       {
         "key": "attempts",
         "type": "integer",
-        "required": true
+        "required": false
       },
       {
         "key": "firstReceivedAt",
         "type": "datetime",
-        "required": true
+        "required": false
       },
       {
         "key": "lastAttemptedAt",
@@ -16573,6 +16830,30 @@
         "columns": [
           "agencyId",
           "status"
+        ]
+      },
+      {
+        "key": "operation_once",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "operationId"
+        ]
+      },
+      {
+        "key": "job_received",
+        "type": "key",
+        "columns": [
+          "inspectionJobId",
+          "receivedAt"
+        ]
+      },
+      {
+        "key": "operation_received",
+        "type": "key",
+        "columns": [
+          "operation",
+          "receivedAt"
         ]
       },
       {

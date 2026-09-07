@@ -21,7 +21,7 @@ export interface UploadSessionRecord {
   id: string; agencyId: string; propertyId: string; inspectionJobId: string; reportId?: string; areaId?: string; componentIds: string[];
   originalFilename: string; contentType: string; fileSize: number; sha256: string; objectPath: string; mediaType?: EvidenceMediaType; resumableUploadUrl?: string;
   status: 'issued' | 'uploading' | 'completed' | 'expired' | 'cancelled' | 'duplicate'; issuedTo: string; expiresAt: string;
-  externalGrantId?: string; externalResourceType?: 'work_request' | 'tenant_instruction' | 'tenant_portal'; externalResourceId?: string; createdAt: string; updatedAt: string;
+  externalGrantId?: string; externalResourceType?: 'work_request' | 'tenant_instruction' | 'report_distribution' | 'tenant_portal' | 'remote_inspection'; externalResourceId?: string; createdAt: string; updatedAt: string;
 }
 
 export interface EvidenceUploadCompletion { bucket: string; objectPath: string; generation: string; metageneration?: string; contentType?: string; size?: number; sha256?: string; completedAt: string; }

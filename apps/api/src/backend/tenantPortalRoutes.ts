@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
@@ -8,13 +8,10 @@ import {
   type AuthenticatedPrincipal,
   type MaintenanceCategory,
   type MaintenancePriority,
-  type UploadSessionRecord,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
-import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 import { ApiError, type ApiResponse } from './router.js';
-import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
+import { requireEvidenceStore, requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import type {
   ApiDependencies,
   ExternalGrantRecord,
@@ -209,6 +206,35 @@ async function createGrant(
     rawToken,
     accessUrl: `/tenant-portal/${rawToken}`,
   };
+}
+
+
+function automationSecretMatches(req: IncomingMessage): boolean {
+  const supplied = req.headers['x-proinspect-automation-secret']?.toString();
+  const expected = process.env.AUTOMATION_RUNNER_SECRET?.trim();
+  if (!supplied || !expected) return false;
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+async function automationGrant(
+  req: IncomingMessage,
+  dependencies: ApiDependencies,
+  correlationId: string,
+): Promise<ApiResponse> {
+  if (!automationSecretMatches(req)) {
+    throw new ApiError(403, 'AUTOMATION_SECRET_INVALID', 'Automation grant issuance is not authorised.');
+  }
+  const body = await readJson(req);
+  const agencyId = requiredString(body, 'agencyId');
+  const tenantId = requiredString(body, 'tenantId');
+  const tenancyId = requiredString(body, 'tenancyId');
+  const recipientEmail = validEmail(requiredString(body, 'recipientEmail'));
+  await assertVerifiedParticipant(dependencies, agencyId, tenantId, tenancyId, recipientEmail);
+  const created = await createGrant(dependencies, agencyId, tenantId, tenancyId, recipientEmail, 24 * 7, 'system:tenant-automation');
+  await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: 'system:tenant-automation', actorRole: 'operations', agencyId, capability: 'tenant.portal.manage', outcome: 'allowed', reason: 'tenant_portal.automation_grant_generated', target: { agencyId, tenancyId }, correlationId });
+  return { status: 201, body: { data: { grantId: created.grant.id, accessUrl: created.accessUrl, expiresAt: created.grant.expiresAt }, meta: { correlationId } } };
 }
 
 async function generateGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
@@ -510,7 +536,7 @@ function uploadInput(body: Record<string, unknown>) {
   return { fileName, contentType, size, sha256 };
 }
 
-async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGrant, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
+async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGrant, rawToken: string, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
   const body = uploadInput(await readJson(req));
   const tenancy = await dependencies.repository.get('tenancies', grant.agencyId, grant.tenancyId);
   if (!tenancy?.propertyId) throw new ApiError(409, 'TENANCY_PROPERTY_REQUIRED', 'Tenancy is not linked to a property.');
@@ -521,35 +547,21 @@ async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGr
     externalGrantId: grant.id, externalResourceType: 'tenant_portal', externalResourceId: grant.tenancyId,
   }, externalPrincipal(grant));
   await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: `external:${grant.id}`, actorRole: 'external', agencyId: grant.agencyId, capability: 'upload.create', outcome: 'allowed', reason: 'tenant_portal.evidence_session_created', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId });
-  return { status: 201, body: { data: { ...session, photoId: uploadId }, meta: { correlationId } } };
+  const encodedToken = encodeURIComponent(rawToken);
+  const providerUrls = session.uploadProvider === 'appwrite' ? { binaryUploadUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/binary`, completionUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/complete` } : {};
+  return { status: 201, body: { data: { ...session, ...providerUrls, photoId: uploadId }, meta: { correlationId } } };
 }
 
 async function evidenceComplete(grant: TenantPortalGrant, dependencies: ApiDependencies, correlationId: string, uploadId: string): Promise<ApiResponse> {
-  const database = firestoreDb(adminApp());
-  const snapshot = await database.doc(`agencies/${grant.agencyId}/uploadSessions/${uploadId}`).get();
-  if (!snapshot.exists) throw new ApiError(404, 'UPLOAD_SESSION_NOT_FOUND', 'Evidence upload session was not found.');
-  const session = snapshot.data() as UploadSessionRecord;
-  if (session.externalGrantId !== grant.id || String(session.externalResourceType) !== 'tenant_portal' || session.externalResourceId !== grant.tenancyId) throw new ApiError(403, 'UPLOAD_SESSION_SCOPE_MISMATCH', 'Evidence upload session does not belong to this portal grant.');
-  if (session.status === 'expired' || new Date(session.expiresAt).getTime() <= Date.now()) throw new ApiError(409, 'UPLOAD_SESSION_EXPIRED', 'Evidence upload session has expired.');
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
-  const bucketName = process.env.UPLOAD_BUCKET?.trim() || (projectId ? `${projectId}-uploads` : '');
-  if (!bucketName) throw new ApiError(503, 'UPLOAD_BUCKET_REQUIRED', 'UPLOAD_BUCKET is required before evidence completion.');
-  const file = getStorage(adminApp()).bucket(bucketName).file(session.objectPath);
-  const [metadata] = await file.getMetadata().catch(() => { throw new ApiError(422, 'EVIDENCE_OBJECT_NOT_FOUND', 'Uploaded evidence object could not be verified.'); });
-  const actualSize = Number(metadata.size);
-  if (!Number.isFinite(actualSize) || actualSize !== session.fileSize) throw new ApiError(422, 'EVIDENCE_SIZE_MISMATCH', 'Uploaded evidence size does not match the issued session.');
-  const [bytes] = await file.download({ validation: false });
-  const actualHash = createHash('sha256').update(bytes).digest('hex');
-  if (actualHash !== session.sha256) throw new ApiError(422, 'EVIDENCE_HASH_MISMATCH', 'Uploaded evidence does not match its declared SHA-256.');
-  const completedAt = new Date().toISOString();
-  const evidence = await new FirestorePhotoEvidenceStore().complete(grant.agencyId, uploadId, { bucket: bucketName, objectPath: session.objectPath, generation: String(metadata.generation || ''), ...(metadata.metageneration ? { metageneration: String(metadata.metageneration) } : {}), contentType: String(metadata.contentType || session.contentType), size: actualSize, sha256: actualHash, completedAt });
-  await database.doc(`agencies/${grant.agencyId}/photoEvidence/${evidence.id}`).set({ source: 'tenant_portal', externalGrantId: grant.id, externalResourceType: 'tenant_portal', externalResourceId: grant.tenancyId, updatedAt: completedAt }, { merge: true });
-  return { status: 201, body: { data: { photoId: evidence.id, objectPath: evidence.objectPath, generation: evidence.generation, sha256: evidence.sha256, contentType: evidence.contentType }, meta: { correlationId } } };
+  const evidence = await requireEvidenceStore(dependencies).complete({ agencyId: grant.agencyId, uploadId, actorId: `external:${grant.id}`, entityType: 'tenant_portal', entityId: grant.tenancyId, source: 'tenant_portal', category: 'inspection_evidence' });
+  await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: `external:${grant.id}`, actorRole: 'external', agencyId: grant.agencyId, capability: 'upload.create', outcome: 'allowed', reason: 'tenant_portal.evidence_upload_completed', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId, entityType: 'tenant_portal', entityId: grant.tenancyId, eventType: 'tenant_portal.evidence_upload_completed', metadata: { evidenceFileId: evidence.id, uploadId, sha256: evidence.checksum } });
+  return { status: 201, body: { data: { photoId: evidence.id, evidenceFileId: evidence.id, bucketId: evidence.bucketId, fileId: evidence.fileId, objectPath: evidence.fileId, generation: evidence.generation, sha256: evidence.checksum, contentType: evidence.mimeType }, meta: { correlationId } } };
 }
 
 export async function routeTenantPortalRequest(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse | undefined> {
   const parts = new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean);
   if (parts[0] !== 'api' || parts[1] !== 'v1') return undefined;
+  if (parts[2] === 'internal' && parts[3] === 'tenant-portal-grants' && parts[4] === 'automation' && req.method === 'POST') return automationGrant(req, dependencies, correlationId);
   if (parts[2] === 'tenant-portal-grants' && parts.length === 3 && req.method === 'GET') return listGrants(req, dependencies, correlationId);
   if (parts[2] === 'tenant-portal-grants' && parts[3] === 'generate' && req.method === 'POST') return generateGrant(req, dependencies, correlationId);
   if (parts[2] === 'tenant-portal-grants' && parts[3] && parts[4] === 'revoke' && req.method === 'POST') return revokeGrant(req, dependencies, correlationId, parts[3]);
@@ -560,7 +572,7 @@ export async function routeTenantPortalRequest(req: IncomingMessage, dependencie
     dependencies,
   );
   if (req.method === 'GET' && !parts[5]) return portalGet(grant, dependencies, correlationId);
-  if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && !parts[7]) return evidenceUploadSession(req, grant, dependencies, correlationId);
+  if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && !parts[7]) return evidenceUploadSession(req, grant, decodeURIComponent(parts[4]), dependencies, correlationId);
   if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && parts[7] && parts[8] === 'complete') return evidenceComplete(grant, dependencies, correlationId, decodeURIComponent(parts[7]));
   if (req.method === 'POST' && parts[5]) return portalPost(req, grant, dependencies, correlationId, parts[5]);
   throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed for tenant portal.');
