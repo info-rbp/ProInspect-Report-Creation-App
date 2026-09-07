@@ -18,7 +18,9 @@ check('02e', 'Appwrite evidence authority is canonical', () => {
   const provider = read('apps/api/src/backend/appwriteEvidenceStore.ts');
   const route = read('apps/api/src/backend/externalEvidenceCompletionRoutes.ts');
   assert(deps.includes('AppwriteEvidenceStore'), 'AppwriteEvidenceStore is not wired.');
-  for (const token of ["tableId: 'upload_sessions'", "tableId: 'evidence_files'", "tableId: 'integration_outbox'", 'storage.createFile', 'createTransaction']) assert(provider.includes(token), `Appwrite evidence provider is missing ${token}.`);
+  for (const token of ["tableId: 'upload_sessions'", "tableId: 'evidence_files'", "tableId: 'integration_outbox'", 'storage.createFile', 'createTransaction']) {
+    assert(provider.includes(token), `Appwrite evidence provider is missing ${token}.`);
+  }
   assert(!provider.includes('firebase-admin'), 'Appwrite evidence provider contains Firebase authority.');
   assert(route.includes('requireEvidenceStore'), 'External evidence completion is not provider-backed.');
   assert(!route.includes('FirestorePhotoEvidenceStore'), 'External evidence completion still uses FirestorePhotoEvidenceStore.');
@@ -34,17 +36,19 @@ check('02e', 'all external evidence scopes use the provider boundary', () => {
 
 check('03', 'transaction commit/rollback capability and tests exist', () => {
   const gateway = read('packages/appwrite-server/src/repositories.ts');
-  for (const token of ['createTransaction', 'commitTransaction', 'rollbackTransaction']) assert(gateway.includes(token), `Missing ${token}.`);
+  for (const token of ['createTransaction', 'commitTransaction', 'rollbackTransaction']) {
+    assert(gateway.includes(token), `Missing ${token}.`);
+  }
   assert(read('infrastructure/appwrite/scripts/test-development-workflow.mjs').includes('rollbackTransaction'), 'Development workflow does not exercise rollback.');
 });
 
 check('04', 'client approval parity is canonical', () => {
   assert(read('apps/api/src/backend/appwriteAdapters.ts').includes("clientApprovals: 'client_approvals'"), 'clientApprovals is not mapped.');
-  assert(read('infrastructure/appwrite/tables/schema.mjs').includes("client_approvals"), 'client_approvals table is missing.');
+  assert(read('infrastructure/appwrite/tables/schema.mjs').includes('client_approvals'), 'client_approvals table is missing.');
 });
 
 check('04', 'notification automation uses API grant authority', () => {
-  for (const path of ['apps/notification-worker/src/index.ts','apps/notification-worker/src/runtime.ts']) {
+  for (const path of ['apps/notification-worker/src/index.ts', 'apps/notification-worker/src/runtime.ts']) {
     const value = read(path);
     assert(value.includes('PROINSPECT_API_BASE_URL'), `${path} does not call the internal API.`);
     assert(value.includes('x-proinspect-automation-secret'), `${path} does not authenticate internal grant issuance.`);
@@ -54,23 +58,38 @@ check('04', 'notification automation uses API grant authority', () => {
 
 check('05', 'seven required portal personas and entitlements are seeded', () => {
   const seed = read('infrastructure/appwrite/seeds/development.json');
-  for (const persona of ['dev_admin','dev_inspector','dev_building_manager','dev_strata_manager','dev_resident_tenant','dev_client_user','dev_contractor']) assert(seed.includes(persona), `Missing Development persona ${persona}.`);
-  for (const portal of ['"portalId":"admin"','"portalId":"inspector"','"portalId":"building"','"portalId":"strata"','"portalId":"resident"','"portalId":"client"','"portalId":"contractor"']) assert(seed.includes(portal), `Missing ${portal}.`);
+  for (const persona of ['dev_admin', 'dev_inspector', 'dev_building_manager', 'dev_strata_manager', 'dev_resident_tenant', 'dev_client_user', 'dev_contractor']) {
+    assert(seed.includes(persona), `Missing Development persona ${persona}.`);
+  }
+  for (const portal of ['"portalId":"admin"', '"portalId":"inspector"', '"portalId":"building"', '"portalId":"strata"', '"portalId":"resident"', '"portalId":"client"', '"portalId":"contractor"']) {
+    assert(seed.includes(portal), `Missing ${portal}.`);
+  }
 });
 
-check('06', 'structured seven-portal acceptance exists', () => {
+check('06', 'local seven-portal acceptance is executable without GitHub Actions', () => {
   assert(exists('infrastructure/appwrite/scripts/test-seven-portals-development.mjs'), 'Missing seven-portal acceptance script.');
-  assert(exists('.github/workflows/appwrite-portal-development.yml'), 'Missing live Development acceptance workflow.');
+  const pkg = JSON.parse(read('package.json'));
+  assert(pkg.scripts?.['appwrite:smoke:portals']?.includes('test-seven-portals-development.mjs'), 'Missing local appwrite:smoke:portals command.');
+  const installer = read('infrastructure/upgrades/platform-completion-v1/upgrade.mjs');
+  assert(installer.includes('APPWRITE_SEED_PASSWORD'), 'Installer does not gate live portal acceptance on the seed credential.');
+  assert(installer.includes('appwrite:smoke:portals'), 'Installer does not execute the local seven-portal acceptance command.');
 });
 
-check('07', 'offline queue/replay and receipts exist', () => {
+check('07', 'offline queue/replay and canonical receipts exist', () => {
   const offline = read('apps/web/services/offlineWorkspace.ts');
-  assert(/replay|sync/iu.test(offline), 'Offline workspace lacks replay/sync handling.');
-  assert(read('infrastructure/appwrite/tables/schema.mjs').includes('offline_sync_receipts'), 'offline_sync_receipts is missing.');
+  for (const token of ['queuePhoto', 'enqueueMutation', 'detectDraftConflict', 'installReconnectSync', 'canSubmitInspection']) {
+    assert(offline.includes(token), `Offline workspace lacks ${token}.`);
+  }
+  const schema = read('infrastructure/appwrite/tables/schema.mjs');
+  assert(schema.includes("agencyEntity('offline_sync_receipts'"), 'offline_sync_receipts is missing.');
+  assert(schema.includes("unique('operation_once',['agencyId','operationId'])"), 'offline_sync_receipts lacks operation idempotency.');
+  assert(exists('apps/web/services/stage7OfflineContract.test.ts'), 'Stage 7 regression contract was not installed.');
 });
 
 check('08', 'migration dry-run/reconciliation framework exists', () => {
-  for (const path of ['infrastructure/appwrite/migrations/framework.mjs','infrastructure/appwrite/migrations/framework.test.mjs','infrastructure/appwrite/migrations/strata-d1-manifest.mjs','infrastructure/appwrite/migrations/strata-d1-manifest.test.mjs']) assert(exists(path), `Missing ${path}.`);
+  for (const path of ['infrastructure/appwrite/migrations/framework.mjs', 'infrastructure/appwrite/migrations/framework.test.mjs', 'infrastructure/appwrite/migrations/strata-d1-manifest.mjs', 'infrastructure/appwrite/migrations/strata-d1-manifest.test.mjs']) {
+    assert(exists(path), `Missing ${path}.`);
+  }
 });
 
 check('09', 'Shopify Development integration contracts exist', () => {
@@ -80,7 +99,9 @@ check('09', 'Shopify Development integration contracts exist', () => {
 
 check('10', 'canonical outbox and specialist worker contracts exist', () => {
   assert(read('apps/api/src/backend/appwriteAdapters.ts').includes("tableId: 'integration_outbox'"), 'Canonical integration outbox is not used.');
-  for (const worker of ['ai-worker','pdf-worker','notification-worker','document-worker','integration-worker']) assert(exists(`apps/${worker}/src`), `Missing ${worker}.`);
+  for (const worker of ['ai-worker', 'pdf-worker', 'notification-worker', 'document-worker', 'integration-worker']) {
+    assert(exists(`apps/${worker}/src`), `Missing ${worker}.`);
+  }
 });
 
 check('11', 'toolchain is pinned', () => {
@@ -91,9 +112,13 @@ check('11', 'toolchain is pinned', () => {
 });
 
 check('12', 'security and recovery gates exist', () => {
-  for (const path of ['scripts/scan-secrets.mjs','tests/rules/backend-boundary.test.ts','tests/rules/security-regressions.test.ts']) assert(exists(path), `Missing ${path}.`);
+  for (const path of ['scripts/scan-secrets.mjs', 'tests/rules/backend-boundary.test.ts', 'tests/rules/security-regressions.test.ts']) {
+    assert(exists(path), `Missing ${path}.`);
+  }
   const grant = read('apps/api/src/backend/appwriteExternalGrantStore.ts');
-  for (const token of ['GRANT_SCOPE_MISMATCH','GRANT_TOKEN_REVOKED','GRANT_TOKEN_EXPIRED','AMBIGUOUS_GRANT_TOKEN']) assert(grant.includes(token), `Grant fail-closed code ${token} is missing.`);
+  for (const token of ['GRANT_SCOPE_MISMATCH', 'GRANT_TOKEN_REVOKED', 'GRANT_TOKEN_EXPIRED', 'AMBIGUOUS_GRANT_TOKEN']) {
+    assert(grant.includes(token), `Grant fail-closed code ${token} is missing.`);
+  }
 });
 
 check('13', 'performance budget verifier is installed', () => {
