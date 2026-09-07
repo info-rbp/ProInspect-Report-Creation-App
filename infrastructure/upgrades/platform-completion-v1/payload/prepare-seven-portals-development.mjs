@@ -31,6 +31,9 @@ const personas = [
   ['dev_contractor', 'contractor_worker'],
 ];
 
+const createUserCommand = ['--json', 'users', 'create'];
+const updatePasswordCommand = ['--json', 'users', 'update-password'];
+
 const seed = JSON.parse(readFileSync(resolve(root, 'seeds/development.json'), 'utf8'));
 const seedRoles = new Map(seed.identities ?? []);
 for (const [userId, role] of personas) {
@@ -106,9 +109,7 @@ for (const [userId, role] of personas) {
       throw new Error(`Could not inspect synthetic Development persona ${userId}: ${detail || 'unknown Appwrite CLI error'}`);
     }
     run([
-      '--json',
-      'users',
-      'create',
+      ...createUserCommand,
       '--user-id', userId,
       '--email', email,
       '--password', password,
@@ -117,9 +118,7 @@ for (const [userId, role] of personas) {
   }
 
   run([
-    '--json',
-    'users',
-    'update-password',
+    ...updatePasswordCommand,
     '--user-id', userId,
     '--password', password,
   ]);
