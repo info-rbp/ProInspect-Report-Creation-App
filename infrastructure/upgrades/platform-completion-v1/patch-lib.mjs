@@ -24,12 +24,19 @@ export function writeIfChanged(path, value) {
   return true;
 }
 
+function uniqueAnchor(source, anchor, path, label) {
+  const first = source.indexOf(anchor);
+  if (first < 0) throw new Error(`${path}: could not locate ${label}.`);
+  if (source.indexOf(anchor, first + anchor.length) >= 0) {
+    throw new Error(`${path}: ${label} is ambiguous.`);
+  }
+  return first;
+}
+
 export function replaceOnce(path, oldValue, newValue, label = oldValue.slice(0, 60)) {
   const source = text(path);
   if (source.includes(newValue)) return false;
-  const first = source.indexOf(oldValue);
-  if (first < 0) throw new Error(`${path}: could not locate ${label}.`);
-  if (source.indexOf(oldValue, first + oldValue.length) >= 0) throw new Error(`${path}: ${label} is ambiguous.`);
+  const first = uniqueAnchor(source, oldValue, path, label);
   write(path, source.slice(0, first) + newValue + source.slice(first + oldValue.length));
   return true;
 }
@@ -37,10 +44,12 @@ export function replaceOnce(path, oldValue, newValue, label = oldValue.slice(0, 
 export function replaceSection(path, startAnchor, endAnchor, replacement, label) {
   const source = text(path);
   if (source.includes(replacement)) return false;
-  const start = source.indexOf(startAnchor);
-  if (start < 0) throw new Error(`${path}: could not locate ${label} start.`);
+  const start = uniqueAnchor(source, startAnchor, path, `${label} start`);
   const end = source.indexOf(endAnchor, start + startAnchor.length);
   if (end < 0) throw new Error(`${path}: could not locate ${label} end.`);
+  if (source.indexOf(endAnchor, end + endAnchor.length) >= 0) {
+    throw new Error(`${path}: ${label} end is ambiguous.`);
+  }
   write(path, source.slice(0, start) + replacement + source.slice(end));
   return true;
 }
@@ -57,8 +66,7 @@ export function replaceRegexOnce(path, pattern, replacement, label) {
 export function insertAfter(path, anchor, addition, label = anchor.slice(0, 60)) {
   const source = text(path);
   if (source.includes(addition)) return false;
-  const index = source.indexOf(anchor);
-  if (index < 0) throw new Error(`${path}: could not locate ${label}.`);
+  const index = uniqueAnchor(source, anchor, path, label);
   write(path, source.slice(0, index + anchor.length) + addition + source.slice(index + anchor.length));
   return true;
 }
@@ -66,8 +74,7 @@ export function insertAfter(path, anchor, addition, label = anchor.slice(0, 60))
 export function insertBefore(path, anchor, addition, label = anchor.slice(0, 60)) {
   const source = text(path);
   if (source.includes(addition)) return false;
-  const index = source.indexOf(anchor);
-  if (index < 0) throw new Error(`${path}: could not locate ${label}.`);
+  const index = uniqueAnchor(source, anchor, path, label);
   write(path, source.slice(0, index) + addition + source.slice(index));
   return true;
 }
