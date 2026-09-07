@@ -131,6 +131,7 @@ for (const marker of [
 }
 
 const stage7Contract = packageText('payload/stage7OfflineContract.test.ts');
+check(readFileSync(resolve(root, 'vitest.config.ts'), 'utf8').includes('apps/web/services/**/*.test.ts'), 'Vitest discovers Stage 7 and report-index service regression tests');
 check(stage7Contract.includes("'userId'"), 'Stage 7 regression checks legacy userId update compatibility');
 check(stage7Contract.includes("'deviceId'"), 'Stage 7 regression checks legacy deviceId update compatibility');
 check(stage7Contract.includes("'clientSubmissionId'"), 'Stage 7 regression checks legacy clientSubmissionId update compatibility');
