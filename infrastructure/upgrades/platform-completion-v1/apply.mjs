@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { applyStage02e } from './apply-02e-v2.mjs';
 import { applyStage04 } from './apply-04-v2.mjs';
+import { applyStage07 } from './apply-07.mjs';
 import { markStage, packageRoot } from './lib.mjs';
 import { writeIfChanged } from './patch-lib.mjs';
 
@@ -17,10 +18,11 @@ export async function applyUpdate({ persistState = true } = {}) {
     await applyStage04();
     writeIfChanged('apps/api/tests/stage4RuntimeParity.test.ts', payload('stage4RuntimeParity.test.ts'));
     if (persistState) markStage('04', 'complete', 'Client approval parity and worker grant authority cutover installed.');
+    if (persistState) markStage('05', 'complete', 'Seven portal Development personas and representative fixtures retained.');
+    if (persistState) markStage('06', 'complete', 'Structured seven-portal UAT acceptance retained and upgrade readiness gate installed.');
+    await applyStage07();
+    if (persistState) markStage('07', 'complete', 'Offline queue/replay and canonical sync receipt boundary installed.');
     for (const [id, detail] of [
-      ['05', 'Seven portal Development personas and representative fixtures retained.'],
-      ['06', 'Structured seven-portal UAT acceptance retained and upgrade readiness gate installed.'],
-      ['07', 'Offline queue/replay and canonical sync receipt boundary verified.'],
       ['08', 'Migration dry-run/reconciliation framework verified.'],
       ['09', 'Shopify Development integration contracts verified; live bridge runs during Development install when configured.'],
       ['10', 'Google specialist worker/outbox contracts verified; live project check runs during Development install when configured.'],
