@@ -1,42 +1,71 @@
 # ProInspect Platform Completion Update v1
 
-This package is the controlled software update for the ProInspect Development platform from the Stage 2D baseline through Stage 13 testing readiness.
+This package is the controlled software update for the ProInspect Development platform from the completed Stage 2D baseline through Stage 13 testing readiness.
 
-## Baseline
+## Baseline and target
 
 - Source branch: `feat/seven-portal-completion-chatgpt`
 - Baseline commit: `030d2650870f09556e72b7aebb58a4bec2a7a75f`
-- Update branch: `upgrade/platform-completion-v1`
+- Update-media branch: `upgrade/platform-completion-v1`
 - Node: `22.23.2`
 - npm: `10.9.2`
 - Appwrite CLI: `27.2.1`
 - Development Appwrite project: `proinspect-development`
+- Target Appwrite schema: `121` tables
+- Shopify Development store: `proinspect-2.myshopify.com`
 
-The legacy standalone Appwrite project `6a911f1e0031e90015b2` is explicitly prohibited by the installer.
+The legacy standalone Appwrite project `6a911f1e0031e90015b2` and the documented Production Google Cloud project `business-plan-applicatio-17047` are explicitly prohibited targets.
 
-## What the update covers
+## GitHub Actions is not required
 
-The update contains source migrations and permanent closure gates for:
+GitHub Actions is an optional future CI surface for this update, not a completion dependency. The monthly Actions quota may be unavailable. The authoritative validation paths are therefore local and are designed for the VS Code terminal:
 
-- Stage 2D external-grant closeout and seven-persona acceptance
-- Stage 2E Appwrite Storage/evidence authority
-- Stage 3 Appwrite transaction/rollback safety
-- Stage 4 client-approval parity and notification-worker grant authority
-- Stage 5 seven-persona and representative Development fixtures
-- Stage 6 structured UAT readiness
-- Stage 7 offline inspector queue/replay plus canonical sync receipts
-- Stage 8 migration dry-run/reconciliation
-- Stage 9 Shopify Development integration validation
-- Stage 10 Google worker Development integration validation
-- Stage 11 environment bootstrap/toolchain pinning
-- Stage 12 security/recovery hardening
-- Stage 13 performance/readiness budget
+- `npm run upgrade:audit` performs a non-mutating installer-media audit.
+- `npm run upgrade:local` creates a temporary detached Git worktree, installs dependencies there, applies the complete update and runs all local readiness gates without mutating Appwrite Development.
+- `npm run upgrade:install -- --development` repeats the guarded source installation and local gates before allowing the Development Appwrite push.
 
-Production mutation is intentionally out of scope. Shopify and Google Cloud Development checks use the authenticated local CLI/VS Code context and fail closed when full integration readiness is explicitly required.
+## Stage coverage
+
+The manifest records how each stage is completed rather than pretending every stage is a fresh rewrite:
+
+- Stage 2D: baseline verification of canonical external-grant authority.
+- Stage 2E: source migration to Appwrite Storage/evidence authority with an explicit Firebase rollback/emulator fallback.
+- Stage 3: verification of existing Appwrite transaction commit/rollback and recovery coverage.
+- Stage 4: source migration for dedicated `client_approvals` parity and canonical notification-worker grant authority.
+- Stage 5: verification of seven Development personas, portal entitlements and representative fixtures.
+- Stage 6: local seven-portal live acceptance plus consolidated UAT readiness gates.
+- Stage 7: source migration adding idempotent `offline_sync_receipts` plus permanent offline queue/replay regression coverage.
+- Stage 8: verification of deterministic migration dry-run/reconciliation framework.
+- Stage 9: Shopify Development contract verification plus exact Development-store target guard.
+- Stage 10: canonical worker/outbox contract verification plus explicit Google Cloud Development-project guard.
+- Stage 11: environment/toolchain bootstrap and target safety.
+- Stage 12: security, dependency, isolation and recovery gates.
+- Stage 13: blocking front-end performance budget.
+
+Production mutation is intentionally out of scope.
+
+## First: audit the update media
+
+From a clean checkout of the update branch:
+
+```bash
+git fetch origin
+git checkout upgrade/platform-completion-v1
+git pull --ff-only
+
+nvm use 22.23.2
+npm install -g npm@10.9.2 appwrite-cli@27.2.1
+npm ci
+
+npm run upgrade:audit
+npm run upgrade:local
+```
+
+`upgrade:local` uses a temporary detached worktree, so a successful or failed validation does not leave the update branch modified and cannot push Appwrite resources.
 
 ## Installation model
 
-The upgrade branch is the update media. Merge it into the Stage 2D feature branch, verify the exact toolchain and Development target, then run one Development installer command. Do not run `upgrade:apply` separately before `upgrade:install`; the installer applies the source update itself.
+The upgrade branch is the update media. Merge it into the completed Stage 2D feature branch, then run the guarded Development installer. Do not run `upgrade:apply` separately before `upgrade:install`; the installer applies the source update itself.
 
 ```bash
 git fetch origin
@@ -54,62 +83,81 @@ export APPWRITE_PROJECT_NAME="ProInspect Development"
 export APPWRITE_CONFIRM_PUSH="push-development"
 export APPWRITE_CONFIRM_VERIFY="verify-development"
 
-npm run upgrade:status
+unset APPWRITE_API_KEY
+read -s "APPWRITE_SEED_PASSWORD?Development seed password: "
+echo
+export APPWRITE_SEED_PASSWORD
+
+npm run upgrade:audit
 npm run upgrade:preflight -- --development
 npm run upgrade:install -- --development
 ```
 
-For the strict integrated-UAT gate, also select/authenticate the intended Google Cloud Development project in `gcloud`, set the Shopify Development store, and add `--require-integrations`:
+The Development installer requires `APPWRITE_SEED_PASSWORD` because seven-portal live acceptance is mandatory. It refuses `APPWRITE_API_KEY`; re-seeding with a deliberately created temporary key is a separate administrative operation and is not part of this installation package.
+
+## Integrated UAT targets
+
+For strict integrated-UAT readiness, declare the exact Shopify store and explicitly name the authenticated Google Cloud Development project. Do not derive the expected Google project from whichever project happens to be active, because humans already invented enough ways to deploy to the wrong environment.
 
 ```bash
 export SHOPIFY_STORE_DOMAIN="proinspect-2.myshopify.com"
-export GOOGLE_CLOUD_PROJECT="$(gcloud config get-value project)"
+export GOOGLE_CLOUD_PROJECT="YOUR_GOOGLE_CLOUD_DEVELOPMENT_PROJECT_ID"
+
+gcloud config get-value project
 
 npm run upgrade:install -- --development --require-integrations
 ```
 
-If the seven-persona live Development acceptance is required locally, set `APPWRITE_SEED_PASSWORD` in the terminal without committing it. A temporary `APPWRITE_API_KEY` is only needed when you deliberately want to re-seed Development; the installer never creates an API key itself.
+The installer checks that `gcloud config get-value project` exactly matches `GOOGLE_CLOUD_PROJECT` and rejects the documented Production Google Cloud project.
 
 ## Commands
 
 ```bash
 npm run upgrade:status
+npm run upgrade:audit
+npm run upgrade:local
 npm run upgrade:preflight -- --development
 npm run upgrade:install -- --development
 npm run upgrade:verify
-npm run upgrade:ci
 ```
 
 - `upgrade:status` shows installer state stored under `.git/`.
-- `upgrade:preflight` proves the repository baseline, exact Node/npm/Appwrite CLI versions and safe Development target.
-- `upgrade:install -- --development` applies the source migration, regenerates and pushes Appwrite Development resources, audits the control plane and runs all local testing-readiness gates.
-- `upgrade:verify` verifies an already-applied source update without mutating Development.
-- `upgrade:ci` is the clean-room installation path used by GitHub Actions.
+- `upgrade:audit` verifies manifest coverage, authoritative patchers, payloads, target schema, safety declarations and root command exposure. It does not alter source or remote systems.
+- `upgrade:local` performs an isolated clean-checkout installation and all local test gates in a temporary Git worktree. It does not mutate Development.
+- `upgrade:preflight -- --development` proves the repository baseline, exact toolchain and safe Appwrite Development target.
+- `upgrade:install -- --development` applies the source update, runs all local gates, then and only then pushes Appwrite Development resources, audits the control plane and performs mandatory seven-portal live acceptance.
+- `upgrade:verify` verifies an already-applied source update without pushing Development resources.
+- `upgrade:ci` remains available for future CI runners, but it is not required for package completion.
 
-## Safety
+## Safety and execution order
 
 The installer refuses:
 
 - the legacy Appwrite project `6a911f1e0031e90015b2`;
+- any `APPWRITE_API_KEY` during normal installation;
+- a missing seven-portal seed password;
 - malformed/Markdown endpoint values;
 - Node/npm/Appwrite CLI version drift;
-- an unexpected repository/baseline;
+- an unexpected repository or missing Stage 2D baseline;
 - a dirty working tree before Development installation;
-- full integrated-UAT mode when Shopify or Google Cloud Development targets cannot be positively verified.
+- the documented Production Google Cloud project;
+- integrated-UAT mode when Shopify or Google Cloud Development targets cannot be positively verified.
 
-The installer does not create persistent Appwrite API keys and never mutates Production resources.
+Before `appwrite:push:development` can run, the installed source must pass formatting, linting, TypeScript, unit/rules tests, Appwrite generation/validation, production builds, artifact verification, Firebase emulator tests, Playwright E2E, secret scanning, high-severity production dependency policy, Stage 2D-13 source verification and the Stage 13 performance budget.
 
 ## Completion definition
 
-Core Development UAT readiness requires:
+Installer-media completion requires `npm run upgrade:audit` to pass.
 
-1. all Stage 2D-13 source/boundary checks pass;
-2. Appwrite source validates with the upgraded schema;
-3. the Development push and control-plane audit succeed with zero persistent API keys;
-4. `npm run check`, rules, emulator, E2E and secret scanning pass;
-5. evidence, grant, approval, transaction, offline and worker boundaries are canonical;
-6. the Stage 13 performance budget passes.
+Local executable completion requires `npm run upgrade:local` to pass in the isolated worktree.
 
-Full integrated UAT additionally requires positive Shopify Development and Google Cloud Development target verification and the seven-persona live acceptance when that gate is enabled.
+Core Development UAT readiness additionally requires:
 
-After a successful install, the intentional source changes remain in the working tree for review and commit; generated TypeScript build metadata and test-result artifacts are automatically cleaned.
+1. the guarded Appwrite Development push succeeds with the 121-table target;
+2. the Development control-plane audit succeeds with zero persistent API keys;
+3. mandatory seven-portal live acceptance succeeds using `APPWRITE_SEED_PASSWORD`;
+4. the post-acceptance Development control-plane audit remains clean.
+
+Full integrated UAT additionally requires exact Shopify Development and explicit Google Cloud Development target verification with `--require-integrations`.
+
+After a successful Development install, the intentional source changes remain in the working tree for review and explicit commit. Generated TypeScript build metadata and Playwright test-result artifacts are automatically cleaned.
