@@ -5,6 +5,7 @@ import { unifiedPlatformExtensionTables } from '../../appwrite/tables/unified-pl
 import { manifest, nextStageState, packageRoot, root } from './lib.mjs';
 import { auditPersonaPreparer } from './persona-contract.mjs';
 import { developmentIntegrationChecks } from './integration-checks.mjs';
+import { buildPortalFixturePlan } from './payload/development-portal-fixtures.mjs';
 
 const failures = [];
 const check = (ok, label) => {
@@ -35,6 +36,14 @@ check(
     ? `canonical Appwrite source table IDs are unique (duplicates: ${duplicateTableIds.join(', ')})`
     : 'canonical Appwrite source table IDs are unique',
 );
+const fixtureSeed = JSON.parse(readFileSync(resolve(root, 'infrastructure/appwrite/seeds/development.json'), 'utf8'));
+const fixturePlan = buildPortalFixturePlan(fixtureSeed, fixtureSeed.identities.filter(([id]) => fixtureSeed.portalEntitlements.some((item) => item.userId === id)));
+for (const fixture of fixturePlan) {
+  const columns = new Map(sourceTables.find((table) => table.$id === fixture.tableId)?.columns.map((column) => [column.key, column]) ?? []);
+  const valid = Object.entries(fixture.data).every(([key, value]) => columns.has(key) && (!columns.get(key).elements || columns.get(key).elements.includes(value)))
+    && [...columns.values()].every((column) => !column.required || fixture.data[column.key] !== undefined || ['createdAt', 'updatedAt'].includes(column.key));
+  check(valid, `synthetic fixture ${fixture.tableId}/${fixture.rowId} matches source columns and required fields`);
+}
 
 for (const stage of manifest.stages) {
   check(['baseline','migration','verified-existing','closure'].includes(stage.completionMode), `Stage ${stage.id} has an explicit completion mode`);
@@ -46,9 +55,10 @@ for (const path of [
 ]) check(packageHas(path), `package contains ${path}`);
 
 check(!packageHas('apply-02e.mjs') && !packageHas('apply-04.mjs'), 'superseded patchers are absent');
-for (const path of ['persona-contract.mjs', 'integration-checks.mjs']) check(packageHas(path), `package contains ${path}`);
+for (const path of ['persona-contract.mjs', 'integration-checks.mjs', 'payload/development-portal-fixtures.mjs']) check(packageHas(path), `package contains ${path}`);
 
 const apply = packageText('apply.mjs');
+check(apply.includes('development-portal-fixtures.mjs'), 'installer installs the synthetic portal fixture planner');
 for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-07-live-schema-fix.mjs","./apply-lint-cleanup.mjs","applyStage07LiveSchemaFix()","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts","prepare-seven-portals-development.mjs"]) {
   check(apply.includes(marker), `apply sequence contains ${marker}`);
 }
@@ -162,6 +172,7 @@ check(!diffAudit.includes('const required = ['), 'bounded diff audit does not re
 check(!diffAudit.includes('Update did not produce required source changes'), 'bounded diff audit accepts idempotent partial or no-op re-application');
 check(diffAudit.includes('stage-verification.mjs before this bounded-diff gate runs'), 'bounded diff audit delegates required final-state validation to stage verification');
 check(diffAudit.includes('infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs'), 'bounded diff audit permits the Development persona preparer');
+check(diffAudit.includes('infrastructure/appwrite/scripts/development-portal-fixtures.mjs'), 'bounded diff audit permits the Development fixture planner');
 
 const installer = packageText('upgrade.mjs');
 const integrationChecks = packageText('integration-checks.mjs');

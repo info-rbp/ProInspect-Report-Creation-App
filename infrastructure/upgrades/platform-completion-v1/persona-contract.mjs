@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { assertDevelopmentTarget } from '../../appwrite/scripts/safety.mjs';
+import { buildPortalFixturePlan, portalFixtureChange } from './payload/development-portal-fixtures.mjs';
 
 const personas = [
   ['dev_admin', 'proinspect_admin'],
@@ -54,6 +55,8 @@ export function auditPersonaPreparer(source, check) {
     };
     const calls = [];
     const mutations = [];
+    const rowMutations = [];
+    const rows = options.rows ?? new Map();
     const messages = [];
     const users = options.users ?? new Map(personas.map(([id]) => [id, { $id: id, email: `${id}@example.com`, status: true }]));
     const process = { env, execPath: '/fixture/node', exitCode: 0 };
@@ -67,12 +70,33 @@ export function auditPersonaPreparer(source, check) {
       }
       assert.equal(command, 'appwrite', 'Only the account-authenticated CLI is permitted');
       if (args[0] === '--version') return { status: 0, stdout: `appwrite version ${options.version ?? '27.2.1'}` };
-      assert.equal(args[0], '--json');
+      assert(['--json', '--raw'].includes(args[0]));
       if (args[1] === 'project' && args[2] === 'get') {
         assert.equal(args[4], 'proinspect-development');
         return success({ $id: 'proinspect-development', name: 'ProInspect Development', status: 'active', region: 'syd', ...options.live });
       }
       assert.equal(config.cwd, '/fixture/.generated', 'User operations require the materialized Development config');
+      if (args[1] === 'tablesdb') {
+        assert.equal(args[args.indexOf('--database-id') + 1], 'proinspect_core');
+        const tableId = args[args.indexOf('--table-id') + 1];
+        const rowId = args[args.indexOf('--row-id') + 1];
+        const key = `${tableId}/${rowId}`;
+        const expected = buildPortalFixturePlan(seed, personas).find((item) => item.tableId === tableId && item.rowId === rowId);
+        assert(expected, 'Only source-controlled synthetic fixtures may be accessed');
+        if (args[2] === 'get-row') {
+          assert.equal(args[0], '--raw', 'Fixture reads must preserve permissions and nulls');
+          if (options.rowLookupFailure) return { status: 1, stderr: options.rowLookupFailure };
+          return rows.has(key) ? success(rows.get(key)) : { status: 1, stderr: '404 row_not_found' };
+        }
+        assert(['create-row', 'update-row'].includes(args[2]), 'Fixture deletion and arbitrary row operations are forbidden');
+        assert.equal(rows.has(key), args[2] === 'update-row');
+        const data = JSON.parse(args[args.indexOf('--data') + 1]);
+        const permissions = Array.from(args).flatMap((arg, index) => arg === '--permissions' ? [args[index + 1]] : []);
+        assert.deepEqual(permissions, expected.permissions);
+        rows.set(key, { $id: rowId, ...data, $permissions: permissions });
+        rowMutations.push([args[2], key]);
+        return success(rows.get(key));
+      }
       assert.equal(args[1], 'users', 'No key creation or other remote resource operation is allowed');
       const id = args[args.indexOf('--user-id') + 1];
       assert(personas.some(([userId]) => userId === id), 'Only the seven synthetic IDs may be accessed');
@@ -102,7 +126,7 @@ export function auditPersonaPreparer(source, check) {
     let error;
     try {
       runInNewContext(code, {
-        process, spawnSync, dirname, resolve, fileURLToPath, assertDevelopmentTarget,
+        process, spawnSync, dirname, resolve, fileURLToPath, assertDevelopmentTarget, buildPortalFixturePlan, portalFixtureChange,
         readFileSync: (path) => {
           assert.equal(path, '/fixture/seeds/development.json');
           return JSON.stringify(options.seed ?? seed);
@@ -110,7 +134,7 @@ export function auditPersonaPreparer(source, check) {
         console: { log: (value) => messages.push(String(value)), error: (value) => messages.push(String(value)) },
       }, { timeout: 1000 });
     } catch (cause) { error = String(cause); }
-    return { failed: Boolean(error || process.exitCode), detail: [error, ...messages].join('\n'), mutations, calls, users };
+    return { failed: Boolean(error || process.exitCode), detail: [error, ...messages].join('\n'), mutations, rowMutations, rows, calls, users };
   }
 
   const test = (label, fn) => {
@@ -126,8 +150,63 @@ export function auditPersonaPreparer(source, check) {
   };
   test('resets all seven existing personas on every rerun without creating duplicates', () => {
     const first = execute(); accepted(first);
-    const second = execute({ users: first.users }); accepted(second);
+    const second = execute({ users: first.users, rows: first.rows }); accepted(second);
     assert.equal(first.mutations.length, 7); assert.equal(second.mutations.length, 7);
+    assert.equal(second.rowMutations.length, 0, 'Fixture reconciliation must be a no-op on rerun');
+  });
+  test('restores missing entitlements and representative fixtures with scoped read permissions', () => {
+    const result = execute(); accepted(result);
+    assert.equal(result.rows.size, 51);
+    for (const [id] of personas) {
+      const entitlement = [...result.rows.entries()].find(([key, row]) => key.startsWith('portal_entitlements/') && row.userId === id)?.[1];
+      assert(entitlement, `Missing portal entitlement for ${id}`);
+      assert.deepEqual(entitlement.$permissions, [`read("user:${id}")`]);
+    }
+    for (const key of ['clients/dev_client', 'units/dev_unit_1', 'occupancies/dev_occupancy_tenant', 'occupancies/dev_occupancy_owner', 'contractors/dev_contractor_profile', 'property_client_relationships/dev_property_client']) assert(result.rows.has(key), `Missing ${key}`);
+    const incident = result.rows.get('incidents/dev_incident');
+    assert.deepEqual(incident.$permissions, ['read("user:dev_admin")', 'read("user:dev_building_manager")', 'read("user:dev_strata_manager")']);
+    const commercial = result.rows.get('managed_sites/dev_site_commercial');
+    assert.deepEqual(commercial.$permissions, ['read("user:dev_admin")']);
+  });
+  test('repairs synthetic fixture permission drift without changing creation time', () => {
+    const first = execute(); accepted(first);
+    const row = first.rows.get('portal_entitlements/dev_admin_portal');
+    const createdAt = row.createdAt;
+    row.$permissions = [];
+    const next = execute({ rows: first.rows }); accepted(next);
+    assert.deepEqual(next.rowMutations, [['update-row', 'portal_entitlements/dev_admin_portal']]);
+    assert.equal(next.rows.get('portal_entitlements/dev_admin_portal').createdAt, createdAt);
+  });
+  test('migrates only the documented legacy synthetic contractor reference', () => {
+    const first = execute(); accepted(first);
+    const order = first.rows.get('maintenance_work_orders/dev_work_order');
+    order.contractorId = 'dev_contractor';
+    const migrated = execute({ rows: first.rows }); accepted(migrated);
+    assert.deepEqual(migrated.rowMutations, [['update-row', 'maintenance_work_orders/dev_work_order']]);
+    assert.equal(order.agencyId, 'dev_agency');
+    assert.equal(migrated.rows.get('maintenance_work_orders/dev_work_order').contractorId, 'dev_contractor_profile');
+    migrated.rows.get('maintenance_work_orders/dev_work_order').contractorId = 'unrelated_contractor';
+    const rejected = execute({ rows: migrated.rows });
+    assert(rejected.failed); assert.equal(rejected.rowMutations.length, 0);
+  });
+  test('treats Appwrite-normalized timestamps as unchanged on rerun', () => {
+    const first = execute(); accepted(first);
+    const job = first.rows.get('inspection_jobs/dev_inspection_job');
+    job.scheduledDate = job.scheduledDate.replace('Z', '+00:00');
+    const next = execute({ rows: first.rows }); accepted(next);
+    assert.equal(next.rowMutations.length, 0);
+  });
+  for (const [label, override] of [['agency scope', { agencyId: 'other_agency' }], ['user identity', { userId: 'dev_inspector' }]]) {
+    test(`rejects conflicting fixture ${label} before any fixture writes`, () => {
+      const row = { $id: 'dev_admin_portal', agencyId: 'dev_agency', userId: 'dev_admin', ...override };
+      const result = execute({ rows: new Map([['portal_entitlements/dev_admin_portal', row]]) });
+      assert(result.failed);
+      assert.equal(result.rowMutations.length, 0);
+    });
+  }
+  test('rejects a fixture lookup permission error without creating rows', () => {
+    const result = execute({ rowLookupFailure: '401 unauthorized' });
+    assert(result.failed); assert.equal(result.rowMutations.length, 0);
   });
   test('creates missing personas and enables disabled personas before resetting passwords', () => {
     const users = new Map([['dev_admin', { $id: 'dev_admin', email: 'dev_admin@example.com', status: false }]]);

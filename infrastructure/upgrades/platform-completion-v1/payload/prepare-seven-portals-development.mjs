@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertDevelopmentTarget } from '../scripts/safety.mjs';
+import { buildPortalFixturePlan, portalFixtureChange } from './development-portal-fixtures.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const generated = resolve(root, '.generated');
@@ -43,6 +44,7 @@ for (const [userId, role] of personas) {
     throw new Error(`Development seed does not contain expected persona ${userId} with role ${role}.`);
   }
 }
+const fixtures = buildPortalFixturePlan(seed, personas);
 
 function redact(value) {
   return String(value ?? '')
@@ -133,4 +135,23 @@ for (const [userId, role] of personas) {
   ]);
 }
 
+// Inspect every planned row before writing any fixture. The raw CLI response
+// preserves permissions, nested values and nulls for exact comparison.
+const changes = [];
+for (const fixture of fixtures) {
+  const identity = ['--database-id', 'proinspect_core', '--table-id', fixture.tableId, '--row-id', fixture.rowId];
+  const result = run(['--raw', 'tablesdb', 'get-row', ...identity], generated, { allowFailure: true });
+  let existing;
+  if (result.status === 0) existing = parseCliJson(result.stdout);
+  else if (!/(404|not found|could not be found)/iu.test(redact(`${result.stderr}\n${result.stdout}`))) {
+    throw new Error(`Could not inspect synthetic fixture ${fixture.tableId}/${fixture.rowId}; refusing fixture writes.`);
+  }
+  const change = portalFixtureChange(fixture, existing, new Date().toISOString());
+  if (change) changes.push({ identity, existing: Boolean(existing), ...change });
+}
+for (const change of changes) {
+  run(['--json', 'tablesdb', change.existing ? 'update-row' : 'create-row', ...change.identity,
+    '--data', JSON.stringify(change.data), ...change.permissions.flatMap((permission) => ['--permissions', permission])]);
+}
+console.log(`Reconciled ${fixtures.length} synthetic Development portal fixtures (${changes.length} changed); no unrelated rows were modified.`);
 console.log(`Prepared ${personas.length} synthetic Development personas in ${target.projectId} using the authenticated Appwrite CLI session; no API key was created or used.`);

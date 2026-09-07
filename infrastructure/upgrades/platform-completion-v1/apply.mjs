@@ -20,5 +20,6 @@ export async function applyUpdate() {
   await applyStage07LiveSchemaFix();
   writeIfChanged('apps/web/services/stage7OfflineContract.test.ts', payload('stage7OfflineContract.test.ts'));
   writeIfChanged('infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs', payload('prepare-seven-portals-development.mjs'));
+  writeIfChanged('infrastructure/appwrite/scripts/development-portal-fixtures.mjs', payload('development-portal-fixtures.mjs'));
   await applyLintCleanup();
 }

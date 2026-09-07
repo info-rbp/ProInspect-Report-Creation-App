@@ -15,6 +15,7 @@ const allowed = new Set([
   'infrastructure/appwrite/tables/schema.test.mjs',
   'infrastructure/appwrite/tables/tables.json',
   'infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs',
+  'infrastructure/appwrite/scripts/development-portal-fixtures.mjs',
   'apps/api/src/backend/externalEvidenceRoutes.ts',
   'apps/web/services/platform/externalEvidenceUploadService.ts',
   'apps/api/src/backend/tenantPortalRoutes.ts',
