@@ -108,7 +108,18 @@ export async function applyStage04() {
   insertBefore('apps/api/src/backend/tenantPortalRoutes.ts', 'async function generateGrant(', automationRoute, 'internal automation grant route');
   insertAfter('apps/api/src/backend/tenantPortalRoutes.ts', "  if (parts[0] !== 'api' || parts[1] !== 'v1') return undefined;\n", "  if (parts[2] === 'internal' && parts[3] === 'tenant-portal-grants' && parts[4] === 'automation' && req.method === 'POST') return automationGrant(req, dependencies, correlationId);\n", 'internal tenant automation route mount');
 
-  for (const path of ['apps/notification-worker/src/index.ts', 'apps/notification-worker/src/runtime.ts']) {
-    replaceSection(path, 'async function portalLink(', 'async function emitAutomationNotification', workerPortalLink, `${path} canonical tenant grant API`);
-  }
+  replaceSection(
+    'apps/notification-worker/src/index.ts',
+    'async function portalLink(',
+    'async function emitAutomationNotification',
+    workerPortalLink,
+    'notification index canonical tenant grant API',
+  );
+  replaceSection(
+    'apps/notification-worker/src/runtime.ts',
+    'async function portalLink(',
+    'async function queueTenantEvent',
+    workerPortalLink,
+    'notification runtime canonical tenant grant API',
+  );
 }
