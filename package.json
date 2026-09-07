@@ -58,6 +58,7 @@
     "upgrade:apply": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs apply",
     "upgrade:verify": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs verify",
     "upgrade:audit": "node infrastructure/upgrades/platform-completion-v1/package-audit.mjs",
+    "upgrade:local": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs local",
     "upgrade:install": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs install",
     "upgrade:ci": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs ci",
     "prepare": "node scripts/verify-workspace.mjs"
