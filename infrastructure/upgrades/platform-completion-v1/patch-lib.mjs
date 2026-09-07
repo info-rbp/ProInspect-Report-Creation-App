@@ -34,6 +34,17 @@ export function replaceOnce(path, oldValue, newValue, label = oldValue.slice(0, 
   return true;
 }
 
+export function replaceSection(path, startAnchor, endAnchor, replacement, label) {
+  const source = text(path);
+  if (source.includes(replacement)) return false;
+  const start = source.indexOf(startAnchor);
+  if (start < 0) throw new Error(`${path}: could not locate ${label} start.`);
+  const end = source.indexOf(endAnchor, start + startAnchor.length);
+  if (end < 0) throw new Error(`${path}: could not locate ${label} end.`);
+  write(path, source.slice(0, start) + replacement + source.slice(end));
+  return true;
+}
+
 export function replaceRegexOnce(path, pattern, replacement, label) {
   const source = text(path);
   const matches = [...source.matchAll(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`))];
