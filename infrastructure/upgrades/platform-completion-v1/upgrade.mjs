@@ -31,7 +31,10 @@ function banner() {
 function verifyRepository() {
   assert(existsSync(resolve(root, '.git')), 'Run this update from the ProInspect repository root.');
   const repository = output('git', ['remote', 'get-url', 'origin']);
-  assert(repository.includes('ProInspect-Report-Creation-App'), `Unexpected git origin: ${repository}`);
+  assert(
+    /(?:github\.com[:/])info-rbp\/ProInspect-Report-Creation-App(?:\.git)?$/u.test(repository),
+    `Unexpected git origin: ${repository}`,
+  );
   const head = output('git', ['rev-parse', 'HEAD']);
   const baseline = output('git', ['merge-base', manifest.baselineCommit, head]);
   assert(baseline === manifest.baselineCommit, `Current HEAD does not contain required baseline ${manifest.baselineCommit}.`);
@@ -129,6 +132,13 @@ async function localReadiness() {
   }
 }
 
+function recordSuccessfulInstallation() {
+  for (const stage of manifest.stages) {
+    markStage(stage.id, 'complete', 'Development installation and all required gates completed.');
+  }
+  markStage('update', 'complete', `Installed ${manifest.id} v${manifest.version} to Development.`);
+}
+
 async function installDevelopment() {
   banner();
   verifyRepository();
@@ -139,7 +149,7 @@ async function installDevelopment() {
   assert(!process.env.APPWRITE_API_KEY?.trim(), 'APPWRITE_API_KEY must be unset. This installer does not create or depend on a persistent Appwrite API key.');
   assert(process.env.APPWRITE_SEED_PASSWORD?.trim(), 'APPWRITE_SEED_PASSWORD is required for the mandatory seven-portal Development acceptance test.');
 
-  await applyUpdate({ persistState: true });
+  await applyUpdate({ persistState: false });
   run('npm', ['run', 'format']);
   run('npm', ['run', 'appwrite:generate']);
   await verifyStages();
@@ -155,6 +165,7 @@ async function installDevelopment() {
   run('npm', ['run', 'appwrite:audit:development']);
   run('npm', ['run', 'appwrite:smoke:portals'], { env: { APPWRITE_CONFIRM_TEST: 'test-development' } });
   run('npm', ['run', 'appwrite:audit:development']);
+  recordSuccessfulInstallation();
 
   console.log('PASS: Stages 2D-13 core application and live seven-portal gates completed. Development is ready for structured core UAT.');
   if (integrations.shopify && integrations.google) {
