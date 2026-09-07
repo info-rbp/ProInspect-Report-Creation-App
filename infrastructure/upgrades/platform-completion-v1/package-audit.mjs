@@ -56,9 +56,17 @@ for (const marker of [
   'Firebase admin helper removed',
   'notification-worker/src/index.ts',
   "import { createHash } from 'node:crypto';",
+  'apps/api/src/backend/appwriteEvidenceStore.ts',
+  'return Buffer.from(downloaded);',
+  'normalize Appwrite evidence download to Buffer.from(ArrayBuffer)',
 ]) {
-  check(lintCleanup.includes(marker), `lint cleanup contains ${marker}`);
+  check(lintCleanup.includes(marker), `lint/type cleanup contains ${marker}`);
 }
+
+const stage2eContract = packageText('payload/stage2eProviderBoundary.test.ts');
+check(stage2eContract.includes("expect(store).toContain('return Buffer.from(downloaded);')"), 'Stage 2E regression requires direct Buffer conversion for Appwrite downloads');
+check(stage2eContract.includes("expect(store).not.toContain('ArrayBuffer.isView(downloaded)')"), 'Stage 2E regression rejects impossible ArrayBuffer view narrowing branch');
+check(stage2eContract.includes("expect(store).not.toContain('downloaded.buffer')"), 'Stage 2E regression rejects downloaded.buffer access');
 
 const stage07 = packageText('apply-07.mjs');
 for (const marker of [
