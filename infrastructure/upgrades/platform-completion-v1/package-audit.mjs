@@ -27,7 +27,7 @@ for (const stage of manifest.stages) {
 }
 
 for (const path of [
-  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','stage-verification.mjs','performance-budget.mjs','upgrade.mjs',
+  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','upgrade.mjs',
   'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts',
 ]) check(packageHas(path), `package contains ${path}`);
 
@@ -42,9 +42,15 @@ const stage07 = packageText('apply-07.mjs');
 check(stage07.includes("agencyEntity('offline_sync_receipts'") && stage07.includes("unique('operation_once',['agencyId','operationId'])") && stage07.includes('toHaveLength(121)'), 'Stage 7 installs idempotent offline receipts and 121-table target');
 
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
-for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:install']) {
+for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:local','upgrade:install']) {
   check(Boolean(rootPackage.scripts?.[script]), `root package exposes ${script}`);
 }
+
+const installer = packageText('upgrade.mjs');
+check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
+check(installer.indexOf("run('npm', ['run', 'check'])") < installer.indexOf("run('npm', ['run', 'appwrite:push:development'])"), 'local check is ordered before Appwrite Development push');
+check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects Appwrite API keys');
+check(installer.includes('APPWRITE_SEED_PASSWORD is required'), 'installer requires seven-portal acceptance credential');
 
 check(existsSync(resolve(root, 'infrastructure/appwrite/scripts/test-seven-portals-development.mjs')), 'local seven-portal acceptance script exists');
 check(existsSync(resolve(root, 'apps/web/services/offlineWorkspace.ts')), 'offline workspace implementation exists');
