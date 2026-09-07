@@ -75,10 +75,17 @@ check('06', 'local seven-portal acceptance is executable without GitHub Actions'
   assert(installer.includes('appwrite:smoke:portals'), 'Installer does not execute the local seven-portal acceptance command.');
 });
 
-check('07', 'offline queue/replay and canonical receipts exist', () => {
+check('07', 'offline replay is idempotent and receipt-backed', () => {
   const offline = read('apps/web/services/offlineWorkspace.ts');
   for (const token of ['queuePhoto', 'enqueueMutation', 'detectDraftConflict', 'installReconnectSync', 'canSubmitInspection']) {
     assert(offline.includes(token), `Offline workspace lacks ${token}.`);
+  }
+  const coordinator = read('apps/web/services/offlineSyncCoordinator.ts');
+  assert(coordinator.includes("item.operation !== 'job.patch'"), 'Offline replay does not fail closed on unsupported operations.');
+  assert(coordinator.includes('operationId: item.id'), 'Offline replay does not send a stable operation ID.');
+  const server = read('apps/api/src/backend/platformEnhancementRoutes.ts');
+  for (const token of ["deps.idempotency.execute(", "'offline.job.patch'", "deps.repository.get('offlineSyncReceipts'", "'offlineSyncReceipts',", 'OFFLINE_OPERATION_REUSE']) {
+    assert(server.includes(token), `Offline server replay is missing ${token}.`);
   }
   const schema = read('infrastructure/appwrite/tables/schema.mjs');
   assert(schema.includes("agencyEntity('offline_sync_receipts'"), 'offline_sync_receipts is missing.');
