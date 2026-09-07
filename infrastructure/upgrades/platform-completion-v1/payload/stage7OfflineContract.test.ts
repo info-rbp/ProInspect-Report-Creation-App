@@ -41,12 +41,19 @@ describe('Stage 7 offline field operations boundary', () => {
     expect(source).toContain('resultHash');
   });
 
-  it('defines an idempotent canonical server receipt table', () => {
-    const schema = read('infrastructure/appwrite/tables/schema.mjs');
+  it('migrates the existing canonical receipt table to operation-level idempotency', () => {
+    const schema = read('infrastructure/appwrite/tables/unified-platform-extensions.mjs');
     expect(schema).toContain("agencyEntity('offline_sync_receipts'");
-    expect(schema).toContain("unique('operation_once',['agencyId','operationId'])");
-    expect(schema).toContain("str('payloadHash',64,true)");
-    expect(schema).toContain("integer('baseVersion')");
+    expect(schema).toContain("unique('operation_once', ['agencyId', 'operationId'])");
+    expect(schema).toContain("str('inspectionJobId', 36, true)");
+    expect(schema).toContain("str('operationId', 128, true)");
+    expect(schema).toContain("str('operation', 64, true)");
+    expect(schema).toContain("str('payloadHash', 128, true)");
+    expect(schema).toContain("integer('baseVersion', true)");
     expect(schema).toContain("integer('resultVersion')");
+    expect(schema).toContain("str('deviceId', 128)");
+    expect(schema).toContain("str('clientSubmissionId', 128)");
+    expect(schema).not.toContain("str('deviceId', 128, true)");
+    expect(schema).not.toContain("str('clientSubmissionId', 128, true)");
   });
 });
