@@ -1,5 +1,6 @@
-import { existsSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   assert,
   manifest,
@@ -37,13 +38,22 @@ function verifyRepository() {
 }
 
 function cleanupGeneratedArtifacts() {
-  run('git', ['restore', '--', ':(glob)**/tsconfig.tsbuildinfo']);
+  const tracked = output('git', ['ls-files', '--', ':(glob)**/tsconfig.tsbuildinfo'])
+    .split('\n')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (tracked.length) run('git', ['restore', '--', ...tracked]);
   rmSync(resolve(root, 'test-results'), { recursive: true, force: true });
+}
+
+function runPackageAudit() {
+  run('node', [resolve(packageRoot, 'package-audit.mjs')]);
 }
 
 async function preflight() {
   banner();
   verifyRepository();
+  runPackageAudit();
   const versions = verifyToolchain();
   if (development) verifyDevelopmentEnvironment();
   console.log('PASS repository origin and Stage 2D baseline');
@@ -54,6 +64,7 @@ async function preflight() {
 async function sourceVerify() {
   banner();
   verifyRepository();
+  runPackageAudit();
   await verifyStages();
   run('node', [resolve(packageRoot, 'performance-budget.mjs')]);
 }
@@ -62,97 +73,129 @@ function developmentIntegrationChecks() {
   let shopify = false;
   let google = false;
 
-  const shop = process.env.SHOPIFY_STORE_DOMAIN?.trim() || process.env.SHOPIFY_SHOP_DOMAIN?.trim();
+  const expectedShop = manifest.development.shopifyStore.toLowerCase();
+  const shop = (process.env.SHOPIFY_STORE_DOMAIN?.trim() || process.env.SHOPIFY_SHOP_DOMAIN?.trim() || '').toLowerCase();
   if (shop) {
-    assert(/proinspect-2\.myshopify\.com$/iu.test(shop), `Unexpected Shopify store for Development integration: ${shop}`);
+    assert(shop === expectedShop, `SHOPIFY_STORE_DOMAIN must be ${manifest.development.shopifyStore}; found ${shop}.`);
     shopify = true;
-    console.log(`PASS Stage 09 Shopify Development bridge target ${shop}`);
+    console.log(`PASS Stage 09 Shopify Development target ${shop}`);
   } else {
-    console.log('INFO Stage 09 live Shopify bridge target is not declared. Set SHOPIFY_STORE_DOMAIN=proinspect-2.myshopify.com for full integration readiness.');
+    console.log(`INFO Stage 09 target not declared. Set SHOPIFY_STORE_DOMAIN=${manifest.development.shopifyStore} for integrated UAT.`);
   }
 
-  try {
-    const configured = output('gcloud', ['config', 'get-value', 'project']);
-    const expected = process.env.GOOGLE_CLOUD_PROJECT?.trim() || configured;
-    if (configured && configured !== '(unset)' && expected === configured) {
-      google = true;
-      console.log(`PASS Stage 10 Google Cloud Development project ${configured}`);
+  const expectedGoogle = process.env.GOOGLE_CLOUD_PROJECT?.trim();
+  if (expectedGoogle) {
+    assert(
+      !manifest.development.prohibitedGoogleCloudProjectIds.includes(expectedGoogle),
+      `Prohibited Production Google Cloud project selected: ${expectedGoogle}.`,
+    );
+    let configured;
+    try {
+      configured = output('gcloud', ['config', 'get-value', 'project']);
+    } catch {
+      throw new Error('GOOGLE_CLOUD_PROJECT is set but the authenticated gcloud project could not be read.');
     }
-  } catch {
-    console.log('INFO Stage 10 gcloud target could not be verified. Authenticate/select the Development project for full integration readiness.');
+    assert(configured && configured !== '(unset)', 'gcloud has no active project.');
+    assert(configured === expectedGoogle, `gcloud project ${configured} does not match GOOGLE_CLOUD_PROJECT ${expectedGoogle}.`);
+    google = true;
+    console.log(`PASS Stage 10 Google Cloud Development target ${configured}`);
+  } else {
+    console.log('INFO Stage 10 target not declared. Set GOOGLE_CLOUD_PROJECT explicitly to the authenticated Development project for integrated UAT.');
   }
 
   if (requireIntegrations) {
-    assert(shopify, 'Full integration readiness requires SHOPIFY_STORE_DOMAIN=proinspect-2.myshopify.com.');
-    assert(google, 'Full integration readiness requires an authenticated Google Cloud Development project in gcloud.');
+    assert(shopify, `Integrated UAT requires SHOPIFY_STORE_DOMAIN=${manifest.development.shopifyStore}.`);
+    assert(google, 'Integrated UAT requires an explicit, authenticated GOOGLE_CLOUD_PROJECT that is not the prohibited Production project.');
   }
 
   return { shopify, google };
 }
 
 async function localReadiness() {
-  run('npm', ['run', 'check']);
-  run('npm', ['run', 'test:emulator']);
-  run('npm', ['run', 'test:e2e']);
-  run('npm', ['run', 'security:scan']);
-  run('npm', ['audit', '--omit=dev', '--audit-level=high']);
-  cleanupGeneratedArtifacts();
+  try {
+    run('npm', ['run', 'check']);
+    run('npm', ['run', 'test:emulator']);
+    run('npm', ['run', 'test:e2e']);
+    run('npm', ['run', 'security:scan']);
+    run('npm', ['audit', '--omit=dev', '--audit-level=high']);
+    await verifyStages();
+    run('node', [resolve(packageRoot, 'performance-budget.mjs')]);
+  } finally {
+    cleanupGeneratedArtifacts();
+  }
 }
 
 async function installDevelopment() {
   banner();
   verifyRepository();
+  runPackageAudit();
   verifyToolchain();
   verifyDevelopmentEnvironment();
   verifyCleanTree();
+  assert(!process.env.APPWRITE_API_KEY?.trim(), 'APPWRITE_API_KEY must be unset. This installer does not create or depend on a persistent Appwrite API key.');
+  assert(process.env.APPWRITE_SEED_PASSWORD?.trim(), 'APPWRITE_SEED_PASSWORD is required for the mandatory seven-portal Development acceptance test.');
 
   await applyUpdate({ persistState: true });
   run('npm', ['run', 'format']);
   run('npm', ['run', 'appwrite:generate']);
   await verifyStages();
   run('npm', ['run', 'appwrite:validate']);
+
+  console.log('Running all local testing-readiness gates before any Development mutation.');
+  await localReadiness();
+  const integrations = developmentIntegrationChecks();
+
+  console.log('PASS local gates. Development mutation is now permitted.');
   run('npm', ['run', 'appwrite:push:development']);
   run('npm', ['run', 'appwrite:audit:development']);
+  run('npm', ['run', 'appwrite:smoke:portals'], { env: { APPWRITE_CONFIRM_TEST: 'test-development' } });
+  run('npm', ['run', 'appwrite:audit:development']);
 
-  if (process.env.APPWRITE_API_KEY?.trim() && process.env.APPWRITE_SEED_PASSWORD?.trim()) {
-    run('npm', ['run', 'appwrite:seed:development'], { env: { APPWRITE_CONFIRM_SEED: 'seed-development' } });
-  } else {
-    console.log('INFO Development re-seed skipped: no explicit temporary APPWRITE_API_KEY + APPWRITE_SEED_PASSWORD pair was supplied. Existing Development fixtures are preserved.');
-  }
-
-  if (process.env.APPWRITE_SEED_PASSWORD?.trim()) {
-    run('node', ['infrastructure/appwrite/scripts/test-seven-portals-development.mjs'], { env: { APPWRITE_CONFIRM_TEST: 'test-development' } });
-  } else {
-    console.log('INFO Stage 06 live seven-persona acceptance requires APPWRITE_SEED_PASSWORD. Source and local test gates still run.');
-  }
-
-  const integrations = developmentIntegrationChecks();
-  await localReadiness();
-  await verifyStages();
-  run('node', [resolve(packageRoot, 'performance-budget.mjs')]);
-  cleanupGeneratedArtifacts();
-
-  console.log('PASS: Stages 2D-13 core application gates completed. Development is ready for structured core UAT.');
+  console.log('PASS: Stages 2D-13 core application and live seven-portal gates completed. Development is ready for structured core UAT.');
   if (integrations.shopify && integrations.google) {
-    console.log('PASS: Shopify and Google Cloud Development targets verified. Development is ready for integrated UAT.');
+    console.log('PASS: Shopify and Google Cloud Development targets are explicitly verified. Development is ready for integrated UAT.');
   } else {
-    console.log('INFO: Integrated UAT remains conditional on the unverified Stage 09/10 live Development targets shown above.');
+    console.log('INFO: Integrated UAT remains conditional on the Stage 09/10 Development targets shown above.');
   }
 }
 
-async function ci() {
+async function cleanCheckoutValidation() {
   banner();
   verifyRepository();
+  runPackageAudit();
   verifyToolchain();
+  verifyCleanTree();
   await applyUpdate({ persistState: false });
   run('npm', ['run', 'format']);
   run('npm', ['run', 'appwrite:generate']);
   await verifyStages();
-  run('npm', ['run', 'check']);
-  run('npm', ['run', 'security:scan']);
-  run('node', [resolve(packageRoot, 'performance-budget.mjs')]);
-  cleanupGeneratedArtifacts();
-  console.log('PASS: software update applied and verified in a clean CI checkout.');
+  run('npm', ['run', 'appwrite:validate']);
+  await localReadiness();
+  console.log('PASS: software update applied and fully verified without remote Development mutation.');
+}
+
+async function isolatedLocalValidation() {
+  banner();
+  verifyRepository();
+  runPackageAudit();
+  verifyToolchain();
+  verifyCleanTree();
+
+  const sandbox = mkdtempSync(join(tmpdir(), 'proinspect-platform-completion-'));
+  const head = output('git', ['rev-parse', 'HEAD']);
+  let attached = false;
+  try {
+    run('git', ['worktree', 'add', '--detach', sandbox, head]);
+    attached = true;
+    run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: sandbox });
+    run('node', ['infrastructure/upgrades/platform-completion-v1/upgrade.mjs', 'ci'], { cwd: sandbox });
+    console.log('PASS: isolated local validation completed in a temporary Git worktree. No Development resources were mutated.');
+  } finally {
+    if (attached) {
+      try { run('git', ['worktree', 'remove', '--force', sandbox]); } catch { /* best-effort cleanup */ }
+    }
+    rmSync(sandbox, { recursive: true, force: true });
+  }
 }
 
 try {
@@ -165,12 +208,16 @@ try {
   } else if (command === 'apply') {
     banner();
     verifyRepository();
+    runPackageAudit();
     verifyToolchain();
+    verifyCleanTree();
     await applyUpdate({ persistState: true });
   } else if (command === 'verify') {
     await sourceVerify();
+  } else if (command === 'local') {
+    await isolatedLocalValidation();
   } else if (command === 'ci') {
-    await ci();
+    await cleanCheckoutValidation();
   } else if (command === 'install') {
     assert(development, 'Production/staging installation is locked. Use --development for this update.');
     await installDevelopment();
