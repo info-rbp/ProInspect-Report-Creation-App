@@ -57,6 +57,27 @@ function parseCliJson(value) {
   catch { throw new Error('Appwrite CLI returned invalid JSON; response content suppressed.'); }
 }
 
+async function passwordAlreadyMatches(userId, email) {
+  const response = await fetch(`${target.endpoint}/account/sessions/email`, {
+    method: 'POST',
+    redirect: 'error',
+    headers: { 'content-type': 'application/json', 'x-appwrite-project': target.projectId },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) return false;
+  const session = await response.json().catch(() => { throw new Error('Password verification returned invalid JSON; response content suppressed.'); });
+  const fallback = response.headers.get('x-fallback-cookies');
+  const secret = session.secret || (fallback ? parseCliJson(fallback)[`a_session_${target.projectId}`] : undefined);
+  if (!secret) throw new Error('Password verification returned no usable session.');
+  const logout = await fetch(`${target.endpoint}/account/sessions/current`, {
+    method: 'DELETE',
+    redirect: 'error',
+    headers: { 'x-appwrite-project': target.projectId, 'x-appwrite-session': secret },
+  });
+  if (!logout.ok) throw new Error('Could not close the password verification session.');
+  return session.userId === userId;
+}
+
 function run(args, cwd = generated, { allowFailure = false } = {}) {
   const result = spawnSync(cli, args, {
     cwd,
@@ -128,11 +149,16 @@ for (const [userId, role] of personas) {
     ]);
   }
 
-  run([
+  const reset = run([
     ...updatePasswordCommand,
     '--user-id', userId,
     '--password', password,
-  ]);
+  ], generated, { allowFailure: true });
+  // Password history may reject an already-current password. Only a successful
+  // login for this exact user (followed by logout) can establish the no-op case.
+  if (reset.status !== 0 && !await passwordAlreadyMatches(userId, email)) {
+    throw new Error(redact(reset.stderr || reset.stdout || 'Could not prepare the Development persona password.'));
+  }
 }
 
 // Inspect every planned row before writing any fixture. The raw CLI response

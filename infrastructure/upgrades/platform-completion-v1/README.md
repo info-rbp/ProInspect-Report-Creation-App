@@ -103,6 +103,8 @@ npm run upgrade:install -- --development
 
 The Development installer requires `APPWRITE_SEED_PASSWORD` because persona preparation and seven-portal live acceptance are mandatory. It refuses `APPWRITE_API_KEY`. After the first successful live audit, the preparer uses the authenticated Appwrite CLI account to create missing synthetic users, enable disabled users and reset all seven passwords. Existing IDs with unexpected emails are rejected. No API key is created or used.
 
+On reruns, Appwrite password history may reject a reset to the already-current password. The preparer accepts that case only after the supplied password successfully authenticates as the exact expected user and the verification session is closed. A failed login, wrong identity or failed logout still fails preparation. Password-history policy remains enabled and no replacement credential is generated.
+
 The same guarded preparation reconciles 51 source-controlled synthetic portal fixtures, including the seven entitlements, profiles/memberships, clients, properties, units, occupancies, contractor records and representative operational rows. It inspects the whole fixture plan before writing rows, rejects conflicting agency or identity scopes, applies explicit per-user read permissions and leaves already-correct rows untouched. Unrelated rows are never enumerated for mutation or deleted. This repairs Development projects that received the schema update but still contain an older seed population. The package audit executes missing-fixture, permission repair, collision, lookup-error and no-op rerun regressions and validates every fixture against the source table columns.
 
 ## Strict integrated-UAT installation

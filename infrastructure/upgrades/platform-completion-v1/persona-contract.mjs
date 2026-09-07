@@ -39,12 +39,12 @@ function executable(source) {
   finally { transformed.dispose(); }
 }
 
-export function auditPersonaPreparer(source, check) {
+export async function auditPersonaPreparer(source, check) {
   const code = executable(source);
   const seed = JSON.parse(readFileSync(new URL('../../appwrite/seeds/development.json', import.meta.url), 'utf8'));
   const password = `${randomBytes(20).toString('hex')}"\\suffix`;
 
-  function execute(options = {}) {
+  async function execute(options = {}) {
     const env = {
       APPWRITE_ENDPOINT: 'https://syd.cloud.appwrite.io/v1',
       APPWRITE_PROJECT_ID: 'proinspect-development',
@@ -55,6 +55,9 @@ export function auditPersonaPreparer(source, check) {
     };
     const calls = [];
     const mutations = [];
+    const passwordAttempts = [];
+    const sessions = new Map();
+    const logins = [];
     const rowMutations = [];
     const rows = options.rows ?? new Map();
     const messages = [];
@@ -105,6 +108,7 @@ export function auditPersonaPreparer(source, check) {
         if (options.invalidJson) return { status: 0, stdout: `invalid ${password}` };
         return users.has(id) ? success(users.get(id)) : { status: 1, stderr: '404 user_not_found: User could not be found.' };
       }
+      if (args[2] === 'update-password') passwordAttempts.push(id);
       if (options.mutationFailure) return { status: 1, stderr: options.mutationFailure };
       if (args[2] === 'create') {
         assert(!users.has(id), 'Existing users must never be recreated');
@@ -123,10 +127,39 @@ export function auditPersonaPreparer(source, check) {
       mutations.push([args[2], id]);
       return success(users.get(id));
     };
+    const fetch = async (url, init) => {
+      assert.equal(init.headers['x-appwrite-project'], 'proinspect-development');
+      assert.equal(init.redirect, 'error', 'Credential verification must not follow redirects');
+      if (init.method === 'POST') {
+        assert.equal(url, 'https://syd.cloud.appwrite.io/v1/account/sessions/email');
+        const body = JSON.parse(init.body);
+        assert.equal(body.password, password);
+        const userId = body.email.replace('@example.com', '');
+        assert(users.has(userId));
+        if (!options.passwordCurrent) return { ok: false, status: 401 };
+        const secret = randomBytes(24).toString('hex');
+        sessions.set(secret, userId); logins.push(userId);
+        return {
+          ok: true, status: 201,
+          json: async () => {
+            if (options.invalidSessionJson) throw new Error(password);
+            return { userId: options.wrongSessionUser ? 'different_user' : userId, secret: options.fallbackCookie ? undefined : secret };
+          },
+          headers: { get: () => options.fallbackCookie ? JSON.stringify({ 'a_session_proinspect-development': secret }) : null },
+        };
+      }
+      assert.equal(url, 'https://syd.cloud.appwrite.io/v1/account/sessions/current');
+      assert.equal(init.method, 'DELETE');
+      const secret = init.headers['x-appwrite-session'];
+      assert(sessions.has(secret), 'Logout must close the session just created');
+      if (options.logoutFailure) return { ok: false, status: 500 };
+      sessions.delete(secret);
+      return { ok: true, status: 204 };
+    };
     let error;
     try {
-      runInNewContext(code, {
-        process, spawnSync, dirname, resolve, fileURLToPath, assertDevelopmentTarget, buildPortalFixturePlan, portalFixtureChange,
+      await runInNewContext(`(async () => {\n${code}\n})()`, {
+        process, spawnSync, fetch, dirname, resolve, fileURLToPath, assertDevelopmentTarget, buildPortalFixturePlan, portalFixtureChange,
         readFileSync: (path) => {
           assert.equal(path, '/fixture/seeds/development.json');
           return JSON.stringify(options.seed ?? seed);
@@ -134,11 +167,11 @@ export function auditPersonaPreparer(source, check) {
         console: { log: (value) => messages.push(String(value)), error: (value) => messages.push(String(value)) },
       }, { timeout: 1000 });
     } catch (cause) { error = String(cause); }
-    return { failed: Boolean(error || process.exitCode), detail: [error, ...messages].join('\n'), mutations, rowMutations, rows, calls, users };
+    return { failed: Boolean(error || process.exitCode), detail: [error, ...messages].join('\n'), mutations, passwordAttempts, sessions, logins, rowMutations, rows, calls, users };
   }
 
-  const test = (label, fn) => {
-    try { fn(); check(true, `persona execution: ${label}`); }
+  const test = async (label, fn) => {
+    try { await fn(); check(true, `persona execution: ${label}`); }
     catch (error) { check(false, `persona execution: ${label}: ${String(error).replaceAll(password, '[REDACTED]')}`); }
   };
   const accepted = (result) => {
@@ -146,16 +179,38 @@ export function auditPersonaPreparer(source, check) {
     assert.match(result.detail, /Prepared 7 synthetic Development personas in proinspect-development/);
     assert.match(result.detail, /authenticated Appwrite CLI session; no API key was created or used/);
     assert(!result.detail.includes(password));
-    assert.deepEqual(result.mutations.filter(([command]) => command === 'update-password').map(([, id]) => id), personas.map(([id]) => id));
+    assert.deepEqual(result.passwordAttempts, personas.map(([id]) => id));
   };
-  test('resets all seven existing personas on every rerun without creating duplicates', () => {
-    const first = execute(); accepted(first);
-    const second = execute({ users: first.users, rows: first.rows }); accepted(second);
+  await test('resets all seven existing personas on every rerun without creating duplicates', async () => {
+    const first = await execute(); accepted(first);
+    const second = await execute({ users: first.users, rows: first.rows }); accepted(second);
     assert.equal(first.mutations.length, 7); assert.equal(second.mutations.length, 7);
     assert.equal(second.rowMutations.length, 0, 'Fixture reconciliation must be a no-op on rerun');
   });
-  test('restores missing entitlements and representative fixtures with scoped read permissions', () => {
-    const result = execute(); accepted(result);
+  for (const fallbackCookie of [false, true]) {
+    await test(`accepts password-history rejection only after verified login and logout (cookie=${fallbackCookie})`, async () => {
+      const result = await execute({ mutationFailure: 'Password resembles a previous password', passwordCurrent: true, fallbackCookie });
+      accepted(result);
+      assert.deepEqual(result.logins, personas.map(([id]) => id));
+      assert.equal(result.sessions.size, 0);
+      assert.equal(result.mutations.length, 0);
+    });
+  }
+  for (const [label, options] of [
+    ['password does not authenticate', { passwordCurrent: false }],
+    ['authenticated identity differs', { passwordCurrent: true, wrongSessionUser: true }],
+    ['session cleanup fails', { passwordCurrent: true, logoutFailure: true }],
+    ['invalid authentication response', { passwordCurrent: true, invalidSessionJson: true }],
+  ]) {
+    await test(`rejects reset failure when ${label}`, async () => {
+      const result = await execute({ mutationFailure: 'Password resembles a previous password', ...options });
+      assert(result.failed);
+      assert.equal(result.rowMutations.length, 0);
+      assert(!result.detail.includes(password));
+    });
+  }
+  await test('restores missing entitlements and representative fixtures with scoped read permissions', async () => {
+    const result = await execute(); accepted(result);
     assert.equal(result.rows.size, 51);
     for (const [id] of personas) {
       const entitlement = [...result.rows.entries()].find(([key, row]) => key.startsWith('portal_entitlements/') && row.userId === id)?.[1];
@@ -168,52 +223,52 @@ export function auditPersonaPreparer(source, check) {
     const commercial = result.rows.get('managed_sites/dev_site_commercial');
     assert.deepEqual(commercial.$permissions, ['read("user:dev_admin")']);
   });
-  test('repairs synthetic fixture permission drift without changing creation time', () => {
-    const first = execute(); accepted(first);
+  await test('repairs synthetic fixture permission drift without changing creation time', async () => {
+    const first = await execute(); accepted(first);
     const row = first.rows.get('portal_entitlements/dev_admin_portal');
     const createdAt = row.createdAt;
     row.$permissions = [];
-    const next = execute({ rows: first.rows }); accepted(next);
+    const next = await execute({ rows: first.rows }); accepted(next);
     assert.deepEqual(next.rowMutations, [['update-row', 'portal_entitlements/dev_admin_portal']]);
     assert.equal(next.rows.get('portal_entitlements/dev_admin_portal').createdAt, createdAt);
   });
-  test('migrates only the documented legacy synthetic contractor reference', () => {
-    const first = execute(); accepted(first);
+  await test('migrates only the documented legacy synthetic contractor reference', async () => {
+    const first = await execute(); accepted(first);
     const order = first.rows.get('maintenance_work_orders/dev_work_order');
     order.contractorId = 'dev_contractor';
-    const migrated = execute({ rows: first.rows }); accepted(migrated);
+    const migrated = await execute({ rows: first.rows }); accepted(migrated);
     assert.deepEqual(migrated.rowMutations, [['update-row', 'maintenance_work_orders/dev_work_order']]);
     assert.equal(order.agencyId, 'dev_agency');
     assert.equal(migrated.rows.get('maintenance_work_orders/dev_work_order').contractorId, 'dev_contractor_profile');
     migrated.rows.get('maintenance_work_orders/dev_work_order').contractorId = 'unrelated_contractor';
-    const rejected = execute({ rows: migrated.rows });
+    const rejected = await execute({ rows: migrated.rows });
     assert(rejected.failed); assert.equal(rejected.rowMutations.length, 0);
   });
-  test('treats Appwrite-normalized timestamps as unchanged on rerun', () => {
-    const first = execute(); accepted(first);
+  await test('treats Appwrite-normalized timestamps as unchanged on rerun', async () => {
+    const first = await execute(); accepted(first);
     const job = first.rows.get('inspection_jobs/dev_inspection_job');
     job.scheduledDate = job.scheduledDate.replace('Z', '+00:00');
-    const next = execute({ rows: first.rows }); accepted(next);
+    const next = await execute({ rows: first.rows }); accepted(next);
     assert.equal(next.rowMutations.length, 0);
   });
   for (const [label, override] of [['agency scope', { agencyId: 'other_agency' }], ['user identity', { userId: 'dev_inspector' }]]) {
-    test(`rejects conflicting fixture ${label} before any fixture writes`, () => {
+    await test(`rejects conflicting fixture ${label} before any fixture writes`, async () => {
       const row = { $id: 'dev_admin_portal', agencyId: 'dev_agency', userId: 'dev_admin', ...override };
-      const result = execute({ rows: new Map([['portal_entitlements/dev_admin_portal', row]]) });
+      const result = await execute({ rows: new Map([['portal_entitlements/dev_admin_portal', row]]) });
       assert(result.failed);
       assert.equal(result.rowMutations.length, 0);
     });
   }
-  test('rejects a fixture lookup permission error without creating rows', () => {
-    const result = execute({ rowLookupFailure: '401 unauthorized' });
+  await test('rejects a fixture lookup permission error without creating rows', async () => {
+    const result = await execute({ rowLookupFailure: '401 unauthorized' });
     assert(result.failed); assert.equal(result.rowMutations.length, 0);
   });
-  test('creates missing personas and enables disabled personas before resetting passwords', () => {
+  await test('creates missing personas and enables disabled personas before resetting passwords', async () => {
     const users = new Map([['dev_admin', { $id: 'dev_admin', email: 'dev_admin@example.com', status: false }]]);
-    const result = execute({ users }); accepted(result);
+    const result = await execute({ users }); accepted(result);
     assert.equal(result.mutations.filter(([command]) => command === 'create').length, 6);
     assert.deepEqual(result.mutations.slice(0, 2), [['update-status', 'dev_admin'], ['update-password', 'dev_admin']]);
-    accepted(execute({ users }));
+    accepted(await execute({ users }));
   });
   for (const [label, options] of [
     ['legacy project', { env: { APPWRITE_PROJECT_ID: '6a911f1e0031e90015b2' } }],
@@ -232,8 +287,8 @@ export function auditPersonaPreparer(source, check) {
     ['existing email mismatch', { users: new Map([['dev_admin', { $id: 'dev_admin', email: 'unrelated@example.com', status: false }]]) }],
     ['lookup authentication error', { lookupFailure: '401 User unauthorized' }],
   ]) {
-    test(`rejects ${label} before any user mutation`, () => {
-      const result = execute(options);
+    await test(`rejects ${label} before any user mutation`, async () => {
+      const result = await execute(options);
       assert(result.failed, result.detail);
       assert.equal(result.mutations.length, 0);
     });
@@ -244,8 +299,8 @@ export function auditPersonaPreparer(source, check) {
     ['invalid CLI JSON', { invalidJson: true }],
     ['materialization error', { materializeFailure: true }],
   ]) {
-    test(`redacts ${label}`, () => {
-      const result = execute(options);
+    await test(`redacts ${label}`, async () => {
+      const result = await execute(options);
       assert(result.failed);
       assert(!result.detail.includes(password), 'Raw credential appeared in error output');
       assert(!result.detail.includes(JSON.stringify(password).slice(1, -1)), 'Escaped credential appeared in error output');

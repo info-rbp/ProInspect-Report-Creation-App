@@ -64,7 +64,7 @@ for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs",
 }
 
 const personaPreparer = packageText('payload/prepare-seven-portals-development.mjs');
-auditPersonaPreparer(personaPreparer, check);
+await auditPersonaPreparer(personaPreparer, check);
 
 const lintCleanup = packageText('apply-lint-cleanup.mjs');
 for (const marker of [
