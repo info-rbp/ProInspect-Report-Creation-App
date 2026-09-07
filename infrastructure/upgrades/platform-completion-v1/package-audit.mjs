@@ -27,7 +27,7 @@ for (const stage of manifest.stages) {
 }
 
 for (const path of [
-  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','upgrade.mjs',
+  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
   'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts',
 ]) check(packageHas(path), `package contains ${path}`);
 
@@ -61,6 +61,7 @@ check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local valid
 const checkIndex = installer.indexOf("run('npm', ['run', 'check'])");
 const pushIndex = installer.indexOf("run('npm', ['run', 'appwrite:push:development'])");
 check(checkIndex >= 0 && pushIndex >= 0 && checkIndex < pushIndex, 'local check is ordered before Appwrite Development push');
+check(installer.includes('diff-audit.mjs'), 'installer invokes the bounded source diff audit');
 check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects Appwrite API keys');
 check(installer.includes('APPWRITE_SEED_PASSWORD is required'), 'installer requires seven-portal acceptance credential');
 check(installer.includes('prohibitedGoogleCloudProjectIds'), 'installer enforces prohibited Google Cloud targets');
