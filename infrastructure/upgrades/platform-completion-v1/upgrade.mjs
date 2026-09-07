@@ -174,6 +174,9 @@ async function installDevelopment() {
   console.log('PASS local gates and bounded diff. Development mutation is now permitted.');
   run('npm', ['run', 'appwrite:push:development']);
   run('npm', ['run', 'appwrite:audit:development']);
+  run('node', ['infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs'], {
+    env: { APPWRITE_CONFIRM_TEST: 'test-development' },
+  });
   run('npm', ['run', 'appwrite:smoke:portals'], { env: { APPWRITE_CONFIRM_TEST: 'test-development' } });
   run('npm', ['run', 'appwrite:audit:development']);
   recordSuccessfulInstallation(integrations);

@@ -39,6 +39,10 @@ export async function applyUpdate({ persistState = true } = {}) {
       'apps/web/services/stage7OfflineContract.test.ts',
       payload('stage7OfflineContract.test.ts'),
     );
+    writeIfChanged(
+      'infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs',
+      payload('prepare-seven-portals-development.mjs'),
+    );
 
     await applyLintCleanup();
 
