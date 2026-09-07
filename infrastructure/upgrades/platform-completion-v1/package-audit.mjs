@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { tables } from '../../appwrite/tables/schema.mjs';
+import { unifiedPlatformExtensionTables } from '../../appwrite/tables/unified-platform-extensions.mjs';
 import { manifest, packageRoot, root } from './lib.mjs';
 
 const failures = [];
@@ -15,12 +17,22 @@ console.log(`ProInspect ${manifest.id} v${manifest.version} package audit`);
 const expectedStages = ['02d','02e','03','04','05','06','07','08','09','10','11','12','13'];
 check(JSON.stringify(manifest.stages.map((stage) => stage.id)) === JSON.stringify(expectedStages), 'manifest covers Stage 2D through Stage 13 in order');
 check(manifest.baselineCommit === '030d2650870f09556e72b7aebb58a4bec2a7a75f', 'Stage 2D baseline commit is pinned');
-check(manifest.targetSchemaTables === 121, 'target Appwrite schema is pinned to 121 tables');
+check(manifest.targetSchemaTables === 120, 'target Appwrite schema is pinned to 120 tables');
 check(manifest.localValidationRequired === true, 'local validation is mandatory');
 check(manifest.development?.projectId === 'proinspect-development', 'Development Appwrite target is pinned');
 check(manifest.development?.shopifyStore === 'proinspect-2.myshopify.com', 'Development Shopify store is pinned');
 check(manifest.development?.prohibitedProjectIds?.includes('6a911f1e0031e90015b2'), 'legacy Appwrite project is prohibited');
 check(manifest.development?.prohibitedGoogleCloudProjectIds?.includes('business-plan-applicatio-17047'), 'documented Production Google Cloud project is prohibited');
+
+const sourceTables = [...tables, ...unifiedPlatformExtensionTables];
+const sourceIds = sourceTables.map((table) => table.$id);
+const duplicateTableIds = [...new Set(sourceIds.filter((id, index) => sourceIds.indexOf(id) !== index))];
+check(
+  duplicateTableIds.length === 0 && new Set(sourceIds).size === sourceIds.length,
+  duplicateTableIds.length
+    ? `canonical Appwrite source table IDs are unique (duplicates: ${duplicateTableIds.join(', ')})`
+    : 'canonical Appwrite source table IDs are unique',
+);
 
 for (const stage of manifest.stages) {
   check(['baseline','migration','verified-existing','closure'].includes(stage.completionMode), `Stage ${stage.id} has an explicit completion mode`);
@@ -40,9 +52,12 @@ for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs",
 
 const stage07 = packageText('apply-07.mjs');
 for (const marker of [
+  'unified-platform-extensions.mjs',
   "agencyEntity('offline_sync_receipts'",
-  "unique('operation_once',['agencyId','operationId'])",
-  'toHaveLength(121)',
+  "unique('operation_once', ['agencyId', 'operationId'])",
+  "str('inspectionJobId', 36, true)",
+  "str('operationId', 128, true)",
+  "integer('baseVersion', true)",
   'operationId: item.id',
   "deps.idempotency.execute(",
   "'offlineSyncReceipts',",
@@ -50,6 +65,7 @@ for (const marker of [
 ]) {
   check(stage07.includes(marker), `Stage 7 package contains ${marker}`);
 }
+check(!stage07.includes("'expect(allTables).toHaveLength(121);'"), 'Stage 7 does not inflate the schema to 121 tables');
 
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:local','upgrade:install']) {
