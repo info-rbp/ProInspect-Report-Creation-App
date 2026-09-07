@@ -39,7 +39,17 @@ for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs",
 }
 
 const stage07 = packageText('apply-07.mjs');
-check(stage07.includes("agencyEntity('offline_sync_receipts'") && stage07.includes("unique('operation_once',['agencyId','operationId'])") && stage07.includes('toHaveLength(121)'), 'Stage 7 installs idempotent offline receipts and 121-table target');
+for (const marker of [
+  "agencyEntity('offline_sync_receipts'",
+  "unique('operation_once',['agencyId','operationId'])",
+  'toHaveLength(121)',
+  'operationId: item.id',
+  "deps.idempotency.execute(",
+  "'offlineSyncReceipts',",
+  'OFFLINE_OPERATION_REUSE',
+]) {
+  check(stage07.includes(marker), `Stage 7 package contains ${marker}`);
+}
 
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:local','upgrade:install']) {
@@ -48,12 +58,17 @@ for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflig
 
 const installer = packageText('upgrade.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
-check(installer.indexOf("run('npm', ['run', 'check'])") < installer.indexOf("run('npm', ['run', 'appwrite:push:development'])"), 'local check is ordered before Appwrite Development push');
+const checkIndex = installer.indexOf("run('npm', ['run', 'check'])");
+const pushIndex = installer.indexOf("run('npm', ['run', 'appwrite:push:development'])");
+check(checkIndex >= 0 && pushIndex >= 0 && checkIndex < pushIndex, 'local check is ordered before Appwrite Development push');
 check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects Appwrite API keys');
 check(installer.includes('APPWRITE_SEED_PASSWORD is required'), 'installer requires seven-portal acceptance credential');
+check(installer.includes('prohibitedGoogleCloudProjectIds'), 'installer enforces prohibited Google Cloud targets');
+check(installer.includes('requireIntegrations'), 'installer supports strict integrated-UAT target enforcement');
 
 check(existsSync(resolve(root, 'infrastructure/appwrite/scripts/test-seven-portals-development.mjs')), 'local seven-portal acceptance script exists');
 check(existsSync(resolve(root, 'apps/web/services/offlineWorkspace.ts')), 'offline workspace implementation exists');
+check(existsSync(resolve(root, 'apps/web/services/offlineSyncCoordinator.ts')), 'offline replay coordinator exists');
 
 if (failures.length) {
   console.error(`PACKAGE AUDIT FAILED: ${failures.length} issue(s).`);
