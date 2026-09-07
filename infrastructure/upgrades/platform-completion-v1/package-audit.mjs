@@ -39,14 +39,14 @@ for (const stage of manifest.stages) {
 }
 
 for (const path of [
-  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','apply-lint-cleanup.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
+  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','apply-07-live-schema-fix.mjs','apply-lint-cleanup.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
   'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts',
 ]) check(packageHas(path), `package contains ${path}`);
 
 check(!packageHas('apply-02e.mjs') && !packageHas('apply-04.mjs'), 'superseded patchers are absent');
 
 const apply = packageText('apply.mjs');
-for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-lint-cleanup.mjs","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
+for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-07-live-schema-fix.mjs","./apply-lint-cleanup.mjs","applyStage07LiveSchemaFix()","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
   check(apply.includes(marker), `apply sequence contains ${marker}`);
 }
 
@@ -107,6 +107,32 @@ for (const marker of [
   check(stage07.includes(marker), `Stage 7 package contains ${marker}`);
 }
 check(!stage07.includes("'expect(allTables).toHaveLength(121);'"), 'Stage 7 does not inflate the schema to 121 tables');
+
+const stage07Live = packageText('apply-07-live-schema-fix.mjs');
+for (const marker of [
+  'intermediateOfflineReceiptTable',
+  'appwriteCompatibleOfflineReceiptTable',
+  "{ ...str('userId', 36), default: null }",
+  "{ ...str('deviceId', 128), default: null }",
+  "{ ...str('clientSubmissionId', 128), default: null }",
+  "{ ...str('entityType', 64), default: null }",
+  "{ ...str('syncState', 32), default: null }",
+  "{ ...integer('attempts'), default: null }",
+  "{ ...datetime('firstReceivedAt'), default: null }",
+  'offline receipt Appwrite update defaults',
+]) {
+  check(stage07Live.includes(marker), `Stage 7 live schema compatibility contains ${marker}`);
+}
+
+const stage7Contract = packageText('payload/stage7OfflineContract.test.ts');
+check(stage7Contract.includes("'userId'"), 'Stage 7 regression checks legacy userId update compatibility');
+check(stage7Contract.includes("'deviceId'"), 'Stage 7 regression checks legacy deviceId update compatibility');
+check(stage7Contract.includes("'clientSubmissionId'"), 'Stage 7 regression checks legacy clientSubmissionId update compatibility');
+check(stage7Contract.includes("'entityType'"), 'Stage 7 regression checks legacy entityType update compatibility');
+check(stage7Contract.includes("'syncState'"), 'Stage 7 regression checks legacy syncState update compatibility');
+check(stage7Contract.includes("'attempts'"), 'Stage 7 regression checks legacy attempts update compatibility');
+check(stage7Contract.includes("'firstReceivedAt'"), 'Stage 7 regression checks legacy firstReceivedAt update compatibility');
+check(stage7Contract.includes('default: null'), 'Stage 7 regression requires null defaults for relaxed live Appwrite columns');
 
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:local','upgrade:install']) {
