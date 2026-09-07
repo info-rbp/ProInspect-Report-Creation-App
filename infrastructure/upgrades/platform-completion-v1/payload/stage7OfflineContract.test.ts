@@ -51,9 +51,32 @@ describe('Stage 7 offline field operations boundary', () => {
     expect(schema).toContain("str('payloadHash', 128, true)");
     expect(schema).toContain("integer('baseVersion', true)");
     expect(schema).toContain("integer('resultVersion')");
-    expect(schema).toContain("str('deviceId', 128)");
-    expect(schema).toContain("str('clientSubmissionId', 128)");
     expect(schema).not.toContain("str('deviceId', 128, true)");
     expect(schema).not.toContain("str('clientSubmissionId', 128, true)");
+
+    const generated = JSON.parse(
+      read('infrastructure/appwrite/tables/tables.json'),
+    ) as Array<{
+      $id: string;
+      columns: Array<{
+        key: string;
+        required: boolean;
+        default?: unknown;
+      }>;
+    }>;
+    const receipts = generated.find((table) => table.$id === 'offline_sync_receipts');
+    expect(receipts).toBeDefined();
+    const byKey = new Map(receipts?.columns.map((column) => [column.key, column]));
+    for (const key of [
+      'userId',
+      'deviceId',
+      'clientSubmissionId',
+      'entityType',
+      'syncState',
+      'attempts',
+      'firstReceivedAt',
+    ]) {
+      expect(byKey.get(key), key).toMatchObject({ required: false, default: null });
+    }
   });
 });
