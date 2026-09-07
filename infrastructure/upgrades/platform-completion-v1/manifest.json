@@ -81,7 +81,7 @@
       "name": "Migration dry-run and reconciliation",
       "completionMode": "verified-existing",
       "testBlocking": true,
-      "requiresLiveDevelopment": true,
+      "requiresLiveDevelopment": false,
       "summary": "Verify the existing dry-run, checksum, reconciliation, rerun and recovery framework before representative migration testing."
     },
     {
