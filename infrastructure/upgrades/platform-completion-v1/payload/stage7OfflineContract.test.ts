@@ -21,6 +21,26 @@ describe('Stage 7 offline field operations boundary', () => {
     }
   });
 
+  it('sends stable operation IDs and only replays the supported job.patch contract', () => {
+    const source = read('apps/web/services/offlineSyncCoordinator.ts');
+    expect(source).toContain("item.operation !== 'job.patch'");
+    expect(source).toContain('operationId: item.id');
+    expect(source).toContain('operation: item.operation');
+    expect(source).toContain('/offline-sync');
+  });
+
+  it('persists idempotent server receipts and fails closed on operation reuse', () => {
+    const source = read('apps/api/src/backend/platformEnhancementRoutes.ts');
+    expect(source).toContain('deps.idempotency.execute(');
+    expect(source).toContain("'offline.job.patch'");
+    expect(source).toContain("deps.repository.get('offlineSyncReceipts'");
+    expect(source).toContain("'offlineSyncReceipts',");
+    expect(source).toContain('OFFLINE_OPERATION_REUSE');
+    expect(source).toContain('OFFLINE_OPERATION_UNSUPPORTED');
+    expect(source).toContain('payloadHash');
+    expect(source).toContain('resultHash');
+  });
+
   it('defines an idempotent canonical server receipt table', () => {
     const schema = read('infrastructure/appwrite/tables/schema.mjs');
     expect(schema).toContain("agencyEntity('offline_sync_receipts'");
