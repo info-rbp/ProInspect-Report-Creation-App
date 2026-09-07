@@ -109,9 +109,16 @@ export const unifiedPlatformExtensionTables = [
     number('distanceKm'), str('stopState', 32), datetime('actualArrivalAt'), datetime('departedAt'),
   ], [unique('route_sequence', ['routePlanId', 'sequence']), index('job_route', ['inspectionJobId', 'routePlanId']), index('route_status', ['routePlanId', 'status'])]),
   agencyEntity('offline_sync_receipts', [
-    str('userId', 36, true), str('deviceId', 128, true), str('clientSubmissionId', 128, true),
-    str('entityType', 64, true), str('entityId', 36), str('payloadHash', 128, true), str('syncState', 32, true),
-    integer('attempts', true), datetime('firstReceivedAt', true), datetime('lastAttemptedAt'), datetime('completedAt'),
-    text('conflictDetail'), text('errorDetail'),
-  ], [unique('device_submission', ['deviceId', 'clientSubmissionId']), index('user_state', ['userId', 'syncState']), index('user_status', ['userId', 'status']), index('entity_state', ['entityType', 'entityId', 'syncState'])]),
+    str('userId', 36), str('deviceId', 128), str('clientSubmissionId', 128),
+    str('inspectionJobId', 36, true), str('operationId', 128, true), str('operation', 64, true),
+    str('entityType', 64), str('entityId', 36), integer('baseVersion', true), integer('resultVersion'),
+    str('payloadHash', 128, true), str('resultHash', 128), datetime('receivedAt', true), datetime('appliedAt'),
+    text('conflictReason'), str('syncState', 32), integer('attempts'), datetime('firstReceivedAt'),
+    datetime('lastAttemptedAt'), datetime('completedAt'), text('conflictDetail'), text('errorDetail'),
+  ], [
+    unique('operation_once', ['agencyId', 'operationId']), index('job_received', ['inspectionJobId', 'receivedAt']),
+    index('operation_received', ['operation', 'receivedAt']), unique('device_submission', ['deviceId', 'clientSubmissionId']),
+    index('user_state', ['userId', 'syncState']), index('user_status', ['userId', 'status']),
+    index('entity_state', ['entityType', 'entityId', 'syncState']),
+  ]),
 ];

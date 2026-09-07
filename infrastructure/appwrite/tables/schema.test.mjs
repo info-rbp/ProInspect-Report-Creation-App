@@ -29,7 +29,7 @@ describe('Appwrite schema', () => {
     expect(byId.get('portal_entitlements').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['user_status','user_portal','site_portal','client_portal']));
     expect(byId.get('conversation_messages').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['conversation_sent','delivery_status']));
     expect(byId.get('appointment_bookings').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['request_state','assignee_start','property_start']));
-    expect(byId.get('offline_sync_receipts').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['device_submission','user_state','entity_state']));
+    expect(byId.get('offline_sync_receipts').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['operation_once','job_received','operation_received','device_submission','user_state','entity_state']));
   });
 
   it('reconciles every original foundation table and includes source-backed and unified-platform gaps', () => {
