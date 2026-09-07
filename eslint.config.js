@@ -21,6 +21,11 @@ const scopedUnusedVariableExceptions = [
   'apps/web/services/platform/inspectionOperationsService.ts',
 ];
 
+const generatedUpgradePatchers = [
+  'infrastructure/upgrades/platform-completion-v1/apply-02e-v2.mjs',
+  'infrastructure/upgrades/platform-completion-v1/apply-04-v2.mjs',
+];
+
 export default tseslint.config(
   {
     ignores: [
@@ -69,6 +74,15 @@ export default tseslint.config(
     files: scopedUnusedVariableExceptions,
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+  {
+    // Stage 2E/4 patchers embed TypeScript/regex source inside template strings.
+    // Keep the escape exception limited to those code-generator files; emitted
+    // application source remains fully linted by the normal rules.
+    files: generatedUpgradePatchers,
+    rules: {
+      'no-useless-escape': 'off',
     },
   },
   {
