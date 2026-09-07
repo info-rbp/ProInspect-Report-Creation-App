@@ -50,6 +50,10 @@ function runPackageAudit() {
   run('node', [resolve(packageRoot, 'package-audit.mjs')]);
 }
 
+function runDiffAudit() {
+  run('node', [resolve(packageRoot, 'diff-audit.mjs')]);
+}
+
 async function preflight() {
   banner();
   verifyRepository();
@@ -143,9 +147,10 @@ async function installDevelopment() {
 
   console.log('Running all local testing-readiness gates before any Development mutation.');
   await localReadiness();
+  runDiffAudit();
   const integrations = developmentIntegrationChecks();
 
-  console.log('PASS local gates. Development mutation is now permitted.');
+  console.log('PASS local gates and bounded diff. Development mutation is now permitted.');
   run('npm', ['run', 'appwrite:push:development']);
   run('npm', ['run', 'appwrite:audit:development']);
   run('npm', ['run', 'appwrite:smoke:portals'], { env: { APPWRITE_CONFIRM_TEST: 'test-development' } });
@@ -171,6 +176,7 @@ async function cleanCheckoutValidation() {
   await verifyStages();
   run('npm', ['run', 'appwrite:validate']);
   await localReadiness();
+  runDiffAudit();
   console.log('PASS: software update applied and fully verified without remote Development mutation.');
 }
 
