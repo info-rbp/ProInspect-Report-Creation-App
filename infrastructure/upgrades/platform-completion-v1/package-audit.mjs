@@ -67,6 +67,16 @@ const stage2eContract = packageText('payload/stage2eProviderBoundary.test.ts');
 check(stage2eContract.includes("expect(store).toContain('return Buffer.from(downloaded);')"), 'Stage 2E regression requires direct Buffer conversion for Appwrite downloads');
 check(stage2eContract.includes("expect(store).not.toContain('ArrayBuffer.isView(downloaded)')"), 'Stage 2E regression rejects impossible ArrayBuffer view narrowing branch');
 check(stage2eContract.includes("expect(store).not.toContain('downloaded.buffer')"), 'Stage 2E regression rejects downloaded.buffer access');
+check(stage2eContract.includes("it('preserves external grant provenance in Firestore rollback mode'"), 'Stage 2E regression guards Firestore external grant provenance');
+
+const firestoreEvidenceStore = packageText('payload/firestoreEvidenceStore.ts');
+for (const marker of [
+  'externalGrantId?: string',
+  'externalGrantId: value.externalGrantId',
+  'externalGrantId: session.externalGrantId',
+]) {
+  check(firestoreEvidenceStore.includes(marker), `Firestore evidence rollback provider preserves ${marker}`);
+}
 
 const stage4Contract = packageText('payload/stage4RuntimeParity.test.ts');
 for (const marker of [
