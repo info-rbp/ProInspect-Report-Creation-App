@@ -125,12 +125,16 @@ const diffAudit = packageText('diff-audit.mjs');
 check(diffAudit.includes("output('git', ['diff', '--name-only'])"), 'bounded diff audit reads tracked filenames directly');
 check(diffAudit.includes("output('git', ['ls-files', '--others', '--exclude-standard'])"), 'bounded diff audit reads untracked filenames directly');
 check(!diffAudit.includes("line.slice(3)"), 'bounded diff audit does not parse trimmed porcelain status with fixed offsets');
+check(!diffAudit.includes('const required = ['), 'bounded diff audit does not require already-correct files to be modified again');
+check(!diffAudit.includes('Update did not produce required source changes'), 'bounded diff audit accepts idempotent partial or no-op re-application');
+check(diffAudit.includes('stage-verification.mjs before this bounded-diff gate runs'), 'bounded diff audit delegates required final-state validation to stage verification');
 
 const installer = packageText('upgrade.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
 const checkIndex = installer.indexOf("run('npm', ['run', 'check'])");
 const pushIndex = installer.indexOf("run('npm', ['run', 'appwrite:push:development'])");
 check(checkIndex >= 0 && pushIndex >= 0 && checkIndex < pushIndex, 'local check is ordered before Appwrite Development push');
+check(installer.includes('await localReadiness();\n  runDiffAudit();'), 'final-state readiness verification runs before bounded diff audit');
 check(installer.includes('diff-audit.mjs'), 'installer invokes the bounded source diff audit');
 check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects Appwrite API keys');
 check(installer.includes('APPWRITE_SEED_PASSWORD is required'), 'installer requires seven-portal acceptance credential');
