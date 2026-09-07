@@ -132,11 +132,21 @@ async function localReadiness() {
   }
 }
 
-function recordSuccessfulInstallation() {
+function recordSuccessfulInstallation(integrations) {
   for (const stage of manifest.stages) {
-    markStage(stage.id, 'complete', 'Development installation and all required gates completed.');
+    if (stage.id === '09' && !integrations.shopify) continue;
+    if (stage.id === '10' && !integrations.google) continue;
+    markStage(stage.id, 'complete', 'Development installation and all required gates for this stage completed.');
   }
-  markStage('update', 'complete', `Installed ${manifest.id} v${manifest.version} to Development.`);
+
+  const integrated = integrations.shopify && integrations.google;
+  markStage(
+    'update',
+    'complete',
+    integrated
+      ? `Installed ${manifest.id} v${manifest.version} to Development with integrated target gates completed.`
+      : `Installed ${manifest.id} v${manifest.version} to Development for core UAT; unverified Stage 09/10 integration targets remain READY.`,
+  );
 }
 
 async function installDevelopment() {
@@ -165,13 +175,17 @@ async function installDevelopment() {
   run('npm', ['run', 'appwrite:audit:development']);
   run('npm', ['run', 'appwrite:smoke:portals'], { env: { APPWRITE_CONFIRM_TEST: 'test-development' } });
   run('npm', ['run', 'appwrite:audit:development']);
-  recordSuccessfulInstallation();
+  recordSuccessfulInstallation(integrations);
 
-  console.log('PASS: Stages 2D-13 core application and live seven-portal gates completed. Development is ready for structured core UAT.');
+  console.log('PASS: Core Development installation and live seven-portal gates completed. Development is ready for structured core UAT.');
   if (integrations.shopify && integrations.google) {
     console.log('PASS: Shopify and Google Cloud Development targets are explicitly verified. Development is ready for integrated UAT.');
   } else {
-    console.log('INFO: Integrated UAT remains conditional on the Stage 09/10 Development targets shown above.');
+    const pending = [
+      ...(!integrations.shopify ? ['Stage 09 Shopify target'] : []),
+      ...(!integrations.google ? ['Stage 10 Google Cloud target'] : []),
+    ];
+    console.log(`INFO: Integrated UAT remains pending for ${pending.join(' and ')}.`);
   }
 }
 
