@@ -160,6 +160,7 @@ async function installDevelopment() {
   assert(process.env.APPWRITE_SEED_PASSWORD?.trim(), 'APPWRITE_SEED_PASSWORD is required for the mandatory seven-portal Development acceptance test.');
 
   await applyUpdate({ persistState: false });
+  runPackageAudit();
   run('npm', ['run', 'format']);
   run('npm', ['run', 'appwrite:generate']);
   await verifyStages();
@@ -196,6 +197,7 @@ async function cleanCheckoutValidation() {
   verifyToolchain();
   verifyCleanTree();
   await applyUpdate({ persistState: false });
+  runPackageAudit();
   run('npm', ['run', 'format']);
   run('npm', ['run', 'appwrite:generate']);
   await verifyStages();
@@ -244,7 +246,8 @@ try {
     verifyToolchain();
     verifyCleanTree();
     await applyUpdate({ persistState: false });
-    console.log('PASS: source update applied. Installation state is unchanged until guarded Development installation succeeds.');
+    runPackageAudit();
+    console.log('PASS: source update applied and schema IDs remain unique. Installation state is unchanged until guarded Development installation succeeds.');
   } else if (command === 'verify') {
     await sourceVerify();
   } else if (command === 'local') {
