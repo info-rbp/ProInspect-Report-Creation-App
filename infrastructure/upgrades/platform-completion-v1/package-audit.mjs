@@ -66,6 +66,11 @@ check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects A
 check(installer.includes('APPWRITE_SEED_PASSWORD is required'), 'installer requires seven-portal acceptance credential');
 check(installer.includes('prohibitedGoogleCloudProjectIds'), 'installer enforces prohibited Google Cloud targets');
 check(installer.includes('requireIntegrations'), 'installer supports strict integrated-UAT target enforcement');
+check(installer.includes("stage.id === '09' && !integrations.shopify"), 'Stage 09 remains pending until Shopify target verification');
+check(installer.includes("stage.id === '10' && !integrations.google"), 'Stage 10 remains pending until Google target verification');
+
+const workflow = readFileSync(resolve(root, '.github/workflows/platform-completion-update.yml'), 'utf8');
+check(workflow.includes('workflow_dispatch:') && !workflow.includes('\n  push:'), 'optional GitHub Actions validation is manual-only');
 
 check(existsSync(resolve(root, 'infrastructure/appwrite/scripts/test-seven-portals-development.mjs')), 'local seven-portal acceptance script exists');
 check(existsSync(resolve(root, 'apps/web/services/offlineWorkspace.ts')), 'offline workspace implementation exists');
