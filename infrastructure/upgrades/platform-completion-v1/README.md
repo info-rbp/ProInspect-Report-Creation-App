@@ -77,7 +77,7 @@ The upgrade branch is the update media. Merge it into the completed Stage 2D fea
 git fetch origin
 git checkout feat/seven-portal-completion-chatgpt
 git pull --ff-only
-git merge --ff-only origin/upgrade/platform-completion-v1
+git merge --no-ff origin/upgrade/platform-completion-v1
 
 nvm use 22.23.2
 npm install -g npm@10.9.2 appwrite-cli@27.2.1
@@ -101,22 +101,13 @@ npm run upgrade:preflight -- --development
 npm run upgrade:install -- --development
 ```
 
-The Development installer requires `APPWRITE_SEED_PASSWORD` because seven-portal live acceptance is mandatory. It refuses `APPWRITE_API_KEY`; re-seeding with a deliberately created temporary key is a separate administrative operation and is not part of this installation package.
+The Development installer requires `APPWRITE_SEED_PASSWORD` because persona preparation and seven-portal live acceptance are mandatory. It refuses `APPWRITE_API_KEY`. After the first successful live audit, the preparer uses the authenticated Appwrite CLI account to create missing synthetic users, enable disabled users and reset all seven passwords. Existing IDs with unexpected emails are rejected. No API key is created or used.
 
 ## Strict integrated-UAT installation
 
-Strict integrated UAT is an **alternative first installation mode**, not a command to run after the normal installer has already modified the working tree. Before the first `upgrade:install`, declare the exact Shopify store and explicitly name the authenticated Google Cloud Development project:
+The core installer validates any declared Shopify or Google target before Appwrite mutation. The only Shopify store allowed is `proinspect-2.myshopify.com`; both Shopify domain aliases are checked. An explicit `GOOGLE_CLOUD_PROJECT` must match the local authenticated gcloud configuration and must not be the prohibited Production project.
 
-```bash
-export SHOPIFY_STORE_DOMAIN="proinspect-2.myshopify.com"
-export GOOGLE_CLOUD_PROJECT="YOUR_GOOGLE_CLOUD_DEVELOPMENT_PROJECT_ID"
-
-gcloud config get-value project
-
-npm run upgrade:install -- --development --require-integrations
-```
-
-The installer checks that `gcloud config get-value project` exactly matches `GOOGLE_CLOUD_PROJECT`, rejects the documented Production Google Cloud project and requires the exact Shopify Development store. The repository does not define a trustworthy Shopify CLI connectivity command, so the package does not invent one; authenticated Shopify Developer/VS Code bridge testing remains part of integrated UAT after the target guard succeeds.
+Target declarations do not prove integration acceptance. This installer does not yet contain authenticated Shopify bridge or Google worker acceptance runners. Stages 09 and 10 therefore remain READY, including when the target guards pass; `--require-integrations` fails closed before any remote mutation until those live acceptance gates are implemented. No specialist workers are deployed by this package.
 
 ## Commands
 
@@ -130,10 +121,10 @@ npm run upgrade:verify
 ```
 
 - `upgrade:status` shows installer state stored under `.git/`.
-- `upgrade:audit` verifies manifest coverage, authoritative patchers, payloads, target schema, unique source table IDs, safety declarations, bounded-diff support and root command exposure. It does not alter source or remote systems.
-- `upgrade:local` performs an isolated clean-checkout installation and all local test gates in a temporary Git worktree. It does not mutate Development.
+- `upgrade:audit` verifies manifest coverage, authoritative patchers, payloads, target schema, unique source table IDs, safety declarations, bounded-diff support and root command exposure. It also executes the persona payload against an in-memory CLI to verify all seven password resets, creation, reruns, identity protection, target guards and credential redaction, independently of source formatting. It does not alter source or remote systems.
+- `upgrade:local` performs an isolated clean-checkout installation and all local test gates in a temporary Git worktree, including a byte-identical second source application. It does not mutate Development.
 - `upgrade:preflight -- --development` proves the repository baseline, exact toolchain and safe Appwrite Development target.
-- `upgrade:install -- --development` applies the source update, reruns the package/schema audit, runs all local gates and the bounded-diff audit, then and only then pushes Appwrite Development resources, audits the control plane and performs mandatory seven-portal live acceptance.
+- `upgrade:install -- --development` applies the source update, reruns the package/schema audit, runs all local gates and the bounded-diff audit, then and only then pushes Appwrite Development resources, audits the control plane, prepares the seven synthetic personas, performs mandatory seven-portal live acceptance and audits the control plane again before recording success.
 - `upgrade:verify` verifies an already-applied source update without pushing Development resources.
 - `upgrade:ci` remains available for a manually dispatched future CI runner, but it is not required for package completion.
 
@@ -165,9 +156,10 @@ Core Development UAT readiness additionally requires:
 
 1. the guarded Appwrite Development push succeeds with the 120-unique-table target;
 2. the Development control-plane audit succeeds with zero persistent API keys;
-3. mandatory seven-portal live acceptance succeeds using `APPWRITE_SEED_PASSWORD`;
-4. the post-acceptance Development control-plane audit remains clean.
+3. all seven personas are prepared using the authenticated CLI and `APPWRITE_SEED_PASSWORD`;
+4. mandatory seven-portal live acceptance succeeds using that password;
+5. the post-acceptance Development control-plane audit remains clean.
 
-Full integrated UAT additionally requires exact Shopify Development and explicit Google Cloud Development target verification with `--require-integrations`, followed by authenticated bridge testing in the configured Development tooling.
+Full integrated UAT additionally requires implemented and successful live Shopify bridge and Google worker acceptance gates against verified Development targets. Target environment variables alone cannot complete those stages.
 
 After a successful Development install, the intentional source changes remain in the working tree for review and explicit commit. Generated TypeScript build metadata and Playwright test-result artifacts are automatically cleaned.

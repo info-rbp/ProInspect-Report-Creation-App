@@ -67,7 +67,11 @@ export function writeState(state) {
 }
 
 export function markStage(id, status, detail = '') {
-  const state = readState();
+  writeState(nextStageState(readState(), id, status, detail));
+}
+
+export function nextStageState(previous, id, status, detail = '') {
+  const state = { ...previous };
   state.completed = Array.from(new Set(state.completed || []));
   state.failed = Array.from(new Set(state.failed || []));
   if (status === 'complete') {
@@ -75,12 +79,18 @@ export function markStage(id, status, detail = '') {
     state.failed = state.failed.filter((value) => value !== id);
   } else if (status === 'failed') {
     state.failed = Array.from(new Set([...state.failed, id]));
+    state.completed = state.completed.filter((value) => value !== id);
+  } else if (status === 'ready') {
+    state.completed = state.completed.filter((value) => value !== id);
+    state.failed = state.failed.filter((value) => value !== id);
+  } else {
+    throw new Error(`Unknown installation stage status: ${status}`);
   }
   state.lastStage = id;
   state.lastStatus = status;
   state.lastDetail = detail;
   state.updatedAt = new Date().toISOString();
-  writeState(state);
+  return state;
 }
 
 export function toolchain() {

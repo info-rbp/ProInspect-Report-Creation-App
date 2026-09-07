@@ -12,8 +12,10 @@ const target = assertDevelopmentTarget({
   projectName: process.env.APPWRITE_PROJECT_NAME,
   endpoint: process.env.APPWRITE_ENDPOINT,
 }, process.env.APPWRITE_CONFIRM_TEST);
+if (target.projectName !== 'ProInspect Development') throw new Error('APPWRITE_PROJECT_NAME must be ProInspect Development.');
+if (process.env.APPWRITE_CONFIRM_TEST !== 'test-development') throw new Error('APPWRITE_CONFIRM_TEST must be test-development.');
 
-if (process.env.APPWRITE_API_KEY?.trim()) {
+if (process.env.APPWRITE_API_KEY !== undefined) {
   throw new Error('APPWRITE_API_KEY must be unset. Persona preparation uses the authenticated Appwrite CLI session only.');
 }
 
@@ -43,7 +45,14 @@ for (const [userId, role] of personas) {
 }
 
 function redact(value) {
-  return String(value ?? '').replaceAll(password, '[REDACTED]').trim();
+  return String(value ?? '')
+    .replaceAll(JSON.stringify(password).slice(1, -1), '[REDACTED]')
+    .replaceAll(password, '[REDACTED]').trim();
+}
+
+function parseCliJson(value) {
+  try { return JSON.parse(value); }
+  catch { throw new Error('Appwrite CLI returned invalid JSON; response content suppressed.'); }
 }
 
 function run(args, cwd = generated, { allowFailure = false } = {}) {
@@ -65,7 +74,7 @@ if (version !== '27.2.1') {
   throw new Error(`Appwrite CLI 27.2.1 is required; found ${version ?? 'unknown'}.`);
 }
 
-const live = JSON.parse(run([
+const live = parseCliJson(run([
   '--json',
   'project',
   'get',
@@ -96,7 +105,7 @@ for (const [userId, role] of personas) {
   const existing = run(['--json', 'users', 'get', '--user-id', userId], generated, { allowFailure: true });
 
   if (existing.status === 0) {
-    const user = JSON.parse(existing.stdout);
+    const user = parseCliJson(existing.stdout);
     if (user.$id !== userId || user.email !== email) {
       throw new Error(`Synthetic Development persona ${userId} has an unexpected identity; refusing to repurpose it.`);
     }

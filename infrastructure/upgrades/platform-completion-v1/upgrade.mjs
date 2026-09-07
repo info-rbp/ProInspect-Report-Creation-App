@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -17,6 +18,7 @@ import {
 } from './lib.mjs';
 import { verifyStages } from './stage-verification.mjs';
 import { applyUpdate } from './apply.mjs';
+import { developmentIntegrationChecks } from './integration-checks.mjs';
 
 const command = process.argv[2] || 'status';
 const args = new Set(process.argv.slice(3));
@@ -76,48 +78,6 @@ async function sourceVerify() {
   run('node', [resolve(packageRoot, 'performance-budget.mjs')]);
 }
 
-function developmentIntegrationChecks() {
-  let shopify = false;
-  let google = false;
-
-  const expectedShop = manifest.development.shopifyStore.toLowerCase();
-  const shop = (process.env.SHOPIFY_STORE_DOMAIN?.trim() || process.env.SHOPIFY_SHOP_DOMAIN?.trim() || '').toLowerCase();
-  if (shop) {
-    assert(shop === expectedShop, `SHOPIFY_STORE_DOMAIN must be ${manifest.development.shopifyStore}; found ${shop}.`);
-    shopify = true;
-    console.log(`PASS Stage 09 Shopify Development target ${shop}`);
-  } else {
-    console.log(`INFO Stage 09 target not declared. Set SHOPIFY_STORE_DOMAIN=${manifest.development.shopifyStore} for integrated UAT.`);
-  }
-
-  const expectedGoogle = process.env.GOOGLE_CLOUD_PROJECT?.trim();
-  if (expectedGoogle) {
-    assert(
-      !manifest.development.prohibitedGoogleCloudProjectIds.includes(expectedGoogle),
-      `Prohibited Production Google Cloud project selected: ${expectedGoogle}.`,
-    );
-    let configured;
-    try {
-      configured = output('gcloud', ['config', 'get-value', 'project']);
-    } catch {
-      throw new Error('GOOGLE_CLOUD_PROJECT is set but the authenticated gcloud project could not be read.');
-    }
-    assert(configured && configured !== '(unset)', 'gcloud has no active project.');
-    assert(configured === expectedGoogle, `gcloud project ${configured} does not match GOOGLE_CLOUD_PROJECT ${expectedGoogle}.`);
-    google = true;
-    console.log(`PASS Stage 10 Google Cloud Development target ${configured}`);
-  } else {
-    console.log('INFO Stage 10 target not declared. Set GOOGLE_CLOUD_PROJECT explicitly to the authenticated Development project for integrated UAT.');
-  }
-
-  if (requireIntegrations) {
-    assert(shopify, `Integrated UAT requires SHOPIFY_STORE_DOMAIN=${manifest.development.shopifyStore}.`);
-    assert(google, 'Integrated UAT requires an explicit, authenticated GOOGLE_CLOUD_PROJECT that is not the prohibited Production project.');
-  }
-
-  return { shopify, google };
-}
-
 async function localReadiness() {
   try {
     run('npm', ['run', 'check']);
@@ -134,8 +94,14 @@ async function localReadiness() {
 
 function recordSuccessfulInstallation(integrations) {
   for (const stage of manifest.stages) {
-    if (stage.id === '09' && !integrations.shopify) continue;
-    if (stage.id === '10' && !integrations.google) continue;
+    if (stage.id === '09' && !integrations.shopify) {
+      markStage(stage.id, 'ready', 'Shopify Development integration acceptance is pending.');
+      continue;
+    }
+    if (stage.id === '10' && !integrations.google) {
+      markStage(stage.id, 'ready', 'Google Cloud Development integration acceptance is pending.');
+      continue;
+    }
     markStage(stage.id, 'complete', 'Development installation and all required gates for this stage completed.');
   }
 
@@ -156,7 +122,7 @@ async function installDevelopment() {
   verifyToolchain();
   verifyDevelopmentEnvironment();
   verifyCleanTree();
-  assert(!process.env.APPWRITE_API_KEY?.trim(), 'APPWRITE_API_KEY must be unset. This installer does not create or depend on a persistent Appwrite API key.');
+  assert(process.env.APPWRITE_API_KEY === undefined, 'APPWRITE_API_KEY must be unset. This installer does not create or depend on a persistent Appwrite API key.');
   assert(process.env.APPWRITE_SEED_PASSWORD?.trim(), 'APPWRITE_SEED_PASSWORD is required for the mandatory seven-portal Development acceptance test.');
 
   await applyUpdate({ persistState: false });
@@ -169,7 +135,7 @@ async function installDevelopment() {
   console.log('Running all local testing-readiness gates before any Development mutation.');
   await localReadiness();
   runDiffAudit();
-  const integrations = developmentIntegrationChecks();
+  const integrations = developmentIntegrationChecks({ requireIntegrations });
 
   console.log('PASS local gates and bounded diff. Development mutation is now permitted.');
   run('npm', ['run', 'appwrite:push:development']);
@@ -205,9 +171,26 @@ async function cleanCheckoutValidation() {
   run('npm', ['run', 'appwrite:generate']);
   await verifyStages();
   run('npm', ['run', 'appwrite:validate']);
+  await verifyIdempotentApplication();
   await localReadiness();
   runDiffAudit();
   console.log('PASS: software update applied and fully verified without remote Development mutation.');
+}
+
+async function verifyIdempotentApplication() {
+  const snapshot = () => {
+    const paths = output('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean);
+    return JSON.stringify([...new Set(paths)].sort().map((path) => [
+      path,
+      existsSync(resolve(root, path)) ? createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex') : null,
+    ]));
+  };
+  const before = snapshot();
+  await applyUpdate({ persistState: false });
+  run('npm', ['run', 'format']);
+  run('npm', ['run', 'appwrite:generate']);
+  assert(snapshot() === before, 'Reapplying the installer changed the already-installed source.');
+  console.log('PASS installer idempotency: a second application produces identical source.');
 }
 
 async function isolatedLocalValidation() {

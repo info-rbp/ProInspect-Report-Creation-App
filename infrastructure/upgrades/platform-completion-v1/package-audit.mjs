@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tables } from '../../appwrite/tables/schema.mjs';
 import { unifiedPlatformExtensionTables } from '../../appwrite/tables/unified-platform-extensions.mjs';
-import { manifest, packageRoot, root } from './lib.mjs';
+import { manifest, nextStageState, packageRoot, root } from './lib.mjs';
+import { auditPersonaPreparer } from './persona-contract.mjs';
+import { developmentIntegrationChecks } from './integration-checks.mjs';
 
 const failures = [];
 const check = (ok, label) => {
@@ -44,6 +46,7 @@ for (const path of [
 ]) check(packageHas(path), `package contains ${path}`);
 
 check(!packageHas('apply-02e.mjs') && !packageHas('apply-04.mjs'), 'superseded patchers are absent');
+for (const path of ['persona-contract.mjs', 'integration-checks.mjs']) check(packageHas(path), `package contains ${path}`);
 
 const apply = packageText('apply.mjs');
 for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-07-live-schema-fix.mjs","./apply-lint-cleanup.mjs","applyStage07LiveSchemaFix()","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts","prepare-seven-portals-development.mjs"]) {
@@ -51,24 +54,7 @@ for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs",
 }
 
 const personaPreparer = packageText('payload/prepare-seven-portals-development.mjs');
-for (const marker of [
-  'assertDevelopmentTarget',
-  'APPWRITE_API_KEY must be unset',
-  'APPWRITE_SEED_PASSWORD is required',
-  "['dev_admin', 'proinspect_admin']",
-  "['dev_inspector', 'inspector']",
-  "['dev_building_manager', 'building_manager']",
-  "['dev_strata_manager', 'strata_manager']",
-  "['dev_resident_tenant', 'resident_tenant']",
-  "['dev_client_user', 'client_user']",
-  "['dev_contractor', 'contractor_worker']",
-  "'users', 'create'",
-  "'users', 'update-password'",
-  "replaceAll(password, '[REDACTED]')",
-  'authenticated Appwrite CLI session; no API key was created or used',
-]) {
-  check(personaPreparer.includes(marker), `persona preparer contains ${marker}`);
-}
+auditPersonaPreparer(personaPreparer, check);
 
 const lintCleanup = packageText('apply-lint-cleanup.mjs');
 for (const marker of [
@@ -177,6 +163,7 @@ check(diffAudit.includes('stage-verification.mjs before this bounded-diff gate r
 check(diffAudit.includes('infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs'), 'bounded diff audit permits the Development persona preparer');
 
 const installer = packageText('upgrade.mjs');
+const integrationChecks = packageText('integration-checks.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
 const checkIndex = installer.indexOf("run('npm', ['run', 'check'])");
 const pushIndex = installer.indexOf("run('npm', ['run', 'appwrite:push:development'])");
@@ -189,10 +176,31 @@ check(installer.includes('await localReadiness();\n  runDiffAudit();'), 'final-s
 check(installer.includes('diff-audit.mjs'), 'installer invokes the bounded source diff audit');
 check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects Appwrite API keys');
 check(installer.includes('APPWRITE_SEED_PASSWORD is required'), 'installer requires seven-portal acceptance credential');
-check(installer.includes('prohibitedGoogleCloudProjectIds'), 'installer enforces prohibited Google Cloud targets');
+check(integrationChecks.includes('prohibitedGoogleCloudProjectIds'), 'installer enforces prohibited Google Cloud targets');
 check(installer.includes('requireIntegrations'), 'installer supports strict integrated-UAT target enforcement');
 check(installer.includes("stage.id === '09' && !integrations.shopify"), 'Stage 09 remains pending until Shopify target verification');
 check(installer.includes("stage.id === '10' && !integrations.google"), 'Stage 10 remains pending until Google target verification');
+const declarations = { SHOPIFY_STORE_DOMAIN: 'proinspect-2.myshopify.com', GOOGLE_CLOUD_PROJECT: 'synthetic-development-fixture' };
+const integrationOptions = { env: declarations, readProject: () => declarations.GOOGLE_CLOUD_PROJECT, log: () => {} };
+const declared = developmentIntegrationChecks(integrationOptions);
+check(!declared.shopify && !declared.google, 'target declarations cannot mark integrations complete');
+for (const [label, options] of [
+  ['strict integrated UAT without live evidence', { ...integrationOptions, requireIntegrations: true }],
+  ['prohibited Google project', { env: { GOOGLE_CLOUD_PROJECT: 'business-plan-applicatio-17047' } }],
+  ['mismatched Google project', { ...integrationOptions, readProject: () => 'different-project' }],
+  ['wrong Shopify store', { env: { SHOPIFY_STORE_DOMAIN: 'other.myshopify.com' } }],
+  ['conflicting Shopify aliases', { env: { ...declarations, SHOPIFY_SHOP_DOMAIN: 'other.myshopify.com' } }],
+]) {
+  let rejected = false;
+  try { developmentIntegrationChecks(options); } catch { rejected = true; }
+  check(rejected, `integration guards reject ${label}`);
+}
+const pending = nextStageState({ completed: ['09', '10'], failed: ['09'] }, '09', 'ready');
+check(!pending.completed.includes('09') && !pending.failed.includes('09') && pending.completed.includes('10'), 'READY clears stale completion and failure only for the selected stage');
+const failed = nextStageState({ completed: ['05'], failed: [] }, '05', 'failed');
+check(!failed.completed.includes('05') && failed.failed.includes('05'), 'a failed stage cannot retain stale COMPLETE status');
+check(!apply.includes('markStage'), 'source application cannot record live acceptance');
+check(installer.includes('await verifyIdempotentApplication()'), 'isolated validation requires byte-identical installer reapplication');
 
 const workflow = readFileSync(resolve(root, '.github/workflows/platform-completion-update.yml'), 'utf8');
 check(workflow.includes('workflow_dispatch:') && !workflow.includes('\n  push:'), 'optional GitHub Actions validation is manual-only');
