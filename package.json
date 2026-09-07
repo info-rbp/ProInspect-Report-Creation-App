@@ -52,6 +52,12 @@
     "provision:provider-admin": "node scripts/provision-provider-admin.mjs",
     "smoke:api": "node scripts/smoke-api-routes.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:run && npm run appwrite:validate && npm run build && npm run verify:dist",
+    "upgrade:status": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs status",
+    "upgrade:preflight": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs preflight",
+    "upgrade:apply": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs apply",
+    "upgrade:verify": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs verify",
+    "upgrade:install": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs install",
+    "upgrade:ci": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs ci",
     "prepare": "node scripts/verify-workspace.mjs"
   },
   "dependencies": {
