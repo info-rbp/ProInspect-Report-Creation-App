@@ -14,7 +14,7 @@ const intermediateOfflineReceiptTable = `  agencyEntity('offline_sync_receipts',
     index('entity_state', ['entityType', 'entityId', 'syncState']),
   ]),`;
 
-const appwriteCompatibleOfflineReceiptTable = `  agencyEntity('offline_sync_receipts', [
+export const appwriteCompatibleOfflineReceiptTable = `  agencyEntity('offline_sync_receipts', [
     { ...str('userId', 36), default: null }, { ...str('deviceId', 128), default: null }, { ...str('clientSubmissionId', 128), default: null },
     str('inspectionJobId', 36, true), str('operationId', 128, true), str('operation', 64, true),
     { ...str('entityType', 64), default: null }, str('entityId', 36), integer('baseVersion', true), integer('resultVersion'),

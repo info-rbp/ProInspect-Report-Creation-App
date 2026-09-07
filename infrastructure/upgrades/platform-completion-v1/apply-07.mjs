@@ -1,4 +1,5 @@
-import { replaceOnce, replaceSection } from './patch-lib.mjs';
+import { replaceOnce, replaceSection, text } from './patch-lib.mjs';
+import { appwriteCompatibleOfflineReceiptTable } from './apply-07-live-schema-fix.mjs';
 
 const legacyOfflineReceiptTable = `  agencyEntity('offline_sync_receipts', [
     str('userId', 36, true), str('deviceId', 128, true), str('clientSubmissionId', 128, true),
@@ -244,12 +245,16 @@ const routeOffline = `async function routeOffline(req: IncomingMessage, deps: Ap
 `;
 
 export async function applyStage07() {
-  replaceOnce(
-    'infrastructure/appwrite/tables/unified-platform-extensions.mjs',
-    legacyOfflineReceiptTable,
-    upgradedOfflineReceiptTable,
-    'offline receipt schema migration',
-  );
+  // The live compatibility patch is a valid later state of this same migration.
+  // Recognize its complete definition, including every column and index.
+  if (!text('infrastructure/appwrite/tables/unified-platform-extensions.mjs').includes(appwriteCompatibleOfflineReceiptTable)) {
+    replaceOnce(
+      'infrastructure/appwrite/tables/unified-platform-extensions.mjs',
+      legacyOfflineReceiptTable,
+      upgradedOfflineReceiptTable,
+      'offline receipt schema migration',
+    );
+  }
   replaceOnce(
     'infrastructure/appwrite/tables/schema.test.mjs',
     "expect(byId.get('offline_sync_receipts').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['device_submission','user_state','entity_state']));",
