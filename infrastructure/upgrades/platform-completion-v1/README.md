@@ -11,7 +11,7 @@ This package is the controlled software update for the ProInspect Development pl
 - npm: `10.9.2`
 - Appwrite CLI: `27.2.1`
 - Development Appwrite project: `proinspect-development`
-- Target Appwrite schema: `121` tables
+- Target Appwrite schema: `120` unique tables
 - Shopify Development store: `proinspect-2.myshopify.com`
 
 The legacy standalone Appwrite project `6a911f1e0031e90015b2` and the documented Production Google Cloud project `business-plan-applicatio-17047` are explicitly prohibited targets.
@@ -20,7 +20,7 @@ The legacy standalone Appwrite project `6a911f1e0031e90015b2` and the documented
 
 GitHub Actions is an optional, manually dispatched future CI surface for this update. It does not trigger on branch pushes and is not a completion dependency. The authoritative validation paths are local and are designed for the VS Code terminal:
 
-- `npm run upgrade:audit` performs a non-mutating installer-media audit.
+- `npm run upgrade:audit` performs a non-mutating installer-media audit, including duplicate Appwrite table-ID detection.
 - `npm run upgrade:local` creates a temporary detached Git worktree, installs dependencies there, applies the complete update and runs all local readiness gates without mutating Appwrite Development.
 - `npm run upgrade:install -- --development` repeats the guarded source installation and local gates before allowing the Development Appwrite push.
 
@@ -34,7 +34,7 @@ The manifest records how each stage is completed rather than pretending every st
 - Stage 4: source migration for dedicated `client_approvals` parity and canonical notification-worker grant authority.
 - Stage 5: verification of seven Development personas, portal entitlements and representative fixtures.
 - Stage 6: local seven-portal live acceptance plus consolidated UAT readiness gates.
-- Stage 7: source migration adding idempotent `offline_sync_receipts`, stable replay operation IDs, fail-closed replay scope, server idempotency and permanent offline queue/replay regression coverage.
+- Stage 7: in-place migration of the existing `offline_sync_receipts` table to operation-level idempotent replay receipts, retaining optional legacy receipt fields plus stable replay operation IDs, fail-closed replay scope, server idempotency and permanent offline queue/replay regression coverage.
 - Stage 8: local verification of the deterministic migration dry-run/reconciliation framework. Representative live migration remains a controlled UAT activity rather than an automatic installer action.
 - Stage 9: Shopify integration contract verification plus exact Development-store target guard.
 - Stage 10: canonical worker/outbox contract verification plus explicit Google Cloud Development-project guard.
@@ -130,10 +130,10 @@ npm run upgrade:verify
 ```
 
 - `upgrade:status` shows installer state stored under `.git/`.
-- `upgrade:audit` verifies manifest coverage, authoritative patchers, payloads, target schema, safety declarations, bounded-diff support and root command exposure. It does not alter source or remote systems.
+- `upgrade:audit` verifies manifest coverage, authoritative patchers, payloads, target schema, unique source table IDs, safety declarations, bounded-diff support and root command exposure. It does not alter source or remote systems.
 - `upgrade:local` performs an isolated clean-checkout installation and all local test gates in a temporary Git worktree. It does not mutate Development.
 - `upgrade:preflight -- --development` proves the repository baseline, exact toolchain and safe Appwrite Development target.
-- `upgrade:install -- --development` applies the source update, runs all local gates and the bounded-diff audit, then and only then pushes Appwrite Development resources, audits the control plane and performs mandatory seven-portal live acceptance.
+- `upgrade:install -- --development` applies the source update, reruns the package/schema audit, runs all local gates and the bounded-diff audit, then and only then pushes Appwrite Development resources, audits the control plane and performs mandatory seven-portal live acceptance.
 - `upgrade:verify` verifies an already-applied source update without pushing Development resources.
 - `upgrade:ci` remains available for a manually dispatched future CI runner, but it is not required for package completion.
 
@@ -148,11 +148,12 @@ The installer refuses:
 - Node/npm/Appwrite CLI version drift;
 - an unexpected repository or missing Stage 2D baseline;
 - a dirty working tree before Development installation;
+- duplicate canonical Appwrite table IDs;
 - source changes outside the declared update surface;
 - the documented Production Google Cloud project;
 - integrated-UAT mode when Shopify or Google Cloud Development targets cannot be positively verified.
 
-Before `appwrite:push:development` can run, the installed source must pass formatting, linting, TypeScript, unit/rules tests, Appwrite generation/validation, production builds, artifact verification, Firebase emulator tests, Playwright E2E, secret scanning, high-severity production dependency policy, Stage 2D-13 source verification, the Stage 13 performance budget and the bounded source-diff audit.
+Before `appwrite:push:development` can run, the installed source must pass formatting, duplicate table-ID auditing, linting, TypeScript, unit/rules tests, Appwrite generation/validation, production builds, artifact verification, Firebase emulator tests, Playwright E2E, secret scanning, high-severity production dependency policy, Stage 2D-13 source verification, the Stage 13 performance budget and the bounded source-diff audit.
 
 ## Completion definition
 
@@ -162,7 +163,7 @@ Local executable completion requires `npm run upgrade:local` to pass in the isol
 
 Core Development UAT readiness additionally requires:
 
-1. the guarded Appwrite Development push succeeds with the 121-table target;
+1. the guarded Appwrite Development push succeeds with the 120-unique-table target;
 2. the Development control-plane audit succeeds with zero persistent API keys;
 3. mandatory seven-portal live acceptance succeeds using `APPWRITE_SEED_PASSWORD`;
 4. the post-acceptance Development control-plane audit remains clean.
