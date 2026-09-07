@@ -87,10 +87,19 @@ check('07', 'offline replay is idempotent and receipt-backed', () => {
   for (const token of ["deps.idempotency.execute(", "'offline.job.patch'", "deps.repository.get('offlineSyncReceipts'", "'offlineSyncReceipts',", 'OFFLINE_OPERATION_REUSE']) {
     assert(server.includes(token), `Offline server replay is missing ${token}.`);
   }
-  const schema = read('infrastructure/appwrite/tables/schema.mjs');
+  const schema = read('infrastructure/appwrite/tables/unified-platform-extensions.mjs');
   assert(schema.includes("agencyEntity('offline_sync_receipts'"), 'offline_sync_receipts is missing.');
-  assert(schema.includes("unique('operation_once',['agencyId','operationId'])"), 'offline_sync_receipts lacks operation idempotency.');
+  assert(schema.includes("unique('operation_once', ['agencyId', 'operationId'])"), 'offline_sync_receipts lacks operation idempotency.');
+  assert(schema.includes("str('inspectionJobId', 36, true)"), 'offline_sync_receipts lacks required inspectionJobId.');
+  assert(schema.includes("integer('baseVersion', true)"), 'offline_sync_receipts lacks required baseVersion.');
+  assert(schema.includes("str('deviceId', 128)"), 'offline_sync_receipts legacy deviceId must remain optional.');
+  assert(schema.includes("str('clientSubmissionId', 128)"), 'offline_sync_receipts legacy clientSubmissionId must remain optional.');
   assert(exists('apps/web/services/stage7OfflineContract.test.ts'), 'Stage 7 regression contract was not installed.');
+
+  const generated = JSON.parse(read('infrastructure/appwrite/tables/tables.json'));
+  const ids = generated.map((table) => table.$id);
+  assert(generated.length === manifest.targetSchemaTables, `Expected ${manifest.targetSchemaTables} generated tables; found ${generated.length}.`);
+  assert(new Set(ids).size === ids.length, 'Generated Appwrite tables contain duplicate table IDs.');
 });
 
 check('08', 'migration dry-run/reconciliation framework exists', () => {
