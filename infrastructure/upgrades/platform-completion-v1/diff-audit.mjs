@@ -47,13 +47,17 @@ const required = [
 
 run('git', ['diff', '--check']);
 
-const status = output('git', ['status', '--porcelain']);
-const changed = status
-  ? status.split('\n').filter(Boolean).map((line) => {
-      const path = line.slice(3).trim();
-      return path.includes(' -> ') ? path.split(' -> ').at(-1) : path;
-    })
-  : [];
+function lines(value) {
+  return value ? value.split('\n').map((line) => line.trim()).filter(Boolean) : [];
+}
+
+// Do not parse `git status --porcelain` with fixed offsets here. The shared
+// output() helper trims command output, which can remove the leading status
+// column and corrupt paths (for example `apps/...` becoming `pps/...`).
+// Query tracked and untracked filenames directly instead.
+const tracked = lines(output('git', ['diff', '--name-only']));
+const untracked = lines(output('git', ['ls-files', '--others', '--exclude-standard']));
+const changed = [...new Set([...tracked, ...untracked])].sort();
 
 const unexpected = changed.filter((path) => !allowed.has(path));
 assert(

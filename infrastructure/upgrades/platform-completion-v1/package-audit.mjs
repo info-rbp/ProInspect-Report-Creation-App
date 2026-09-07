@@ -39,16 +39,57 @@ for (const stage of manifest.stages) {
 }
 
 for (const path of [
-  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
+  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','apply-lint-cleanup.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
   'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts',
 ]) check(packageHas(path), `package contains ${path}`);
 
 check(!packageHas('apply-02e.mjs') && !packageHas('apply-04.mjs'), 'superseded patchers are absent');
 
 const apply = packageText('apply.mjs');
-for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
+for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-lint-cleanup.mjs","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
   check(apply.includes(marker), `apply sequence contains ${marker}`);
 }
+
+const lintCleanup = packageText('apply-lint-cleanup.mjs');
+for (const marker of [
+  'remoteInspectionPortalRoutes.ts',
+  'Firebase admin helper removed',
+  'notification-worker/src/index.ts',
+  "import { createHash } from 'node:crypto';",
+  'apps/api/src/backend/appwriteEvidenceStore.ts',
+  'return Buffer.from(downloaded);',
+  'normalize Appwrite evidence download to Buffer.from(ArrayBuffer)',
+]) {
+  check(lintCleanup.includes(marker), `lint/type cleanup contains ${marker}`);
+}
+
+const stage2eContract = packageText('payload/stage2eProviderBoundary.test.ts');
+check(stage2eContract.includes("expect(store).toContain('return Buffer.from(downloaded);')"), 'Stage 2E regression requires direct Buffer conversion for Appwrite downloads');
+check(stage2eContract.includes("expect(store).not.toContain('ArrayBuffer.isView(downloaded)')"), 'Stage 2E regression rejects impossible ArrayBuffer view narrowing branch');
+check(stage2eContract.includes("expect(store).not.toContain('downloaded.buffer')"), 'Stage 2E regression rejects downloaded.buffer access');
+check(stage2eContract.includes("it('preserves external grant provenance in Firestore rollback mode'"), 'Stage 2E regression guards Firestore external grant provenance');
+
+const firestoreEvidenceStore = packageText('payload/firestoreEvidenceStore.ts');
+for (const marker of [
+  'externalGrantId?: string',
+  'externalGrantId: value.externalGrantId',
+  'externalGrantId: session.externalGrantId',
+]) {
+  check(firestoreEvidenceStore.includes(marker), `Firestore evidence rollback provider preserves ${marker}`);
+}
+
+const stage4Contract = packageText('payload/stage4RuntimeParity.test.ts');
+for (const marker of [
+  "parts[2] === 'internal'",
+  "parts[3] === 'tenant-portal-grants'",
+  "parts[4] === 'automation'",
+  "req.method === 'POST'",
+  'return automationGrant(req, dependencies, correlationId)',
+  '/api/v1/internal/tenant-portal-grants/automation',
+]) {
+  check(stage4Contract.includes(marker), `Stage 4 regression contains ${marker}`);
+}
+check(!stage4Contract.includes("expect(portal).toContain('/tenant-portal-grants')"), 'Stage 4 regression does not require a slash-prefixed literal from the segmented router');
 
 const stage07 = packageText('apply-07.mjs');
 for (const marker of [
@@ -71,6 +112,19 @@ const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8
 for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:local','upgrade:install']) {
   check(Boolean(rootPackage.scripts?.[script]), `root package exposes ${script}`);
 }
+
+const eslintConfig = readFileSync(resolve(root, 'eslint.config.js'), 'utf8');
+check(
+  eslintConfig.includes("'infrastructure/upgrades/platform-completion-v1/apply-02e-v2.mjs'")
+    && eslintConfig.includes("'infrastructure/upgrades/platform-completion-v1/apply-04-v2.mjs'")
+    && eslintConfig.includes("'no-useless-escape': 'off'"),
+  'nested source-generator escape lint exception is path-scoped to Stage 2E/4 patchers',
+);
+
+const diffAudit = packageText('diff-audit.mjs');
+check(diffAudit.includes("output('git', ['diff', '--name-only'])"), 'bounded diff audit reads tracked filenames directly');
+check(diffAudit.includes("output('git', ['ls-files', '--others', '--exclude-standard'])"), 'bounded diff audit reads untracked filenames directly');
+check(!diffAudit.includes("line.slice(3)"), 'bounded diff audit does not parse trimmed porcelain status with fixed offsets');
 
 const installer = packageText('upgrade.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');

@@ -112,7 +112,7 @@ export function verifyDevelopmentEnvironment() {
   assert(confirmPush === 'push-development', `APPWRITE_CONFIRM_PUSH must be push-development; found ${confirmPush || '<unset>'}.`);
   assert(confirmVerify === 'verify-development', `APPWRITE_CONFIRM_VERIFY must be verify-development; found ${confirmVerify || '<unset>'}.`);
   assert(!expected.prohibitedProjectIds.includes(projectId), `Prohibited Appwrite project selected: ${projectId}.`);
-  assert(!/[\[\]()]/u.test(endpoint), 'APPWRITE_ENDPOINT contains Markdown/link syntax; use the plain HTTPS URL.');
+  assert(!['[', ']', '(', ')'].some((token) => endpoint?.includes(token)), 'APPWRITE_ENDPOINT contains Markdown/link syntax; use the plain HTTPS URL.');
 }
 
 export function verifyCleanTree({ allowUpgradeFiles = false } = {}) {
