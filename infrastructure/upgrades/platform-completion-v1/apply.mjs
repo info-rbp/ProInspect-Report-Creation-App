@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { applyStage02e } from './apply-02e-v2.mjs';
 import { applyStage04 } from './apply-04-v2.mjs';
 import { applyStage07 } from './apply-07.mjs';
+import { applyStage07LiveSchemaFix } from './apply-07-live-schema-fix.mjs';
 import { applyLintCleanup } from './apply-lint-cleanup.mjs';
 import { markStage, packageRoot } from './lib.mjs';
 import { writeIfChanged } from './patch-lib.mjs';
@@ -33,6 +34,7 @@ export async function applyUpdate({ persistState = true } = {}) {
     }
 
     await applyStage07();
+    await applyStage07LiveSchemaFix();
     writeIfChanged(
       'apps/web/services/stage7OfflineContract.test.ts',
       payload('stage7OfflineContract.test.ts'),
