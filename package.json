@@ -36,6 +36,7 @@
     "appwrite:audit:development": "node infrastructure/appwrite/scripts/audit-development-control-plane.mjs",
     "appwrite:seed:development": "node infrastructure/appwrite/scripts/seed-development.mjs",
     "appwrite:test:development": "node infrastructure/appwrite/scripts/test-development-workflow.mjs",
+    "appwrite:smoke:portals": "node infrastructure/appwrite/scripts/test-seven-portals-development.mjs",
     "appwrite:clear-seed:development": "node infrastructure/appwrite/scripts/clear-development-seed.mjs",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "npm run build:packages && npm run typecheck:workspaces",
@@ -56,6 +57,7 @@
     "upgrade:preflight": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs preflight",
     "upgrade:apply": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs apply",
     "upgrade:verify": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs verify",
+    "upgrade:audit": "node infrastructure/upgrades/platform-completion-v1/package-audit.mjs",
     "upgrade:install": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs install",
     "upgrade:ci": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs ci",
     "prepare": "node scripts/verify-workspace.mjs"
