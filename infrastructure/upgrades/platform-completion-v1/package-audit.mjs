@@ -40,14 +40,34 @@ for (const stage of manifest.stages) {
 
 for (const path of [
   'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','apply-07-live-schema-fix.mjs','apply-lint-cleanup.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
-  'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts',
+  'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts','payload/prepare-seven-portals-development.mjs',
 ]) check(packageHas(path), `package contains ${path}`);
 
 check(!packageHas('apply-02e.mjs') && !packageHas('apply-04.mjs'), 'superseded patchers are absent');
 
 const apply = packageText('apply.mjs');
-for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-07-live-schema-fix.mjs","./apply-lint-cleanup.mjs","applyStage07LiveSchemaFix()","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
+for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-07-live-schema-fix.mjs","./apply-lint-cleanup.mjs","applyStage07LiveSchemaFix()","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts","prepare-seven-portals-development.mjs"]) {
   check(apply.includes(marker), `apply sequence contains ${marker}`);
+}
+
+const personaPreparer = packageText('payload/prepare-seven-portals-development.mjs');
+for (const marker of [
+  'assertDevelopmentTarget',
+  'APPWRITE_API_KEY must be unset',
+  'APPWRITE_SEED_PASSWORD is required',
+  "['dev_admin', 'proinspect_admin']",
+  "['dev_inspector', 'inspector']",
+  "['dev_building_manager', 'building_manager']",
+  "['dev_strata_manager', 'strata_manager']",
+  "['dev_resident_tenant', 'resident_tenant']",
+  "['dev_client_user', 'client_user']",
+  "['dev_contractor', 'contractor_worker']",
+  "'users', 'create'",
+  "'users', 'update-password'",
+  "replaceAll(password, '[REDACTED]')",
+  'authenticated Appwrite CLI session; no API key was created or used',
+]) {
+  check(personaPreparer.includes(marker), `persona preparer contains ${marker}`);
 }
 
 const lintCleanup = packageText('apply-lint-cleanup.mjs');
@@ -154,12 +174,17 @@ check(!diffAudit.includes("line.slice(3)"), 'bounded diff audit does not parse t
 check(!diffAudit.includes('const required = ['), 'bounded diff audit does not require already-correct files to be modified again');
 check(!diffAudit.includes('Update did not produce required source changes'), 'bounded diff audit accepts idempotent partial or no-op re-application');
 check(diffAudit.includes('stage-verification.mjs before this bounded-diff gate runs'), 'bounded diff audit delegates required final-state validation to stage verification');
+check(diffAudit.includes('infrastructure/appwrite/scripts/prepare-seven-portals-development.mjs'), 'bounded diff audit permits the Development persona preparer');
 
 const installer = packageText('upgrade.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
 const checkIndex = installer.indexOf("run('npm', ['run', 'check'])");
 const pushIndex = installer.indexOf("run('npm', ['run', 'appwrite:push:development'])");
+const firstAuditIndex = installer.indexOf("run('npm', ['run', 'appwrite:audit:development'])", pushIndex);
+const prepareIndex = installer.indexOf("prepare-seven-portals-development.mjs");
+const smokeIndex = installer.indexOf("run('npm', ['run', 'appwrite:smoke:portals']");
 check(checkIndex >= 0 && pushIndex >= 0 && checkIndex < pushIndex, 'local check is ordered before Appwrite Development push');
+check(firstAuditIndex > pushIndex && prepareIndex > firstAuditIndex && smokeIndex > prepareIndex, 'Development persona preparation runs after the first live audit and before seven-portal smoke');
 check(installer.includes('await localReadiness();\n  runDiffAudit();'), 'final-state readiness verification runs before bounded diff audit');
 check(installer.includes('diff-audit.mjs'), 'installer invokes the bounded source diff audit');
 check(installer.includes('APPWRITE_API_KEY must be unset'), 'installer rejects Appwrite API keys');
