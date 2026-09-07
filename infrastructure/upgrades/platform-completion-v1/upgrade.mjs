@@ -243,7 +243,8 @@ try {
     runPackageAudit();
     verifyToolchain();
     verifyCleanTree();
-    await applyUpdate({ persistState: true });
+    await applyUpdate({ persistState: false });
+    console.log('PASS: source update applied. Installation state is unchanged until guarded Development installation succeeds.');
   } else if (command === 'verify') {
     await sourceVerify();
   } else if (command === 'local') {
@@ -257,7 +258,7 @@ try {
     throw new Error(`Unknown update command '${command}'.`);
   }
 } catch (error) {
-  if (command === 'apply' || command === 'install' || command === 'ci') {
+  if (command === 'install') {
     markStage('update', 'failed', error instanceof Error ? error.message : String(error));
   }
   console.error(`\nUPDATE FAILED: ${error instanceof Error ? error.message : String(error)}`);
