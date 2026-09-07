@@ -1,6 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import {
   calculateWorkflowGateContext,
   evaluateReportQuality,
@@ -14,25 +13,10 @@ import {
   type ReportSupersession,
   type SecurityCapability,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
-
-interface ReportAccessGrantRecord extends StoredRecord {
-  resourceType: 'report_distribution';
-  resourceId: string;
-  recipientEmail: string;
-  tokenHash: string;
-  expiresAt: string;
-  revokedAt?: string;
-  lastAccessedAt?: string;
-  createdBy: string;
-}
-
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function agencyHeader(req: IncomingMessage): string {
   const agencyId = req.headers['x-agency-id']?.toString().trim();
@@ -136,13 +120,37 @@ async function filteredRecords(
   return page.items.filter((record) => record.reportId === reportId || record.sourceReportId === reportId);
 }
 
-async function versionRecords(agencyId: string, reportId: string): Promise<Record<string, unknown>[]> {
-  const snapshot = await firestoreDb(adminApp())
-    .doc(`agencies/${agencyId}/reports/${reportId}`)
-    .collection('versions')
-    .orderBy('sequence', 'asc')
-    .get();
-  return snapshot.docs.map((document) => document.data() as Record<string, unknown>);
+async function versionRecords(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  reportId: string,
+): Promise<Record<string, unknown>[]> {
+  const versions = await dependencies.reportVersions!.list(
+    agencyId,
+    reportId,
+  );
+
+  return versions.map((version) => ({
+    id: version.id,
+    agencyId: version.agencyId,
+    reportId: version.reportId,
+    version: version.version,
+    sequence: version.version,
+    status: version.status,
+    lifecycleStatus: version.aggregate.report.lifecycleStatus,
+    immutable: version.immutable,
+    createdAt: version.createdAt,
+    updatedAt: version.updatedAt,
+    ...(version.contentHash
+      ? { contentHash: version.contentHash }
+      : {}),
+    ...(version.finalisedAt
+      ? { finalisedAt: version.finalisedAt }
+      : {}),
+    ...(version.supersedesVersionId
+      ? { supersedesVersionId: version.supersedesVersionId }
+      : {}),
+  }));
 }
 
 async function audit(
@@ -190,7 +198,7 @@ async function consoleResponse(
     filteredRecords(dependencies, 'reportRecipientResponses', agencyId, reportId),
     filteredRecords(dependencies, 'maintenanceCandidates', agencyId, reportId),
     filteredRecords(dependencies, 'maintenanceItems', agencyId, reportId),
-    versionRecords(agencyId, reportId),
+    versionRecords(dependencies, agencyId, reportId),
   ]);
   const workflow = calculateWorkflowGateContext(context.aggregate, context.job);
   const qc = evaluateReportQuality(context.aggregate);
@@ -397,15 +405,18 @@ async function createDistribution(
       updatedAt: now,
     };
     await dependencies.repository.create('reportDistributions', agencyId, distributionId, distribution as unknown as Record<string, unknown>, principal.uid);
-    await dependencies.repository.create('externalAccessGrants', agencyId, grantId, {
+    await requireExternalGrantStore(
+      dependencies,
+    ).issue({
+      id: grantId,
+      agencyId,
       resourceType: 'report_distribution',
       resourceId: distributionId,
       recipientEmail,
       tokenHash: hash(rawToken),
       expiresAt,
-      createdBy: principal.uid,
-      createdAt: now,
-    }, principal.uid);
+      actorId: principal.uid,
+    });
     const notificationId = randomUUID();
     const notification = {
       type: 'report_distribution',
@@ -460,8 +471,24 @@ async function revokeDistribution(
     const now = new Date().toISOString();
     const updated = await dependencies.repository.update('reportDistributions', agencyId, distributionId, { status: 'revoked', revokedAt: now, updatedAt: now }, Number(distribution.version), principal.uid);
     if (typeof distribution.accessGrantId === 'string') {
-      const grant = await dependencies.repository.get('externalAccessGrants', agencyId, distribution.accessGrantId);
-      if (grant) await dependencies.repository.update('externalAccessGrants', agencyId, grant.id as string, { revokedAt: now }, Number(grant.version), principal.uid);
+      const grantStore =
+        requireExternalGrantStore(dependencies);
+
+      const grant = await grantStore.get(
+        agencyId,
+        'report_distribution',
+        distribution.accessGrantId,
+      );
+
+      if (grant) {
+        await grantStore.revoke(
+          agencyId,
+          'report_distribution',
+          grant.id,
+          grant.version,
+          principal.uid,
+        );
+      }
     }
     await audit(dependencies, agencyId, principal.uid, principal.role, 'report.issue', reportId, 'report.distribution.revoked', correlationId, { distributionId });
     return { status: 200, body: { data: updated, meta: { correlationId } } };
@@ -566,28 +593,19 @@ async function supersedeReport(
   });
 }
 
-async function resolveReportGrant(rawToken: string): Promise<ReportAccessGrantRecord> {
-  const snapshot = await firestoreDb(adminApp())
-    .collectionGroup('externalAccessGrants')
-    .where('tokenHash', '==', hash(rawToken.trim()))
-    .limit(2)
-    .get();
-  if (snapshot.empty) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Access link is invalid or expired.');
-  if (snapshot.size !== 1) throw new ApiError(401, 'AMBIGUOUS_GRANT_TOKEN', 'Access link cannot be resolved safely.');
-  const grant = snapshot.docs[0].data() as ReportAccessGrantRecord;
-  if (String(grant.resourceType) !== 'report_distribution') throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'Access link is not valid for a report distribution.');
-  if (grant.revokedAt) throw new ApiError(401, 'GRANT_TOKEN_REVOKED', 'Access link has been revoked.');
-  if (new Date(grant.expiresAt).getTime() <= Date.now()) throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Access link has expired.');
-  return grant;
-}
-
 async function publicReportPortal(
   req: IncomingMessage,
   dependencies: ApiDependencies,
   correlationId: string,
   rawToken: string,
 ): Promise<ApiResponse> {
-  const grant = await resolveReportGrant(rawToken);
+  const grant =
+    await requireExternalGrantStore(
+      dependencies,
+    ).resolve(
+      rawToken,
+      ['report_distribution'],
+    );
   const distribution = await dependencies.repository.get('reportDistributions', grant.agencyId, grant.resourceId);
   if (!distribution) throw new ApiError(404, 'REPORT_DISTRIBUTION_NOT_FOUND', 'Report distribution no longer exists.');
   const reportId = String(distribution.reportId);
@@ -596,20 +614,29 @@ async function publicReportPortal(
   if (!aggregate) throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report no longer exists.');
   const externalActor = `external:${grant.id}`;
 
+  const recipientEmail =
+    grant.recipientEmail?.trim().toLowerCase();
+
+  if (!recipientEmail) {
+    throw new ApiError(
+      409,
+      'GRANT_RECIPIENT_REQUIRED',
+      'Report access grant is missing its recipient email.',
+    );
+  }
+
   if (req.method === 'GET') {
     const now = new Date().toISOString();
     if (distribution.status === 'sent' || distribution.status === 'delivered') {
       await dependencies.repository.update('reportDistributions', grant.agencyId, distribution.id as string, { status: 'viewed', viewedAt: now, updatedAt: now }, Number(distribution.version), externalActor);
     }
-    const grantRecord = await dependencies.repository.get('externalAccessGrants', grant.agencyId, grant.id as string);
-    if (grantRecord) await dependencies.repository.update('externalAccessGrants', grant.agencyId, grant.id as string, { lastAccessedAt: now }, Number(grantRecord.version), externalActor);
     const priorResponses = (await filteredRecords(dependencies, 'reportRecipientResponses', grant.agencyId, reportId)).filter((record) => record.distributionId === distribution.id);
     const acknowledgements = (await filteredRecords(dependencies, 'reportAcknowledgements', grant.agencyId, reportId)).filter((record) => record.distributionId === distribution.id);
     return {
       status: 200,
       body: {
         data: {
-          distribution: { ...distribution, recipientEmail: grant.recipientEmail },
+          distribution: { ...distribution, recipientEmail },
           report: {
             id: aggregate.report.id,
             reportVersionId,
@@ -647,7 +674,7 @@ async function publicReportPortal(
         reportId,
         reportVersionId,
         distributionId: distribution.id as string,
-        recipientEmail: grant.recipientEmail,
+        recipientEmail,
         recipientRole: distribution.recipientRole as ReportDistributionRecipientRole,
         acknowledgementType,
         ...(typeof body.note === 'string' && body.note.trim() ? { note: body.note.trim() } : {}),
@@ -684,7 +711,7 @@ async function publicReportPortal(
         reportId,
         reportVersionId,
         distributionId: distribution.id as string,
-        recipientEmail: grant.recipientEmail,
+        recipientEmail,
         recipientRole: distribution.recipientRole as ReportDistributionRecipientRole,
         ...(generalNote ? { generalNote } : {}),
         comments,

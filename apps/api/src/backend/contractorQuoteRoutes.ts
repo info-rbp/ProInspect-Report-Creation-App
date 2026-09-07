@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import type {
   ContractorQuote,
   ContractorQuoteRequest,
@@ -10,14 +9,10 @@ import type {
   MaintenanceItem,
   PriceBookUnit,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
-
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function parts(req: IncomingMessage): string[] {
   return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean);
@@ -94,29 +89,16 @@ function typed<T>(value: StoredRecord | undefined): T {
   return value as unknown as T;
 }
 
-async function resolveGrant(token: string): Promise<{
-  grant: Record<string, unknown> & { id: string; agencyId: string; version: number };
-  reference: FirebaseFirestore.DocumentReference;
-}> {
-  const snapshot = await firestoreDb(adminApp())
-    .collectionGroup('contractorQuoteAccessGrants')
-    .where('tokenHash', '==', hashToken(token))
-    .limit(2)
-    .get();
-  if (snapshot.empty || snapshot.size !== 1) {
-    throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Contractor quote link is invalid or expired.');
-  }
-  const document = snapshot.docs[0];
-  const grant = document.data() as Record<string, unknown> & {
-    id: string;
-    agencyId: string;
-    version: number;
-  };
-  if (grant.revokedAt || typeof grant.expiresAt !== 'string' || Date.parse(grant.expiresAt) <= Date.now()) {
-    throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Contractor quote link is expired or revoked.');
-  }
-  await document.ref.update({ lastAccessedAt: new Date().toISOString() });
-  return { grant, reference: document.ref };
+async function resolveGrant(
+  token: string,
+  dependencies: ApiDependencies,
+) {
+  return requireExternalGrantStore(
+    dependencies,
+  ).resolve(
+    token,
+    ['contractor_quote_request'],
+  );
 }
 
 async function externalPortal(
@@ -125,9 +107,22 @@ async function externalPortal(
   correlationId: string,
   token: string,
 ): Promise<ApiResponse> {
-  const { grant } = await resolveGrant(token);
-  const requestId = String(grant.contractorQuoteRequestId || '');
-  const contactId = String(grant.externalContactId || '');
+  const grant = await resolveGrant(
+    token,
+    dependencies,
+  );
+
+  const requestId = grant.resourceId;
+  const contactId =
+    grant.externalContactId?.trim();
+
+  if (!contactId) {
+    throw new ApiError(
+      409,
+      'CONTRACTOR_GRANT_SCOPE_INCOMPLETE',
+      'Contractor quote grant is missing its contractor scope.',
+    );
+  }
   const [requestRecord, contactRecord] = await Promise.all([
     dependencies.repository.get('contractorQuoteRequests', grant.agencyId, requestId),
     dependencies.repository.get('externalContacts', grant.agencyId, contactId),
@@ -369,20 +364,20 @@ export async function routeContractorQuoteRequest(
         const grantId = randomUUID();
         const token = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
         const expiresAt = request.dueAt || new Date(Date.now() + 7 * 86_400_000).toISOString();
-        await dependencies.repository.create(
-          'contractorQuoteAccessGrants',
+        await requireExternalGrantStore(
+          dependencies,
+        ).issue({
+          id: grantId,
           agencyId,
-          grantId,
-          {
-            contractorQuoteRequestId: request.id,
-            externalContactId: contact.id,
-            recipientEmail: contact.email.toLowerCase(),
-            tokenHash: hashToken(token),
-            expiresAt,
-            createdBy: principal.uid,
-          },
-          principal.uid,
-        );
+          resourceType: 'contractor_quote_request',
+          resourceId: request.id,
+          externalContactId: contact.id,
+          recipientEmail:
+            contact.email.toLowerCase(),
+          tokenHash: hashToken(token),
+          expiresAt,
+          actorId: principal.uid,
+        });
         const accessUrl = `${webBase}/external/contractor-quote/${token}`;
         const notificationId = randomUUID();
         const notification = {

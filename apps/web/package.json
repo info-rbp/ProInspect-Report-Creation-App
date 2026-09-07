@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@pcr/appwrite-client": "*",
     "@pcr/domain": "*",
     "@pcr/report-presentation": "*",
     "@pcr/templates": "*",

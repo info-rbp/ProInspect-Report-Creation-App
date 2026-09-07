@@ -1,4 +1,9 @@
-import { checksum, deterministicTargetId } from './framework.mjs';
+import {
+  checksum,
+  deterministicTargetId,
+  migrationIdentityKey,
+  resolveParentTargetId,
+} from './framework.mjs';
 
 export const FIRST_BOUNDED_DOMAIN = Object.freeze([
   'agencies',
@@ -21,7 +26,8 @@ const timestamp = (value, fallback) => optional(value) ?? fallback;
 
 function addRow(plan, index, { sourceSystem, sourceEntity, source, targetTable, target }) {
   const sourceId = required(source.id ?? source.$id, 'id', `${sourceSystem}.${sourceEntity}`);
-  const key = `${sourceSystem}:${sourceEntity}:${sourceId}`;
+  const key = migrationIdentityKey(sourceSystem, sourceEntity, sourceId);
+  if (index.has(key)) throw new Error(`Duplicate legacy ID ${sourceSystem}.${sourceEntity}.${sourceId}`);
   const targetId = deterministicTargetId(sourceSystem, sourceEntity, sourceId);
   const row = Object.fromEntries(Object.entries(target).filter(([, value]) => value !== undefined));
   index.set(key, targetId);
@@ -30,9 +36,7 @@ function addRow(plan, index, { sourceSystem, sourceEntity, source, targetTable, 
 }
 
 function resolve(index, sourceSystem, sourceEntity, sourceId, owner) {
-  const id = index.get(`${sourceSystem}:${sourceEntity}:${required(sourceId, `${sourceEntity}Id`, owner)}`);
-  if (!id) throw new Error(`${owner} references an unplanned ${sourceSystem}.${sourceEntity} row`);
-  return id;
+  return resolveParentTargetId(index, sourceSystem, sourceEntity, required(sourceId, `${sourceEntity}Id`, owner), owner);
 }
 
 /**

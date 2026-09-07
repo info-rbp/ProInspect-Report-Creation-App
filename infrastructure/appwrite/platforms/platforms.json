@@ -4,5 +4,11 @@
     "name": "ProInspect local development",
     "type": "web",
     "hostname": "localhost"
+  },
+  {
+    "$id": "6a9bc556001897f68c43",
+    "name": "Cloudflare Deployment",
+    "type": "web",
+    "hostname": "proinspect-report-creation-app.delicate-dream-e4c9.workers.dev"
   }
 ]

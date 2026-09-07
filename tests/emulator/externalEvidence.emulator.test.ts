@@ -15,6 +15,8 @@ import type {
 } from '../../apps/api/src/backend/types.js';
 import type { ReportAggregate, UploadSessionRecord } from '@pcr/domain';
 import { MemoryIdempotencyStore } from '../../apps/api/src/backend/idempotency.js';
+import { FirestoreExternalGrantStore } from '../../apps/api/src/backend/firestoreExternalGrantStore.js';
+import { FirestoreEvidenceStore } from '../../apps/api/src/backend/firestoreEvidenceStore.js';
 
 class MemoryRepository implements OperationalRepository {
   readonly values = new Map<string, StoredRecord>();
@@ -114,6 +116,9 @@ function dependencies(repository: MemoryRepository): ApiDependencies {
       },
     },
     repository,
+    externalGrants:
+      new FirestoreExternalGrantStore(),
+    evidence: new FirestoreEvidenceStore(),
     reports: new MemoryReports(),
     idempotency: new MemoryIdempotencyStore(),
     tasks: { dispatch: async () => undefined },

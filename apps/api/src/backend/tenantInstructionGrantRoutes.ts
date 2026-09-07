@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import type { ApiDependencies, StoredRecord } from './types.js';
 
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -72,9 +73,18 @@ export async function routeTenantInstructionGrantRequest(req: IncomingMessage, d
   const grantId = randomUUID();
   const tokenHash = createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = new Date(Date.now() + expiresInHours * 3_600_000).toISOString();
-  const grant = await dependencies.repository.create('externalAccessGrants', agencyId, grantId, {
-    resourceType: 'tenant_instruction', resourceId, recipientEmail, tokenHash, expiresAt,
-  }, principal.uid);
+  const grant = await requireExternalGrantStore(
+    dependencies,
+  ).issue({
+    id: grantId,
+    agencyId,
+    resourceType: 'tenant_instruction',
+    resourceId,
+    recipientEmail,
+    tokenHash,
+    expiresAt,
+    actorId: principal.uid,
+  });
   await dependencies.repository.update('tenantInstructions', agencyId, resourceId, { accessGrantId: grantId }, Number(instruction.version || 1), principal.uid);
   await dependencies.audit.append({
     id: randomUUID(), timestamp: new Date().toISOString(), actorId: principal.uid, actorRole: principal.role,

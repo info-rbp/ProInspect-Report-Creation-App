@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
@@ -8,27 +8,52 @@ import {
   type AuthenticatedPrincipal,
   type MaintenanceCategory,
   type MaintenancePriority,
-  type UploadSessionRecord,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
-import { FirestorePhotoEvidenceStore } from './photoEvidenceStore.js';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies, StoredRecord } from './types.js';
+import { requireEvidenceStore, requireExternalGrantStore } from './runtimeDependencyGuards.js';
+import type {
+  ApiDependencies,
+  ExternalGrantRecord,
+  StoredRecord,
+} from './types.js';
 
-interface TenantPortalGrant {
-  id: string;
-  agencyId: string;
-  tenantId: string;
-  tenancyId: string;
-  recipientEmail: string;
-  tokenHash: string;
-  expiresAt: string;
-  revokedAt?: string;
-  lastAccessedAt?: string;
-  createdBy: string;
-  createdAt: string;
-  version?: number;
+type TenantPortalGrant =
+  ExternalGrantRecord & {
+    resourceType: 'tenant_portal';
+    tenantId: string;
+    tenancyId: string;
+    recipientEmail: string;
+  };
+
+function tenantPortalGrant(
+  grant: ExternalGrantRecord,
+): TenantPortalGrant {
+  const tenantId = grant.tenantId?.trim();
+  const tenancyId = grant.tenancyId?.trim();
+  const recipientEmail =
+    grant.recipientEmail?.trim().toLowerCase();
+
+  if (
+    grant.resourceType !== 'tenant_portal'
+    || !tenantId
+    || !tenancyId
+    || !recipientEmail
+  ) {
+    throw new ApiError(
+      409,
+      'PORTAL_GRANT_SCOPE_INCOMPLETE',
+      'Tenant portal grant is missing required scope.',
+    );
+  }
+
+  return {
+    ...grant,
+    resourceType: 'tenant_portal',
+    tenantId,
+    tenancyId,
+    recipientEmail,
+  };
 }
 
 function adminApp() {
@@ -95,15 +120,19 @@ function externalPrincipal(grant: TenantPortalGrant): AuthenticatedPrincipal {
   return { uid: `external:${grant.id}`, agencyId: grant.agencyId, role: 'operations', mfaVerified: false, tokenIssuedAt: Math.floor(Date.now() / 1000) };
 }
 
-async function resolveGrant(rawToken: string): Promise<TenantPortalGrant> {
-  const snapshot = await firestoreDb(adminApp()).collectionGroup('tenantPortalGrants').where('tokenHash', '==', hashToken(rawToken)).limit(2).get();
-  if (snapshot.empty || snapshot.size !== 1) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Tenant portal link is invalid or expired.');
-  const document = snapshot.docs[0];
-  const grant = document.data() as TenantPortalGrant;
-  if (grant.revokedAt) throw new ApiError(401, 'GRANT_TOKEN_REVOKED', 'Tenant portal link has been revoked.');
-  if (new Date(grant.expiresAt).getTime() <= Date.now()) throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Tenant portal link has expired.');
-  await document.ref.update({ lastAccessedAt: new Date().toISOString() });
-  return grant;
+async function resolveGrant(
+  rawToken: string,
+  dependencies: ApiDependencies,
+): Promise<TenantPortalGrant> {
+  const grant =
+    await requireExternalGrantStore(
+      dependencies,
+    ).resolve(
+      rawToken,
+      ['tenant_portal'],
+    );
+
+  return tenantPortalGrant(grant);
 }
 
 async function assertVerifiedParticipant(dependencies: ApiDependencies, agencyId: string, tenantId: string, tenancyId: string, recipientEmail: string) {
@@ -134,14 +163,78 @@ async function queueInvitation(dependencies: ApiDependencies, principalId: strin
   await dependencies.tasks.dispatch('notification', agencyId, notificationId, notification);
 }
 
-async function createGrant(dependencies: ApiDependencies, agencyId: string, tenantId: string, tenancyId: string, recipientEmail: string, expiresInHours: number, principalId: string) {
-  const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
+async function createGrant(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  tenantId: string,
+  tenancyId: string,
+  recipientEmail: string,
+  expiresInHours: number,
+  principalId: string,
+) {
+  const rawToken =
+    `${randomUUID()}${randomUUID()
+      .replaceAll('-', '')}`;
+
   const grantId = randomUUID();
-  const expiresAt = new Date(Date.now() + expiresInHours * 3_600_000).toISOString();
-  const grant = await dependencies.repository.create('tenantPortalGrants', agencyId, grantId, {
-    tenantId, tenancyId, recipientEmail, tokenHash: hashToken(rawToken), expiresAt,
-  }, principalId);
-  return { grant, rawToken, accessUrl: `/tenant-portal/${rawToken}` };
+
+  const expiresAt =
+    new Date(
+      Date.now()
+      + expiresInHours * 3_600_000,
+    ).toISOString();
+
+  const grant = tenantPortalGrant(
+    await requireExternalGrantStore(
+      dependencies,
+    ).issue({
+      id: grantId,
+      agencyId,
+      resourceType: 'tenant_portal',
+      resourceId: tenancyId,
+      tenantId,
+      tenancyId,
+      recipientEmail,
+      tokenHash: hashToken(rawToken),
+      expiresAt,
+      actorId: principalId,
+    }),
+  );
+
+  return {
+    grant,
+    rawToken,
+    accessUrl: `/tenant-portal/${rawToken}`,
+  };
+}
+
+
+function automationSecretMatches(req: IncomingMessage): boolean {
+  const supplied = req.headers['x-proinspect-automation-secret']?.toString();
+  const expected = process.env.AUTOMATION_RUNNER_SECRET?.trim();
+  if (!supplied || !expected) return false;
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+async function automationGrant(
+  req: IncomingMessage,
+  dependencies: ApiDependencies,
+  correlationId: string,
+): Promise<ApiResponse> {
+  if (!automationSecretMatches(req)) {
+    throw new ApiError(403, 'AUTOMATION_SECRET_INVALID', 'Automation grant issuance is not authorised.');
+  }
+  const body = await readJson(req);
+  const agencyId = requiredString(body, 'agencyId');
+  const tenantId = requiredString(body, 'tenantId');
+  const tenancyId = requiredString(body, 'tenancyId');
+  const recipientEmail = validEmail(requiredString(body, 'recipientEmail'));
+  await assertVerifiedParticipant(dependencies, agencyId, tenantId, tenancyId, recipientEmail);
+  const created = await createGrant(dependencies, agencyId, tenantId, tenancyId, recipientEmail, 24 * 7, 'system:tenant-automation');
+  await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: 'system:tenant-automation', actorRole: 'operations', agencyId, capability: 'tenant.portal.manage', outcome: 'allowed', reason: 'tenant_portal.automation_grant_generated', target: { agencyId, tenancyId }, correlationId });
+  return { status: 201, body: { data: { grantId: created.grant.id, accessUrl: created.accessUrl, expiresAt: created.grant.expiresAt }, meta: { correlationId } } };
 }
 
 async function generateGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
@@ -165,7 +258,13 @@ async function listGrants(req: IncomingMessage, dependencies: ApiDependencies, c
   const url = new URL(req.url ?? '/', 'http://localhost');
   const tenantId = url.searchParams.get('tenantId')?.trim();
   const tenancyId = url.searchParams.get('tenancyId')?.trim();
-  let grants = await listAll(dependencies, 'tenantPortalGrants', agencyId);
+  let grants =
+    await requireExternalGrantStore(
+      dependencies,
+    ).list(
+      agencyId,
+      'tenant_portal',
+    );
   if (tenantId) grants = grants.filter((item) => item.tenantId === tenantId);
   if (tenancyId) grants = grants.filter((item) => item.tenancyId === tenancyId);
   const data = grants.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map((item) => ({ id: item.id, tenantId: item.tenantId, tenancyId: item.tenancyId, recipientEmail: item.recipientEmail, expiresAt: item.expiresAt, revokedAt: item.revokedAt, lastAccessedAt: item.lastAccessedAt, createdAt: item.createdAt }));
@@ -173,28 +272,155 @@ async function listGrants(req: IncomingMessage, dependencies: ApiDependencies, c
   return { status: 200, body: { data, meta: { correlationId, total: data.length } } };
 }
 
-async function revokeGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, grantId: string): Promise<ApiResponse> {
+async function revokeGrant(
+  req: IncomingMessage,
+  dependencies: ApiDependencies,
+  correlationId: string,
+  grantId: string,
+): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
-  const principal = await authenticateAndAuthorise(req, dependencies, 'tenant.portal.manage', { agencyId }, correlationId);
-  const grant = await dependencies.repository.get('tenantPortalGrants', agencyId, grantId);
-  if (!grant) throw new ApiError(404, 'PORTAL_GRANT_NOT_FOUND', 'Tenant portal grant not found.');
-  const updated = await dependencies.repository.update('tenantPortalGrants', agencyId, grantId, { revokedAt: new Date().toISOString() }, Number(grant.version || 1), principal.uid);
-  return { status: 200, body: { data: updated, meta: { correlationId } } };
+
+  const principal =
+    await authenticateAndAuthorise(
+      req,
+      dependencies,
+      'tenant.portal.manage',
+      { agencyId },
+      correlationId,
+    );
+
+  const grantStore =
+    requireExternalGrantStore(dependencies);
+
+  const grant = await grantStore.get(
+    agencyId,
+    'tenant_portal',
+    grantId,
+  );
+
+  if (!grant) {
+    throw new ApiError(
+      404,
+      'PORTAL_GRANT_NOT_FOUND',
+      'Tenant portal grant not found.',
+    );
+  }
+
+  const updated = await grantStore.revoke(
+    agencyId,
+    'tenant_portal',
+    grant.id,
+    grant.version,
+    principal.uid,
+  );
+
+  return {
+    status: 200,
+    body: {
+      data: updated,
+      meta: { correlationId },
+    },
+  };
 }
 
-async function replaceGrant(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, grantId: string): Promise<ApiResponse> {
+async function replaceGrant(
+  req: IncomingMessage,
+  dependencies: ApiDependencies,
+  correlationId: string,
+  grantId: string,
+): Promise<ApiResponse> {
   const agencyId = agencyHeader(req);
   const body = await readJson(req);
-  const principal = await authenticateAndAuthorise(req, dependencies, 'tenant.portal.manage', { agencyId }, correlationId);
-  const old = await dependencies.repository.get('tenantPortalGrants', agencyId, grantId);
-  if (!old) throw new ApiError(404, 'PORTAL_GRANT_NOT_FOUND', 'Tenant portal grant not found.');
-  const recipient = validEmail(String(old.recipientEmail || ''));
-  await assertVerifiedParticipant(dependencies, agencyId, String(old.tenantId), String(old.tenancyId), recipient);
-  await dependencies.repository.update('tenantPortalGrants', agencyId, grantId, { revokedAt: new Date().toISOString(), replacedAt: new Date().toISOString() }, Number(old.version || 1), principal.uid);
-  const expiresInHours = typeof body.expiresInHours === 'number' && Number.isFinite(body.expiresInHours) ? Math.min(Math.max(Math.floor(body.expiresInHours), 1), 24 * 30) : 24 * 7;
-  const created = await createGrant(dependencies, agencyId, String(old.tenantId), String(old.tenancyId), recipient, expiresInHours, principal.uid);
-  await queueInvitation(dependencies, principal.uid, agencyId, String(old.tenantId), String(old.tenancyId), recipient, created.accessUrl, String(created.grant.expiresAt));
-  return { status: 201, body: { data: { grantId: created.grant.id, grantToken: created.rawToken, expiresAt: created.grant.expiresAt, accessUrl: created.accessUrl }, meta: { correlationId } } };
+
+  const principal =
+    await authenticateAndAuthorise(
+      req,
+      dependencies,
+      'tenant.portal.manage',
+      { agencyId },
+      correlationId,
+    );
+
+  const grantStore =
+    requireExternalGrantStore(dependencies);
+
+  const oldRecord = await grantStore.get(
+    agencyId,
+    'tenant_portal',
+    grantId,
+  );
+
+  if (!oldRecord) {
+    throw new ApiError(
+      404,
+      'PORTAL_GRANT_NOT_FOUND',
+      'Tenant portal grant not found.',
+    );
+  }
+
+  const old = tenantPortalGrant(oldRecord);
+
+  await assertVerifiedParticipant(
+    dependencies,
+    agencyId,
+    old.tenantId,
+    old.tenancyId,
+    old.recipientEmail,
+  );
+
+  await grantStore.revoke(
+    agencyId,
+    'tenant_portal',
+    old.id,
+    old.version,
+    principal.uid,
+  );
+
+  const expiresInHours =
+    typeof body.expiresInHours === 'number'
+    && Number.isFinite(body.expiresInHours)
+      ? Math.min(
+          Math.max(
+            Math.floor(body.expiresInHours),
+            1,
+          ),
+          24 * 30,
+        )
+      : 24 * 7;
+
+  const created = await createGrant(
+    dependencies,
+    agencyId,
+    old.tenantId,
+    old.tenancyId,
+    old.recipientEmail,
+    expiresInHours,
+    principal.uid,
+  );
+
+  await queueInvitation(
+    dependencies,
+    principal.uid,
+    agencyId,
+    old.tenantId,
+    old.tenancyId,
+    old.recipientEmail,
+    created.accessUrl,
+    created.grant.expiresAt,
+  );
+
+  return {
+    status: 201,
+    body: {
+      data: {
+        grantId: created.grant.id,
+        grantToken: created.rawToken,
+        expiresAt: created.grant.expiresAt,
+        accessUrl: created.accessUrl,
+      },
+      meta: { correlationId },
+    },
+  };
 }
 
 async function documentDownloadUrl(document: StoredRecord): Promise<string | undefined> {
@@ -310,7 +536,7 @@ function uploadInput(body: Record<string, unknown>) {
   return { fileName, contentType, size, sha256 };
 }
 
-async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGrant, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
+async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGrant, rawToken: string, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse> {
   const body = uploadInput(await readJson(req));
   const tenancy = await dependencies.repository.get('tenancies', grant.agencyId, grant.tenancyId);
   if (!tenancy?.propertyId) throw new ApiError(409, 'TENANCY_PROPERTY_REQUIRED', 'Tenancy is not linked to a property.');
@@ -321,43 +547,32 @@ async function evidenceUploadSession(req: IncomingMessage, grant: TenantPortalGr
     externalGrantId: grant.id, externalResourceType: 'tenant_portal', externalResourceId: grant.tenancyId,
   }, externalPrincipal(grant));
   await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: `external:${grant.id}`, actorRole: 'external', agencyId: grant.agencyId, capability: 'upload.create', outcome: 'allowed', reason: 'tenant_portal.evidence_session_created', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId });
-  return { status: 201, body: { data: { ...session, photoId: uploadId }, meta: { correlationId } } };
+  const encodedToken = encodeURIComponent(rawToken);
+  const providerUrls = session.uploadProvider === 'appwrite' ? { binaryUploadUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/binary`, completionUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/complete` } : {};
+  return { status: 201, body: { data: { ...session, ...providerUrls, photoId: uploadId }, meta: { correlationId } } };
 }
 
 async function evidenceComplete(grant: TenantPortalGrant, dependencies: ApiDependencies, correlationId: string, uploadId: string): Promise<ApiResponse> {
-  const database = firestoreDb(adminApp());
-  const snapshot = await database.doc(`agencies/${grant.agencyId}/uploadSessions/${uploadId}`).get();
-  if (!snapshot.exists) throw new ApiError(404, 'UPLOAD_SESSION_NOT_FOUND', 'Evidence upload session was not found.');
-  const session = snapshot.data() as UploadSessionRecord;
-  if (session.externalGrantId !== grant.id || String(session.externalResourceType) !== 'tenant_portal' || session.externalResourceId !== grant.tenancyId) throw new ApiError(403, 'UPLOAD_SESSION_SCOPE_MISMATCH', 'Evidence upload session does not belong to this portal grant.');
-  if (session.status === 'expired' || new Date(session.expiresAt).getTime() <= Date.now()) throw new ApiError(409, 'UPLOAD_SESSION_EXPIRED', 'Evidence upload session has expired.');
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT?.trim();
-  const bucketName = process.env.UPLOAD_BUCKET?.trim() || (projectId ? `${projectId}-uploads` : '');
-  if (!bucketName) throw new ApiError(503, 'UPLOAD_BUCKET_REQUIRED', 'UPLOAD_BUCKET is required before evidence completion.');
-  const file = getStorage(adminApp()).bucket(bucketName).file(session.objectPath);
-  const [metadata] = await file.getMetadata().catch(() => { throw new ApiError(422, 'EVIDENCE_OBJECT_NOT_FOUND', 'Uploaded evidence object could not be verified.'); });
-  const actualSize = Number(metadata.size);
-  if (!Number.isFinite(actualSize) || actualSize !== session.fileSize) throw new ApiError(422, 'EVIDENCE_SIZE_MISMATCH', 'Uploaded evidence size does not match the issued session.');
-  const [bytes] = await file.download({ validation: false });
-  const actualHash = createHash('sha256').update(bytes).digest('hex');
-  if (actualHash !== session.sha256) throw new ApiError(422, 'EVIDENCE_HASH_MISMATCH', 'Uploaded evidence does not match its declared SHA-256.');
-  const completedAt = new Date().toISOString();
-  const evidence = await new FirestorePhotoEvidenceStore().complete(grant.agencyId, uploadId, { bucket: bucketName, objectPath: session.objectPath, generation: String(metadata.generation || ''), ...(metadata.metageneration ? { metageneration: String(metadata.metageneration) } : {}), contentType: String(metadata.contentType || session.contentType), size: actualSize, sha256: actualHash, completedAt });
-  await database.doc(`agencies/${grant.agencyId}/photoEvidence/${evidence.id}`).set({ source: 'tenant_portal', externalGrantId: grant.id, externalResourceType: 'tenant_portal', externalResourceId: grant.tenancyId, updatedAt: completedAt }, { merge: true });
-  return { status: 201, body: { data: { photoId: evidence.id, objectPath: evidence.objectPath, generation: evidence.generation, sha256: evidence.sha256, contentType: evidence.contentType }, meta: { correlationId } } };
+  const evidence = await requireEvidenceStore(dependencies).complete({ agencyId: grant.agencyId, uploadId, actorId: `external:${grant.id}`, entityType: 'tenant_portal', entityId: grant.tenancyId, source: 'tenant_portal', category: 'inspection_evidence' });
+  await dependencies.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: `external:${grant.id}`, actorRole: 'external', agencyId: grant.agencyId, capability: 'upload.create', outcome: 'allowed', reason: 'tenant_portal.evidence_upload_completed', target: { agencyId: grant.agencyId, tenancyId: grant.tenancyId }, correlationId, entityType: 'tenant_portal', entityId: grant.tenancyId, eventType: 'tenant_portal.evidence_upload_completed', metadata: { evidenceFileId: evidence.id, uploadId, sha256: evidence.checksum } });
+  return { status: 201, body: { data: { photoId: evidence.id, evidenceFileId: evidence.id, bucketId: evidence.bucketId, fileId: evidence.fileId, objectPath: evidence.fileId, generation: evidence.generation, sha256: evidence.checksum, contentType: evidence.mimeType }, meta: { correlationId } } };
 }
 
 export async function routeTenantPortalRequest(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string): Promise<ApiResponse | undefined> {
   const parts = new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean);
   if (parts[0] !== 'api' || parts[1] !== 'v1') return undefined;
+  if (parts[2] === 'internal' && parts[3] === 'tenant-portal-grants' && parts[4] === 'automation' && req.method === 'POST') return automationGrant(req, dependencies, correlationId);
   if (parts[2] === 'tenant-portal-grants' && parts.length === 3 && req.method === 'GET') return listGrants(req, dependencies, correlationId);
   if (parts[2] === 'tenant-portal-grants' && parts[3] === 'generate' && req.method === 'POST') return generateGrant(req, dependencies, correlationId);
   if (parts[2] === 'tenant-portal-grants' && parts[3] && parts[4] === 'revoke' && req.method === 'POST') return revokeGrant(req, dependencies, correlationId, parts[3]);
   if (parts[2] === 'tenant-portal-grants' && parts[3] && parts[4] === 'replace' && req.method === 'POST') return replaceGrant(req, dependencies, correlationId, parts[3]);
   if (parts[2] !== 'external' || parts[3] !== 'tenant-portal' || !parts[4]) return undefined;
-  const grant = await resolveGrant(decodeURIComponent(parts[4]));
+  const grant = await resolveGrant(
+    decodeURIComponent(parts[4]),
+    dependencies,
+  );
   if (req.method === 'GET' && !parts[5]) return portalGet(grant, dependencies, correlationId);
-  if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && !parts[7]) return evidenceUploadSession(req, grant, dependencies, correlationId);
+  if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && !parts[7]) return evidenceUploadSession(req, grant, decodeURIComponent(parts[4]), dependencies, correlationId);
   if (req.method === 'POST' && parts[5] === 'evidence' && parts[6] === 'upload-session' && parts[7] && parts[8] === 'complete') return evidenceComplete(grant, dependencies, correlationId, decodeURIComponent(parts[7]));
   if (req.method === 'POST' && parts[5]) return portalPost(req, grant, dependencies, correlationId, parts[5]);
   throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed for tenant portal.');

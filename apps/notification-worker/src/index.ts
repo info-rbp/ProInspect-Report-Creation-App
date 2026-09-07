@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { firestoreDb } from './firestoreDatabase.js';
@@ -255,23 +255,20 @@ async function tenancyRecipients(tenancyId: string, participants: ParticipantRec
 }
 
 async function portalLink(agencyId: string, tenantId: string, tenancyId: string, recipientEmail: string): Promise<string> {
-  const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
-  const grantId = randomUUID();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
-  await firestoreDb(adminApp()).doc(`agencies/${agencyId}/tenantPortalGrants/${grantId}`).create({
-    id: grantId,
-    agencyId,
-    tenantId,
-    tenancyId,
-    recipientEmail,
-    tokenHash: createHash('sha256').update(rawToken).digest('hex'),
-    expiresAt,
-    createdBy: 'system:tenant-automation',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    version: 1,
+  const apiBase = process.env.PROINSPECT_API_BASE_URL?.trim().replace(/\/$/u, '');
+  const secret = process.env.AUTOMATION_RUNNER_SECRET?.trim();
+  if (!apiBase || !secret) throw new Error('PROINSPECT_API_BASE_URL and AUTOMATION_RUNNER_SECRET are required for tenant portal automation.');
+  const response = await fetch(`${apiBase}/api/v1/internal/tenant-portal-grants/automation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-proinspect-automation-secret': secret },
+    body: JSON.stringify({ agencyId, tenantId, tenancyId, recipientEmail }),
+    signal: AbortSignal.timeout(10_000),
   });
-  return `${webBaseUrl()}/tenant-portal/${rawToken}`;
+  const payload = await response.json().catch(() => ({})) as { data?: { accessUrl?: string }; error?: { message?: string } };
+  if (!response.ok || !payload.data?.accessUrl) throw new Error(payload.error?.message || `Tenant portal grant API failed with ${response.status}.`);
+  const web = webBaseUrl();
+  if (!web) throw new Error('WEB_APP_BASE_URL is required for tenant portal automation.');
+  return new URL(payload.data.accessUrl, `${web}/`).toString();
 }
 
 async function emitAutomationNotification(input: {

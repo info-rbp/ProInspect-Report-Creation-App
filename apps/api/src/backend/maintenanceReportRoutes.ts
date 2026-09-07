@@ -1,13 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import type {
   BaselineComponentSnapshot,
   MaintenanceItem,
   ReportAggregate,
   ReportPhotoReference,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
@@ -15,9 +13,6 @@ import type { ApiDependencies } from './types.js';
 type Versioned<T> = T & { version: number };
 type ReportArea = ReportAggregate['areas'][number];
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
@@ -60,37 +55,89 @@ function address(property: Record<string, unknown>): string {
 }
 
 async function sourceComponent(
+  dependencies: ApiDependencies,
   agencyId: string,
   item: MaintenanceItem,
-): Promise<{ areaId: string; areaName: string; componentId: string; componentName: string; baseline: BaselineComponentSnapshot } | undefined> {
-  if (!item.sourceReportId || !item.sourceReportVersionId || !item.sourceAreaId || !item.sourceComponentId) return undefined;
-  const versionRef = firestoreDb(adminApp()).doc(`agencies/${agencyId}/reports/${item.sourceReportId}/versions/${item.sourceReportVersionId}`);
-  const version = await versionRef.get();
-  if (!version.exists || version.get('immutable') !== true) throw new ApiError(409, 'SOURCE_REPORT_VERSION_INVALID', `Maintenance item ${item.id} does not reference an immutable source report version.`);
-  const areaRef = versionRef.collection('areas').doc(item.sourceAreaId);
-  const [area, component] = await Promise.all([areaRef.get(), areaRef.collection('components').doc(item.sourceComponentId).get()]);
-  if (!area.exists || !component.exists) throw new ApiError(409, 'SOURCE_COMPONENT_NOT_FOUND', `Maintenance item ${item.id} source component is not present in its immutable report version.`);
-  const data = component.data() as Record<string, unknown>;
+): Promise<{
+  areaId: string;
+  areaName: string;
+  componentId: string;
+  componentName: string;
+  baseline: BaselineComponentSnapshot;
+} | undefined> {
+  if (
+    !item.sourceReportId
+    || !item.sourceReportVersionId
+    || !item.sourceAreaId
+    || !item.sourceComponentId
+  ) {
+    return undefined;
+  }
+
+  const version = await dependencies.reportVersions!.get(
+    agencyId,
+    item.sourceReportId,
+    item.sourceReportVersionId,
+  );
+
+  if (!version?.immutable) {
+    throw new ApiError(
+      409,
+      'SOURCE_REPORT_VERSION_INVALID',
+      `Maintenance item ${item.id} does not reference an immutable source report version.`,
+    );
+  }
+
+  const area = version.aggregate.areas.find(
+    (candidate) => candidate.id === item.sourceAreaId,
+  );
+
+  const component = area?.components.find(
+    (candidate) => candidate.id === item.sourceComponentId,
+  );
+
+  if (!area || !component) {
+    throw new ApiError(
+      409,
+      'SOURCE_COMPONENT_NOT_FOUND',
+      `Maintenance item ${item.id} source component is not present in its immutable report version.`,
+    );
+  }
+
   return {
     areaId: item.sourceAreaId,
-    areaName: String(area.get('name') ?? item.sourceAreaId),
+    areaName: area.name || item.sourceAreaId,
     componentId: item.sourceComponentId,
-    componentName: String(data.component ?? item.title),
+    componentName: component.component || item.title,
     baseline: {
       id: item.sourceComponentId,
-      conditionCategory: (data.conditionCategory ?? 'unable_to_confirm') as BaselineComponentSnapshot['conditionCategory'],
-      cleanlinessCategory: (data.cleanlinessCategory ?? 'unable_to_confirm') as BaselineComponentSnapshot['cleanlinessCategory'],
-      workingStatus: (data.workingStatus ?? 'not_applicable') as BaselineComponentSnapshot['workingStatus'],
-      testStatus: (data.testStatus ?? 'not_applicable') as BaselineComponentSnapshot['testStatus'],
-      commentary: typeof data.commentary === 'string' ? data.commentary : '',
-      defects: Array.isArray(data.defects) ? data.defects.filter((defect): defect is string => typeof defect === 'string') : [],
-      photoReferences: Array.isArray(data.photoReferences) ? data.photoReferences as ReportPhotoReference[] : [],
+      conditionCategory:
+        component.conditionCategory ?? 'unable_to_confirm',
+      cleanlinessCategory:
+        component.cleanlinessCategory ?? 'unable_to_confirm',
+      workingStatus:
+        component.workingStatus ?? 'not_applicable',
+      testStatus:
+        component.testStatus ?? 'not_applicable',
+      commentary: component.commentary ?? '',
+      defects: Array.isArray(component.defects)
+        ? component.defects
+        : [],
+      photoReferences: Array.isArray(component.photoReferences)
+        ? component.photoReferences as ReportPhotoReference[]
+        : [],
     },
   };
 }
 
-async function targetAreas(agencyId: string, items: Array<Versioned<MaintenanceItem>>): Promise<ReportAggregate['areas']> {
-  const sourceValues = await Promise.all(items.map((item) => sourceComponent(agencyId, item)));
+async function targetAreas(
+  dependencies: ApiDependencies,
+  agencyId: string,
+  items: Array<Versioned<MaintenanceItem>>,
+): Promise<ReportAggregate['areas']> {
+  const sourceValues = await Promise.all(
+    items.map((item) => sourceComponent(dependencies, agencyId, item)),
+  );
   const areaMap = new Map<string, ReportArea>();
   items.forEach((item, index) => {
     const source = sourceValues[index];
@@ -206,7 +253,7 @@ export async function routeMaintenanceReportRequest(
       baselineQuality: 'structured',
       sourceMaintenanceItemIds: itemIds,
     },
-    areas: await targetAreas(agencyId, items),
+    areas: await targetAreas(dependencies, agencyId, items),
   };
   const stored = await dependencies.reports.saveDraft(aggregate, undefined, principal.uid);
   await dependencies.audit.append({

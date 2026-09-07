@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import {
   MAINTENANCE_CATEGORIES,
   MAINTENANCE_PRIORITIES,
@@ -18,7 +17,6 @@ import {
   type ApprovalRequirement,
   type Client,
   type ClientApproval,
-  type ExternalAccessGrant,
   type MaintenanceCandidate,
   type MaintenanceCategory,
   type MaintenanceEstimate,
@@ -44,12 +42,9 @@ import {
   type ReportAggregate,
   type ReportComponentRecord,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import type { ApiDependencies, StoredRecord } from '../backend/types.js';
+import { requireExternalGrantStore } from '../backend/runtimeDependencyGuards.js';
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function timestamp(): string {
   return new Date().toISOString();
@@ -168,43 +163,38 @@ function recommendedActionFor(component: ReportComponentRecord, issueType: Maint
 }
 
 async function immutableAggregate(
+  dependencies: ApiDependencies,
   agencyId: string,
   reportId: string,
   versionId: string,
   report: ReportAggregate['report'],
 ): Promise<ReportAggregate> {
-  const database = firestoreDb(adminApp());
-  const versionRef = database.doc(`agencies/${agencyId}/reports/${reportId}/versions/${versionId}`);
-  const version = await versionRef.get();
-  if (!version.exists || version.get('immutable') !== true) {
-    throw Object.assign(new Error('The report version is not an immutable extraction source.'), {
-      code: 'REPORT_VERSION_NOT_IMMUTABLE',
-      status: 409,
-    });
+  const version = await dependencies.reportVersions!.get(
+    agencyId,
+    reportId,
+    versionId,
+  );
+
+  if (!version?.immutable) {
+    throw Object.assign(
+      new Error(
+        'The report version is not an immutable extraction source.',
+      ),
+      {
+        code: 'REPORT_VERSION_NOT_IMMUTABLE',
+        status: 409,
+      },
+    );
   }
-  const areasSnapshot = await versionRef.collection('areas').orderBy('sequence').get();
-  const areas: ReportAggregate['areas'] = [];
-  for (const areaDocument of areasSnapshot.docs) {
-    const area = areaDocument.data() as Record<string, unknown>;
-    const componentSnapshot = await areaDocument.ref.collection('components').get();
-    const components = componentSnapshot.docs.map((document) => {
-      const stored = document.data() as ReportComponentRecord;
-      const copy = { ...stored } as Record<string, unknown>;
-      for (const field of ['agencyId', 'reportId', 'areaId', 'createdAt', 'updatedAt', 'version', 'versionId']) {
-        delete copy[field];
-      }
-      return copy as ReportAggregate['areas'][number]['components'][number];
-    });
-    areas.push({
-      id: String(area.id || areaDocument.id),
-      name: String(area.name || areaDocument.id),
-      sequence: Number(area.sequence || areas.length + 1),
-      overallCommentary: typeof area.overallCommentary === 'string' ? area.overallCommentary : '',
-      photoReferences: Array.isArray(area.photoReferences) ? area.photoReferences as never[] : [],
-      components,
-    });
-  }
-  return { report: { ...report, currentVersionId: versionId }, areas };
+
+  return {
+    ...version.aggregate,
+    report: {
+      ...version.aggregate.report,
+      ...report,
+      currentVersionId: versionId,
+    },
+  };
 }
 
 export async function extractMaintenanceForReport(
@@ -230,7 +220,13 @@ export async function extractMaintenanceForReport(
     });
   }
   const aggregate = sourceVersionId
-    ? await immutableAggregate(input.agencyId, input.reportId, sourceVersionId, live.report)
+    ? await immutableAggregate(
+        dependencies,
+        input.agencyId,
+        input.reportId,
+        sourceVersionId,
+        live.report,
+      )
     : live;
   const existingCandidates = await listAllOperationalRecords(dependencies, 'maintenanceCandidates', input.agencyId);
   const existingItems = await listAllOperationalRecords(dependencies, 'maintenanceItems', input.agencyId);
@@ -1092,17 +1088,6 @@ export async function sendMaintenanceQuoteForApproval(
     createdAt: now,
     updatedAt: now,
   };
-  const grant: ExternalAccessGrant = {
-    id: grantId,
-    agencyId: input.agencyId,
-    resourceType: 'client_approval',
-    resourceId: approvalId,
-    recipientEmail,
-    tokenHash: grantHash(rawToken),
-    expiresAt,
-    createdBy: input.actorId,
-    createdAt: now,
-  };
   await dependencies.repository.create(
     'clientApprovals',
     input.agencyId,
@@ -1110,13 +1095,18 @@ export async function sendMaintenanceQuoteForApproval(
     approval as unknown as Record<string, unknown>,
     input.actorId,
   );
-  await dependencies.repository.create(
-    'externalAccessGrants',
-    input.agencyId,
-    grantId,
-    grant as unknown as Record<string, unknown>,
-    input.actorId,
-  );
+  await requireExternalGrantStore(
+    dependencies,
+  ).issue({
+    id: grantId,
+    agencyId: input.agencyId,
+    resourceType: 'client_approval',
+    resourceId: approvalId,
+    recipientEmail,
+    tokenHash: grantHash(rawToken),
+    expiresAt,
+    actorId: input.actorId,
+  });
   const quoteStored = await dependencies.repository.update(
     'maintenanceQuotes',
     input.agencyId,

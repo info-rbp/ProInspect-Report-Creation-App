@@ -1,14 +1,9 @@
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { canonicalComponentOccurrenceIdentity, canonicalSemanticComponentIdentity } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
 import type { ApiDependencies } from './types.js';
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function agencyHeader(req: IncomingMessage): string {
   const agencyId = req.headers['x-agency-id']?.toString().trim();
@@ -112,7 +107,6 @@ export async function routePropertyHistoryRequest(
   if (!property) throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found.');
   await authenticateAndAuthorise(req, dependencies, 'property.read', { agencyId, propertyId }, correlationId);
 
-  const database = firestoreDb(adminApp());
   const reportsPage = await dependencies.repository.list('reports', agencyId, 100);
   const reportRecords = reportsPage.items
     .filter((report) => report.propertyId === propertyId)
@@ -123,76 +117,159 @@ export async function routePropertyHistoryRequest(
 
   for (const report of reportRecords) {
     const reportId = report.id;
-    const versions = await database.collection(`agencies/${agencyId}/reports/${reportId}/versions`).get();
-    const immutableVersions = versions.docs
-      .filter((document) => document.get('immutable') === true)
-      .sort((left, right) => numberValue(left.get('sequence')) - numberValue(right.get('sequence')) || text(left.get('createdAt')).localeCompare(text(right.get('createdAt'))));
+    const immutableVersions = (
+      await dependencies.reportVersions!.list(agencyId, reportId)
+    )
+      .filter((version) => version.immutable)
+      .sort(
+        (left, right) =>
+          left.version - right.version
+          || left.createdAt.localeCompare(right.createdAt),
+      );
+
     if (!immutableVersions.length) continue;
+
+    const latestReport =
+      immutableVersions.at(-1)?.aggregate.report
+      ?? report;
 
     inspections.push({
       reportId,
-      reportType: text(report.reportType),
-      inspectionDate: text(report.inspectionDate),
-      lifecycleStatus: text(report.lifecycleStatus),
-      currentVersionId: text(report.currentVersionId),
-      templateId: text(report.templateId),
-      templateVersion: numberValue(report.templateVersion),
-      propertyLayoutVersionId: text(report.propertyLayoutVersionId),
-      structureResolutionVersion: optionalNumber(report.structureResolutionVersion),
-      canonicalCatalogueId: text(report.canonicalCatalogueId),
-      canonicalCatalogueVersion: optionalNumber(report.canonicalCatalogueVersion),
+      reportType: text(latestReport.reportType ?? report.reportType),
+      inspectionDate: text(
+        latestReport.inspectionDate ?? report.inspectionDate,
+      ),
+      lifecycleStatus: text(
+        latestReport.lifecycleStatus ?? report.lifecycleStatus,
+      ),
+      currentVersionId: text(
+        latestReport.currentVersionId ?? report.currentVersionId,
+      ),
+      templateId: text(
+        latestReport.templateId ?? report.templateId,
+      ),
+      templateVersion: numberValue(
+        latestReport.templateVersion ?? report.templateVersion,
+      ),
+      propertyLayoutVersionId: text(
+        latestReport.propertyLayoutVersionId
+        ?? report.propertyLayoutVersionId,
+      ),
+      structureResolutionVersion: optionalNumber(
+        latestReport.structureResolutionVersion
+        ?? report.structureResolutionVersion,
+      ),
+      canonicalCatalogueId: text(
+        latestReport.canonicalCatalogueId
+        ?? report.canonicalCatalogueId,
+      ),
+      canonicalCatalogueVersion: optionalNumber(
+        latestReport.canonicalCatalogueVersion
+        ?? report.canonicalCatalogueVersion,
+      ),
       immutableVersionCount: immutableVersions.length,
-      sourceMaintenanceItemIds: stringArray(report.sourceMaintenanceItemIds),
+      sourceMaintenanceItemIds: stringArray(
+        latestReport.sourceMaintenanceItemIds
+        ?? report.sourceMaintenanceItemIds,
+      ),
     });
 
-    for (const versionDocument of immutableVersions) {
-      const versionId = versionDocument.id;
-      const areaSnapshot = await versionDocument.ref.collection('areas').get();
-      for (const areaDocument of areaSnapshot.docs) {
-        const area = areaDocument.data() as Record<string, unknown>;
-        const areaId = text(area.id) || areaDocument.id;
+    for (const versionRecord of immutableVersions) {
+      const versionId = versionRecord.id;
+      const versionReport = versionRecord.aggregate.report;
+
+      for (const areaValue of versionRecord.aggregate.areas) {
+        const area = areaValue as unknown as Record<string, unknown>;
+        const areaId = text(area.id);
         const areaName = text(area.name) || areaId;
-        const canonicalAreaDefinitionId = text(area.canonicalAreaDefinitionId) || undefined;
-        const canonicalAreaDefinitionVersion = optionalNumber(area.canonicalAreaDefinitionVersion);
-        const componentSnapshot = await areaDocument.ref.collection('components').get();
-        for (const componentDocument of componentSnapshot.docs) {
-          const component = componentDocument.data() as Record<string, unknown>;
-          const componentId = text(component.id) || componentDocument.id;
-          const componentName = text(component.component) || componentId;
-          const canonicalComponentDefinitionId = text(component.canonicalComponentDefinitionId) || undefined;
-          const canonicalComponentDefinitionVersion = optionalNumber(component.canonicalComponentDefinitionVersion);
-          const canonicalAreaComponentRuleId = text(component.canonicalAreaComponentRuleId) || undefined;
-          const canonicalAreaComponentRuleVersion = optionalNumber(component.canonicalAreaComponentRuleVersion);
-          const identity = stableComponentKey({ areaId, canonicalAreaDefinitionId, componentId, canonicalComponentDefinitionId });
+        const canonicalAreaDefinitionId =
+          text(area.canonicalAreaDefinitionId) || undefined;
+        const canonicalAreaDefinitionVersion =
+          optionalNumber(area.canonicalAreaDefinitionVersion);
+
+        for (const componentValue of areaValue.components) {
+          const component =
+            componentValue as unknown as Record<string, unknown>;
+          const componentId = text(component.id);
+          const componentName =
+            text(component.component) || componentId;
+          const canonicalComponentDefinitionId =
+            text(component.canonicalComponentDefinitionId) || undefined;
+          const canonicalComponentDefinitionVersion =
+            optionalNumber(component.canonicalComponentDefinitionVersion);
+          const canonicalAreaComponentRuleId =
+            text(component.canonicalAreaComponentRuleId) || undefined;
+          const canonicalAreaComponentRuleVersion =
+            optionalNumber(component.canonicalAreaComponentRuleVersion);
+
+          const identity = stableComponentKey({
+            areaId,
+            canonicalAreaDefinitionId,
+            componentId,
+            canonicalComponentDefinitionId,
+          });
+
           const group = componentMap.get(identity.key) ?? {
             stableKey: identity.key,
             identityMode: identity.mode,
             areaId,
             areaName,
-            ...(canonicalAreaDefinitionId ? { canonicalAreaDefinitionId } : {}),
+            ...(canonicalAreaDefinitionId
+              ? { canonicalAreaDefinitionId }
+              : {}),
             componentId,
             componentName,
-            ...(canonicalComponentDefinitionId ? { canonicalComponentDefinitionId } : {}),
+            ...(canonicalComponentDefinitionId
+              ? { canonicalComponentDefinitionId }
+              : {}),
             observations: [],
           };
+
           group.areaName = areaName;
           group.componentName = componentName;
+
           group.observations.push({
             reportId,
             reportVersionId: versionId,
-            reportType: text(report.reportType),
-            ...(text(report.inspectionDate) ? { inspectionDate: text(report.inspectionDate) } : {}),
-            lifecycleStatus: text(versionDocument.get('lifecycleStatus') ?? report.lifecycleStatus),
+            reportType: text(
+              versionReport.reportType ?? report.reportType,
+            ),
+            ...(text(
+              versionReport.inspectionDate ?? report.inspectionDate,
+            )
+              ? {
+                  inspectionDate: text(
+                    versionReport.inspectionDate
+                    ?? report.inspectionDate,
+                  ),
+                }
+              : {}),
+            lifecycleStatus: text(
+              versionReport.lifecycleStatus
+              ?? report.lifecycleStatus,
+            ),
             areaId,
             areaName,
-            ...(canonicalAreaDefinitionId ? { canonicalAreaDefinitionId } : {}),
-            ...(canonicalAreaDefinitionVersion ? { canonicalAreaDefinitionVersion } : {}),
+            ...(canonicalAreaDefinitionId
+              ? { canonicalAreaDefinitionId }
+              : {}),
+            ...(canonicalAreaDefinitionVersion
+              ? { canonicalAreaDefinitionVersion }
+              : {}),
             componentId,
             componentName,
-            ...(canonicalComponentDefinitionId ? { canonicalComponentDefinitionId } : {}),
-            ...(canonicalComponentDefinitionVersion ? { canonicalComponentDefinitionVersion } : {}),
-            ...(canonicalAreaComponentRuleId ? { canonicalAreaComponentRuleId } : {}),
-            ...(canonicalAreaComponentRuleVersion ? { canonicalAreaComponentRuleVersion } : {}),
+            ...(canonicalComponentDefinitionId
+              ? { canonicalComponentDefinitionId }
+              : {}),
+            ...(canonicalComponentDefinitionVersion
+              ? { canonicalComponentDefinitionVersion }
+              : {}),
+            ...(canonicalAreaComponentRuleId
+              ? { canonicalAreaComponentRuleId }
+              : {}),
+            ...(canonicalAreaComponentRuleVersion
+              ? { canonicalAreaComponentRuleVersion }
+              : {}),
             conditionCategory: text(component.conditionCategory),
             cleanlinessCategory: text(component.cleanlinessCategory),
             workingStatus: text(component.workingStatus),
@@ -200,8 +277,9 @@ export async function routePropertyHistoryRequest(
             commentary: text(component.commentary),
             defects: stringArray(component.defects),
             evidencePhotoIds: photoIds(component.photoReferences),
-            ...(text(versionDocument.get('createdAt')) ? { versionCreatedAt: text(versionDocument.get('createdAt')) } : {}),
+            versionCreatedAt: versionRecord.createdAt,
           });
+
           componentMap.set(identity.key, group);
         }
       }

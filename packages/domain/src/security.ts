@@ -61,8 +61,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<SecurityRole, readonly SecurityC
   council_member: [...portalCapabilities('council_member'), 'communication.read'],
   resident_owner: [...portalCapabilities('resident_owner'), ...portalCommunication],
   resident_tenant: [...portalCapabilities('resident_tenant'), ...portalCommunication],
-  client_admin: [...portalCapabilities('client_admin'), ...portalCommunication],
-  client_user: [...portalCapabilities('client_user'), ...portalCommunication],
+  client_admin: ['client.portal.read', ...portalCapabilities('client_admin'), ...portalCommunication],
+  client_user: ['client.portal.read', ...portalCapabilities('client_user'), ...portalCommunication],
   contractor_admin: [...portalCapabilities('contractor_admin'), ...portalCommunication],
   contractor_worker: [...portalCapabilities('contractor_worker'), ...portalCommunication],
 };

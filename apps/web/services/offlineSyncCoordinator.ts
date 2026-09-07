@@ -34,16 +34,26 @@ export async function downloadInspectionForOffline(jobId: string): Promise<Offli
 }
 
 async function replayMutation(item: MutationOutboxItem): Promise<number> {
-  const payload = item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload) ? item.payload as Record<string, unknown> : {};
-  if (item.operation === 'job.patch') {
-    const updated = await apiRequest<Record<string, unknown>>(item.agencyId, `/api/v1/inspection-jobs/${encodeURIComponent(item.inspectionJobId)}/offline-sync`, { method: 'POST', body: { baseVersion: item.expectedVersion, patch: payload } });
-    return Number(updated.version || item.expectedVersion + 1);
+  const payload = item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+    ? item.payload as Record<string, unknown>
+    : {};
+  if (item.operation !== 'job.patch') {
+    throw new Error(`Unsupported offline mutation operation: ${item.operation}`);
   }
-  const path = typeof payload.path === 'string' ? payload.path : undefined;
-  const method = payload.method === 'POST' || payload.method === 'PATCH' || payload.method === 'PUT' || payload.method === 'DELETE' ? payload.method : undefined;
-  if (!path || !method) throw new Error(`Unsupported offline mutation operation: ${item.operation}`);
-  const response = await apiRequest<Record<string, unknown>>(item.agencyId, path, { method, body: payload.body });
-  return Number(response.version || item.expectedVersion + 1);
+  const updated = await apiRequest<Record<string, unknown>>(
+    item.agencyId,
+    `/api/v1/inspection-jobs/${encodeURIComponent(item.inspectionJobId)}/offline-sync`,
+    {
+      method: 'POST',
+      body: {
+        operationId: item.id,
+        operation: item.operation,
+        baseVersion: item.expectedVersion,
+        patch: payload,
+      },
+    },
+  );
+  return Number(updated.version || item.expectedVersion + 1);
 }
 
 export async function syncOfflineJob(jobId: string): Promise<SyncSummary> {

@@ -31,4 +31,12 @@ describe('Cloud Run operational boundary', () => {
     const configServiceSource = readFileSync('apps/web/services/configService.ts', 'utf8');
     expect(configServiceSource).not.toContain('geminiApiKey:');
   });
+
+  it('keeps the Appwrite People route free of direct Firebase or Firestore authority', () => {
+    const source = readFileSync('apps/api/src/backend/peopleRoutes.ts', 'utf8');
+    expect(source).not.toMatch(/firebase-admin|firestoreDb\s*\(|getFirestore\s*\(|getStorage\s*\(|getAuth\s*\(|FirebaseFirestore/u);
+    expect(source).toContain('deps.peopleAdmin');
+    expect(source).toContain('routeFirebasePeopleRequest');
+  });
+
 });

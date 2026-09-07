@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AccessDenied from '../layout/AccessDenied';
 import { logAuditEvent } from '../../services/platform/auditService';
-import type { InternalSection } from '../../services/platform/roleAccess';
+import { isInternalRole, type InternalSection } from '../../services/platform/roleAccess';
 import type { UserRole } from '../../types/platform';
 
 interface RoleProtectedRouteProps {
@@ -27,7 +27,7 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({ section, roles 
       entityId: currentUser?.uid || userProfile.id,
       eventType: 'access_denied',
       actorId: currentUser?.uid,
-      actorRole: userProfile.role,
+      ...(isInternalRole(userProfile.role) ? { actorRole: userProfile.role } : {}),
       metadata: { path: location.pathname, section, roles },
     });
   }, [allowed, currentUser?.uid, location.pathname, roles, section, userProfile]);

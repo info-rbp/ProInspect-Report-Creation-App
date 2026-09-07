@@ -1,5 +1,5 @@
 import { Account, Client } from '@pcr/appwrite-server';
-import type { IdentityVerifier, VerifiedIdentity } from './types.js';
+import type { IdentityVerifier, VerifiedIdentityToken } from './types.js';
 
 interface JwtPayload {
   iat?: number;
@@ -27,7 +27,7 @@ export class AppwriteIdentityVerifier implements IdentityVerifier {
     if (!this.projectId) throw new Error('APPWRITE_PROJECT_ID is required for Appwrite identity verification.');
   }
 
-  async verifyIdentityToken(token: string): Promise<VerifiedIdentity> {
+  async verifyIdentityToken(token: string): Promise<VerifiedIdentityToken> {
     if (!token || token.length < 20) throw Object.assign(new Error('A valid Appwrite JWT is required.'), { status: 401, code: 'AUTH_TOKEN_INVALID' });
     const client = new Client()
       .setEndpoint(this.endpoint as string)
@@ -44,11 +44,9 @@ export class AppwriteIdentityVerifier implements IdentityVerifier {
       };
       const payload = jwtPayload(token);
       const now = Math.floor(Date.now() / 1000);
-      const prefs = record.prefs ?? {};
       return {
         uid: record.$id,
         ...(record.email ? { email: record.email } : {}),
-        ...(typeof prefs.agencyId === 'string' ? { agencyId: prefs.agencyId } : {}),
         mfaVerified: record.mfa === true,
         authTime: typeof payload.auth_time === 'number' ? payload.auth_time : typeof payload.iat === 'number' ? payload.iat : now,
         issuedAt: typeof payload.iat === 'number' ? payload.iat : now,

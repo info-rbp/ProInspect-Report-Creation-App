@@ -1,9 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import type {
   ClientApproval,
-  ExternalAccessGrant,
   MaintenanceItem,
   MaintenanceQuote,
   MaintenanceQuoteStatus,
@@ -13,7 +11,6 @@ import type {
   QuoteApprovalPolicy,
   SecurityCapability,
 } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import {
   createMaintenanceWorkOrder,
@@ -28,9 +25,8 @@ import {
   transitionMaintenanceQuote,
 } from '../services/maintenanceCommercialService.js';
 import { ApiError, type ApiResponse } from './router.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
-
-function adminApp() { return getApps()[0] ?? initializeApp({ credential: applicationDefault() }); }
 function routeParts(req: IncomingMessage): string[] { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
 function agencyHeader(req: IncomingMessage): string { const value = req.headers['x-agency-id']?.toString().trim(); if (!value) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); return value; }
 async function readJson(req: IncomingMessage, maxBytes = 10 * 1024 * 1024): Promise<Record<string, unknown>> { const chunks: Buffer[] = []; let size = 0; for await (const chunk of req) { const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); size += buffer.length; if (size > maxBytes) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', 'Maintenance commercial payload is too large.'); chunks.push(buffer); } if (!chunks.length) return {}; try { const value = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown; if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('object required'); return value as Record<string, unknown>; } catch { throw new ApiError(400, 'INVALID_JSON', 'Request body must be valid JSON.'); } }
@@ -43,22 +39,50 @@ function record<T>(value: StoredRecord | undefined): T { return value as unknown
 function secureEqual(left: string, right: string): boolean { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
 async function automationPrincipal(req: IncomingMessage, dependencies: ApiDependencies, agencyId: string, correlationId: string): Promise<{ uid: string; role: string; agencyId: string }> { const supplied = req.headers['x-proinspect-automation-secret']?.toString(); const expected = process.env.AUTOMATION_RUNNER_SECRET?.trim(); if (supplied && expected && secureEqual(supplied, expected)) return { uid: 'system:maintenance-automation', role: 'operations', agencyId }; return authenticateAndAuthorise(req, dependencies, 'maintenance.triage', { agencyId }, correlationId); }
 async function principal(req: IncomingMessage, dependencies: ApiDependencies, capability: SecurityCapability, agencyId: string, correlationId: string, target: Record<string, unknown> = {}) { return authenticateAndAuthorise(req, dependencies, capability, { agencyId, ...target }, correlationId); }
-function grantTokenHash(rawToken: string): string { return createHash('sha256').update(rawToken.trim()).digest('hex'); }
+async function resolveQuoteGrant(
+  rawToken: string,
+  dependencies: ApiDependencies,
+) {
+  const grant =
+    await requireExternalGrantStore(
+      dependencies,
+    ).resolve(
+      rawToken,
+      ['client_approval'],
+    );
 
-async function resolveQuoteGrant(rawToken: string): Promise<{ grant: ExternalAccessGrant & { version: number }; approval: ClientApproval & { version: number } }> {
-  const snapshot = await firestoreDb(adminApp()).collectionGroup('externalAccessGrants').where('tokenHash', '==', grantTokenHash(rawToken)).limit(2).get();
-  if (snapshot.empty || snapshot.size !== 1) throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Quote approval link is invalid or expired.');
-  const document = snapshot.docs[0]; const grant = document.data() as ExternalAccessGrant & { version: number };
-  if (grant.resourceType !== 'client_approval' || grant.revokedAt) throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'Quote approval link is not valid for this resource.');
-  if (Date.parse(grant.expiresAt) <= Date.now()) throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Quote approval link has expired.');
-  const approval = await document.ref.parent.parent?.collection('clientApprovals').doc(grant.resourceId).get();
-  if (!approval?.exists) throw new ApiError(404, 'APPROVAL_NOT_FOUND', 'Quote approval record was not found.');
-  await document.ref.update({ lastAccessedAt: new Date().toISOString() });
-  return { grant, approval: approval.data() as ClientApproval & { version: number } };
+  const approvalRecord =
+    await dependencies.repository.get(
+      'clientApprovals',
+      grant.agencyId,
+      grant.resourceId,
+    );
+
+  if (!approvalRecord) {
+    throw new ApiError(
+      404,
+      'APPROVAL_NOT_FOUND',
+      'Quote approval record was not found.',
+    );
+  }
+
+  const approval =
+    record<ClientApproval & { version: number }>(
+      approvalRecord,
+    );
+
+  return {
+    grant,
+    approval,
+  };
 }
 
 async function externalQuotePortal(req: IncomingMessage, dependencies: ApiDependencies, correlationId: string, rawToken: string): Promise<ApiResponse> {
-  const { grant, approval } = await resolveQuoteGrant(rawToken);
+  const { grant, approval } =
+    await resolveQuoteGrant(
+      rawToken,
+      dependencies,
+    );
   if (!approval.quoteId || !approval.quoteVersionId) throw new ApiError(409, 'QUOTE_APPROVAL_INCOMPLETE', 'Approval is not linked to an immutable quote version.');
   const [quoteRecord, versionRecord, itemRecord, propertyRecord] = await Promise.all([
     dependencies.repository.get('maintenanceQuotes', grant.agencyId, approval.quoteId),

@@ -1,0 +1,33 @@
+import { createHash, randomUUID } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
+import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
+import { ApiError, type ApiResponse } from './router.js';
+import type { ApiDependencies, IdempotencyResult, StoredRecord } from './types.js';
+
+function parts(req: IncomingMessage): string[] { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
+function agencyId(req: IncomingMessage): string { const value = req.headers['x-agency-id']?.toString().trim(); if (!value) throw new ApiError(400, 'AGENCY_HEADER_REQUIRED', 'x-agency-id is required.'); return value; }
+async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> { const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); if (!chunks.length) return {}; try { const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown; if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('object required'); return parsed as Record<string, unknown>; } catch { throw new ApiError(400, 'INVALID_JSON', 'Request body must be a JSON object.'); } }
+function idempotencyKey(req: IncomingMessage): string { const value = req.headers['idempotency-key']?.toString().trim(); if (!value || value.length < 8 || value.length > 200) throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'A valid Idempotency-Key is required.'); return value; }
+function hash(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
+async function idempotent(deps: ApiDependencies, req: IncomingMessage, agency: string, operation: string, body: Record<string, unknown>, action: () => Promise<IdempotencyResult>): Promise<ApiResponse> { const execution = await deps.idempotency.execute(agency, operation, idempotencyKey(req), hash(body), action); return { status: execution.result.status, body: execution.result.body, headers: { 'idempotency-replayed': String(execution.replayed) } }; }
+async function listAll(deps: ApiDependencies, collection: string, agency: string): Promise<StoredRecord[]> { const rows: StoredRecord[] = []; let cursor: string | undefined; do { const page = await deps.repository.list(collection, agency, 100, cursor); rows.push(...page.items); cursor = page.nextCursor; } while (cursor); return rows; }
+async function propertyIds(deps: ApiDependencies, agency: string, clientAccountId: string): Promise<Set<string>> { return new Set((await listAll(deps, 'propertyClientRelationships', agency)).filter((item) => (item.clientId === clientAccountId || item.clientAccountId === clientAccountId) && item.isCurrent !== false && item.status !== 'ended').map((item) => String(item.propertyId ?? '')).filter(Boolean)); }
+function activeEntitlement(item: StoredRecord): boolean { if (item.status !== 'active') return false; const now = Date.now(); if (item.validFrom && Date.parse(String(item.validFrom)) > now) return false; if (item.validUntil && Date.parse(String(item.validUntil)) <= now) return false; return true; }
+
+export async function routeClientQuoteDecisionRequest(req: IncomingMessage, deps: ApiDependencies, correlationId: string): Promise<ApiResponse | undefined> {
+  const route = parts(req); if (route[0] !== 'api' || route[1] !== 'v1' || route[2] !== 'client-portal' || !route[3] || route[4] !== 'quotes' || !route[5] || route[6] !== 'decision') return undefined;
+  if (req.method !== 'POST') throw new ApiError(405, 'METHOD_NOT_ALLOWED', 'Quote decisions are POST only.');
+  const agency = agencyId(req); const clientAccountId = route[3]; const quoteId = route[5]; const principal = await authenticateAndAuthorise(req, deps, 'client.portal.read', { agencyId: agency, clientAccountId }, correlationId); await authenticateAndAuthorise(req, deps, 'communication.send', { agencyId: agency, clientAccountId }, correlationId);
+  const internal = ['super_admin', 'proinspect_admin', 'operations'].includes(principal.role);
+  const entitlements = (await deps.repository.list('portalEntitlements', agency, 100, undefined, { userId: principal.uid })).items;
+  const clientAdmin = entitlements.some((item) => activeEntitlement(item) && item.portalId === 'client' && item.clientAccountId === clientAccountId && item.sourceRole === 'client_admin');
+  if (!internal && !clientAdmin) throw new ApiError(403, 'CLIENT_ADMIN_REQUIRED', 'An active client-admin portal entitlement is required to decide quotes.');
+  const quote = await deps.repository.get('maintenanceQuotes', agency, quoteId); if (!quote) throw new ApiError(404, 'QUOTE_NOT_FOUND', 'Quote was not found.'); const maintenanceItemId = String(quote.maintenanceItemId ?? ''); const item = maintenanceItemId ? await deps.repository.get('maintenanceItems', agency, maintenanceItemId) : undefined; const propertyId = item && typeof item.propertyId === 'string' ? item.propertyId : undefined; if (!item || !propertyId) throw new ApiError(409, 'QUOTE_SCOPE_UNRESOLVED', 'The quote is not linked to a client property.'); if (!(await propertyIds(deps, agency, clientAccountId)).has(propertyId)) throw new ApiError(403, 'CLIENT_PROPERTY_SCOPE_REQUIRED', 'The quote is not linked to an authorised client property.');
+  const body = await readJson(req); const decision = typeof body.decision === 'string' ? body.decision : ''; if (!['approved', 'declined', 'more_information'].includes(decision)) throw new ApiError(400, 'DECISION_INVALID', 'decision must be approved, declined or more_information.');
+  return idempotent(deps, req, agency, `client-portal:${clientAccountId}:quote:${quoteId}:decision`, body, async () => {
+    const approvalId = randomUUID(); const approval = await deps.repository.create('maintenanceApprovals', agency, approvalId, { maintenanceItemId, quoteId, approvedBy: principal.uid, decision, ...(typeof body.reason === 'string' ? { reason: body.reason.trim() } : {}), decidedAt: new Date().toISOString(), status: 'recorded' }, principal.uid);
+    await deps.repository.update('maintenanceQuotes', agency, quoteId, { approvalStatus: decision }, quote.version, principal.uid);
+    await deps.audit.append({ id: randomUUID(), timestamp: new Date().toISOString(), actorId: principal.uid, actorRole: principal.role, agencyId: agency, capability: 'communication.send', outcome: 'allowed', reason: 'client_portal.quote.decision', target: { agencyId: agency, clientAccountId, propertyId }, correlationId, eventType: 'client_portal.quote.decision', entityType: 'maintenance_quote', entityId: quoteId });
+    return { status: 201, body: { data: approval, meta: { correlationId } } };
+  });
+}

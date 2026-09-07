@@ -4,6 +4,7 @@ import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import type { ApiDependencies, StoredRecord } from './types.js';
 
 function adminApp() {
@@ -163,13 +164,22 @@ async function createPortalGrant(dependencies: ApiDependencies, agencyId: string
   const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`;
   const grantId = randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
-  await dependencies.repository.create('tenantPortalGrants', agencyId, grantId, {
+  await requireExternalGrantStore(
+    dependencies,
+  ).issue({
+    id: grantId,
+    agencyId,
+    resourceType: 'tenant_portal',
+    resourceId: tenancyId,
     tenantId,
     tenancyId,
     recipientEmail,
-    tokenHash: createHash('sha256').update(rawToken).digest('hex'),
+    tokenHash: createHash('sha256')
+      .update(rawToken)
+      .digest('hex'),
     expiresAt,
-  }, actorId);
+    actorId,
+  });
   const relativeUrl = `/tenant-portal/${rawToken}`;
   return { grantId, rawToken, expiresAt, accessUrl: `${webBaseUrl()}${relativeUrl}` || relativeUrl };
 }

@@ -19,12 +19,16 @@ describe('privileged MFA policy', () => {
   });
 
   it('does not force a non-privileged user through MFA', () => {
-    expect(roleRequiresMfa('inspector')).toBe(false);
-    expect(resolveMfaSessionDecision('inspector', {
+    expect(roleRequiresMfa('client_user')).toBe(false);
+    expect(resolveMfaSessionDecision('client_user', {
       verified: false,
       enrolledFactors: 0,
       emailVerified: false,
     })).toBe('none');
+  });
+
+  it('keeps operational inspector sessions behind the same privileged MFA boundary as the API', () => {
+    expect(roleRequiresMfa('inspector')).toBe(true);
   });
 
   it('does not accept anything except verified session evidence for a privileged role', () => {

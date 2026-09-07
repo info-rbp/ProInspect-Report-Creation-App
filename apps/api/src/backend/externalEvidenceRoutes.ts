@@ -1,21 +1,14 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import type { AuthenticatedPrincipal, ExternalAccessGrant } from '@pcr/domain';
-import { firestoreDb } from '../firestoreDatabase.js';
+import type { AuthenticatedPrincipal } from '@pcr/domain';
 import { ApiError, type ApiResponse } from './router.js';
-import type { ApiDependencies } from './types.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
+import type {
+  ApiDependencies,
+  ExternalGrantRecord,
+} from './types.js';
 
-type VersionedGrant = ExternalAccessGrant & { version: number };
-
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
-
-function tokenHash(value: string): string {
-  return createHash('sha256').update(value.trim()).digest('hex');
-}
-
+type VersionedGrant = ExternalGrantRecord;
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -39,29 +32,20 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   }
 }
 
-async function resolveGrant(rawToken: string): Promise<VersionedGrant> {
-  const snapshot = await firestoreDb(adminApp())
-    .collectionGroup('externalAccessGrants')
-    .where('tokenHash', '==', tokenHash(rawToken))
-    .limit(2)
-    .get();
-  if (snapshot.empty) {
-    throw new ApiError(401, 'INVALID_GRANT_TOKEN', 'Access link is invalid or expired.');
-  }
-  if (snapshot.size !== 1) {
-    throw new ApiError(401, 'AMBIGUOUS_GRANT_TOKEN', 'Access link cannot be resolved safely.');
-  }
-  const grant = snapshot.docs[0].data() as VersionedGrant;
-  if (!['work_request', 'tenant_instruction', 'report_distribution'].includes(String(grant.resourceType))) {
-    throw new ApiError(403, 'GRANT_SCOPE_MISMATCH', 'This access link cannot upload evidence.');
-  }
-  if (grant.revokedAt) {
-    throw new ApiError(401, 'GRANT_TOKEN_REVOKED', 'Access link has been revoked.');
-  }
-  if (new Date(grant.expiresAt).getTime() <= Date.now()) {
-    throw new ApiError(401, 'GRANT_TOKEN_EXPIRED', 'Access link has expired.');
-  }
-  return grant;
+async function resolveGrant(
+  rawToken: string,
+  dependencies: ApiDependencies,
+): Promise<VersionedGrant> {
+  return requireExternalGrantStore(
+    dependencies,
+  ).resolve(
+    rawToken,
+    [
+      'work_request',
+      'tenant_instruction',
+      'report_distribution',
+    ],
+  );
 }
 
 function externalPrincipal(grant: VersionedGrant): AuthenticatedPrincipal {
@@ -237,7 +221,10 @@ export async function routeExternalEvidenceRequest(
     );
   }
 
-  const grant = await resolveGrant(decodeURIComponent(parts[4]));
+  const grant = await resolveGrant(
+    decodeURIComponent(parts[4]),
+    dependencies,
+  );
   const body = uploadInput(await readJson(req));
   const context = await resourceContext(dependencies, grant);
   const uploadId = randomUUID();
@@ -261,9 +248,6 @@ export async function routeExternalEvidenceRequest(
     externalPrincipal(grant),
   );
 
-  await firestoreDb(adminApp())
-    .doc(`agencies/${grant.agencyId}/externalAccessGrants/${grant.id}`)
-    .set({ lastAccessedAt: new Date().toISOString() }, { merge: true });
   await dependencies.audit.append({
     id: randomUUID(),
     timestamp: new Date().toISOString(),
@@ -281,8 +265,10 @@ export async function routeExternalEvidenceRequest(
     metadata: { uploadId, fileName: body.fileName, sha256: body.sha256 },
   });
 
-  return {
-    status: 201,
-    body: { data: { ...session, photoId: uploadId }, meta: { correlationId } },
-  };
+  const encodedToken = encodeURIComponent(decodeURIComponent(parts[4]));
+  const providerUrls = session.uploadProvider === 'appwrite' ? {
+    binaryUploadUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/binary`,
+    completionUrl: `/api/v1/external/evidence/${encodedToken}/upload-session/${encodeURIComponent(uploadId)}/complete`,
+  } : {};
+  return { status: 201, body: { data: { ...session, ...providerUrls, photoId: uploadId }, meta: { correlationId } } };
 }

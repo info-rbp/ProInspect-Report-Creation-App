@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { ApiError, type ApiResponse } from './router.js';
+import { requireExternalGrantStore } from './runtimeDependencyGuards.js';
 import type { ApiDependencies } from './types.js';
 
 function parts(req: IncomingMessage) { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
@@ -15,7 +16,23 @@ export async function routeRemoteInspectionAdminRequest(req: IncomingMessage, de
   const agency = agencyId(req); const body = await readJson(req); const principal = await authenticateAndAuthorise(req, deps, 'job.remote.manage', { agencyId: agency }, correlationId); const assignment = await deps.repository.get('remoteInspectionAssignments', agency, route[3]); if (!assignment) throw new ApiError(404, 'REMOTE_INSPECTION_NOT_FOUND', 'Remote inspection assignment was not found.'); if (!['draft','issued'].includes(String(assignment.status))) throw new ApiError(409, 'REMOTE_INSPECTION_NOT_ISSUABLE', 'Only draft or issued remote inspections may be issued.');
   const tenant = await deps.repository.get('tenants', agency, String(assignment.tenantId || '')); if (!tenant) throw new ApiError(409, 'REMOTE_INSPECTION_TENANT_REQUIRED', 'Assignment is not linked to a valid tenant.'); const email = typeof body.recipientEmail === 'string' && body.recipientEmail.trim() ? body.recipientEmail.trim().toLowerCase() : String(tenant.email || '').trim().toLowerCase(); if (!email) throw new ApiError(409, 'REMOTE_INSPECTION_EMAIL_REQUIRED', 'Tenant email is required before issuing a remote inspection.');
   const rawToken = `${randomUUID()}${randomUUID().replaceAll('-', '')}`; const grantId = randomUUID(); const expiresAt = assignment.dueAt && Date.parse(String(assignment.dueAt)) > Date.now() ? String(assignment.dueAt) : new Date(Date.now() + 7 * 86_400_000).toISOString();
-  await deps.repository.create('tenantPortalGrants', agency, grantId, { tenantId: assignment.tenantId, tenancyId: assignment.tenancyId, recipientEmail: email, tokenHash: createHash('sha256').update(rawToken).digest('hex'), expiresAt, purpose: 'remote_inspection', assignmentId: assignment.id }, principal.uid);
+  await requireExternalGrantStore(
+    deps,
+  ).issue({
+    id: grantId,
+    agencyId: agency,
+    resourceType: 'remote_inspection',
+    resourceId: String(assignment.id),
+    tenantId: String(assignment.tenantId ?? ''),
+    tenancyId: String(assignment.tenancyId ?? ''),
+    recipientEmail: email,
+    tokenHash: createHash('sha256')
+      .update(rawToken)
+      .digest('hex'),
+    expiresAt,
+    purpose: 'remote_inspection',
+    actorId: principal.uid,
+  });
   const relativePath = `/tenant-portal/${encodeURIComponent(rawToken)}/inspection/${encodeURIComponent(assignment.id)}`; const accessUrl = `${webBaseUrl()}${relativePath}` || relativePath; const communicationId = randomUUID(); const subject = typeof body.subject === 'string' && body.subject.trim() ? body.subject.trim() : 'Property inspection evidence requested'; const message = typeof body.message === 'string' && body.message.trim() ? body.message.trim() : `Please complete the requested property inspection evidence before ${new Date(expiresAt).toLocaleDateString('en-AU')}: ${accessUrl}`;
   await deps.repository.create('tenantCommunications', agency, communicationId, { tenantId: assignment.tenantId, tenancyId: assignment.tenancyId, propertyId: assignment.propertyId, channel: 'email', direction: 'outbound', subject, message, status: 'queued', relatedEntityType: 'inspection_job', relatedEntityId: assignment.inspectionJobId }, principal.uid);
   const notificationId = randomUUID(); const notification = await deps.repository.create('notificationJobs', agency, notificationId, { tenantId: assignment.tenantId, tenancyId: assignment.tenancyId, propertyId: assignment.propertyId, channel: 'email', recipient: email, subject, message, communicationId, status: 'queued', queuedAt: new Date().toISOString() }, principal.uid); await deps.tasks.dispatch('notification', agency, notificationId, notification);

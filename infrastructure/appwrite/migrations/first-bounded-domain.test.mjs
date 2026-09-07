@@ -26,4 +26,13 @@ describe('first bounded migration plan', () => {
     expect(plan.valid).toBe(false);
     expect(plan.errors[0].message).toContain('unplanned strata_d1.properties');
   });
+
+  it('rejects duplicate legacy identities instead of overwriting the migration ID map', () => {
+    const plan = planFirstBoundedMigration({
+      ...fixture,
+      clients: [fixture.clients[0], { ...fixture.clients[0], name: 'Duplicate client row' }],
+    });
+    expect(plan.valid).toBe(false);
+    expect(plan.errors[0].message).toContain('Duplicate legacy ID firestore.clients.c1');
+  });
 });

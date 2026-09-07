@@ -1,0 +1,46 @@
+name: Appwrite Portal Development Acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/seven-portal-completion-chatgpt
+    paths:
+      - 'infrastructure/appwrite/**'
+      - '.github/workflows/appwrite-portal-development.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appwrite-portal-development-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  seven-personas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APPWRITE_ENDPOINT: https://syd.cloud.appwrite.io/v1
+      APPWRITE_PROJECT_ID: proinspect-development
+      APPWRITE_PROJECT_NAME: ProInspect Development
+      APPWRITE_CONFIRM_TEST: test-development
+      APPWRITE_SEED_PASSWORD: ${{ secrets.APPWRITE_SEED_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Require Development seed credential
+        shell: bash
+        run: |
+          if [ -z "$APPWRITE_SEED_PASSWORD" ]; then
+            echo "::error::APPWRITE_SEED_PASSWORD is not configured in GitHub Actions for the Development acceptance gate."
+            exit 1
+          fi
+      - name: Validate local Appwrite configuration
+        run: npm run appwrite:validate
+      - name: Run seven-portal live persona acceptance
+        run: node infrastructure/appwrite/scripts/test-seven-portals-development.mjs

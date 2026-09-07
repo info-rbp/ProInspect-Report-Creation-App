@@ -15,7 +15,7 @@ export default defineConfig({
           ...common,
           name: 'web',
           environment: 'jsdom',
-          include: ['apps/web/tests/**/*.test.ts', 'apps/web/tests/**/*.test.tsx'],
+          include: ['apps/web/tests/**/*.test.ts', 'apps/web/tests/**/*.test.tsx', 'apps/web/services/**/*.test.ts'],
         },
       },
       {

@@ -1,5 +1,9 @@
 import { AuthenticationFactor, AuthenticatorType, type Account, type Models } from 'appwrite';
 
+export function createAccountJwt(account: Account, duration = 900): Promise<Models.Jwt> {
+  return account.createJWT({ duration });
+}
+
 export function createEmailPasswordSession(account: Account, email: string, password: string): Promise<Models.Session> {
   return account.createEmailPasswordSession({ email: email.trim(), password });
 }

@@ -1,0 +1,128 @@
+{
+  "id": "platform-completion-v1",
+  "version": "1.0.0",
+  "baselineCommit": "030d2650870f09556e72b7aebb58a4bec2a7a75f",
+  "baselineBranch": "feat/seven-portal-completion-chatgpt",
+  "targetBranch": "upgrade/platform-completion-v1",
+  "targetSchemaTables": 120,
+  "localValidationRequired": true,
+  "requiredToolchain": {
+    "node": "22.23.2",
+    "npm": "10.9.2",
+    "appwriteCli": "27.2.1"
+  },
+  "development": {
+    "endpoint": "https://syd.cloud.appwrite.io/v1",
+    "projectId": "proinspect-development",
+    "projectName": "ProInspect Development",
+    "shopifyStore": "proinspect-2.myshopify.com",
+    "prohibitedProjectIds": ["6a911f1e0031e90015b2"],
+    "prohibitedGoogleCloudProjectIds": ["business-plan-applicatio-17047"]
+  },
+  "stages": [
+    {
+      "id": "02d",
+      "name": "External grant authority closeout",
+      "completionMode": "baseline",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Verify the completed Stage 2D canonical external grant table and runtime provider boundary before later stages are installed."
+    },
+    {
+      "id": "02e",
+      "name": "Appwrite storage and evidence authority",
+      "completionMode": "migration",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Install Appwrite Storage and TablesDB evidence authority while retaining an explicit Firebase fallback for rollback and emulator compatibility."
+    },
+    {
+      "id": "03",
+      "name": "Transaction and recovery safety",
+      "completionMode": "verified-existing",
+      "testBlocking": true,
+      "requiresLiveDevelopment": false,
+      "summary": "Retain and verify the existing Appwrite transaction commit/rollback capability and Development rollback workflow."
+    },
+    {
+      "id": "04",
+      "name": "Runtime parity and worker authority",
+      "completionMode": "migration",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Install a distinct canonical client approvals model and remove independent tenant grant creation authority from notification workers."
+    },
+    {
+      "id": "05",
+      "name": "Development personas and representative fixtures",
+      "completionMode": "verified-existing",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Retain and verify the seven required portal identities, entitlements and representative Development fixtures."
+    },
+    {
+      "id": "06",
+      "name": "Structured UAT readiness",
+      "completionMode": "closure",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Require local seven-portal acceptance and the consolidated readiness gate without depending on GitHub Actions."
+    },
+    {
+      "id": "07",
+      "name": "Offline inspector field operations",
+      "completionMode": "migration",
+      "testBlocking": true,
+      "requiresLiveDevelopment": false,
+      "summary": "Migrate the existing offline sync receipt table in place to canonical idempotent replay receipts while retaining queue persistence, replay, conflict and recovery semantics."
+    },
+    {
+      "id": "08",
+      "name": "Migration dry-run and reconciliation",
+      "completionMode": "verified-existing",
+      "testBlocking": true,
+      "requiresLiveDevelopment": false,
+      "summary": "Verify the existing dry-run, checksum, reconciliation, rerun and recovery framework before representative migration testing."
+    },
+    {
+      "id": "09",
+      "name": "Shopify Development integration",
+      "completionMode": "closure",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Verify Shopify integration contracts and require the exact Development store target before integrated UAT."
+    },
+    {
+      "id": "10",
+      "name": "Google worker Development integration",
+      "completionMode": "closure",
+      "testBlocking": true,
+      "requiresLiveDevelopment": true,
+      "summary": "Verify canonical worker/outbox contracts and require an explicitly declared non-Production Google Cloud project before integrated UAT."
+    },
+    {
+      "id": "11",
+      "name": "Environment bootstrap",
+      "completionMode": "closure",
+      "testBlocking": true,
+      "requiresLiveDevelopment": false,
+      "summary": "Pin and verify Node, npm, Appwrite CLI, clean Git state and safe Development environment variables before remote mutation."
+    },
+    {
+      "id": "12",
+      "name": "Security and recovery hardening",
+      "completionMode": "closure",
+      "testBlocking": true,
+      "requiresLiveDevelopment": false,
+      "summary": "Run secret scanning, dependency policy, tenant isolation, grant misuse, recovery and failure-safe gates before Development mutation."
+    },
+    {
+      "id": "13",
+      "name": "Testing performance polish",
+      "completionMode": "closure",
+      "testBlocking": true,
+      "requiresLiveDevelopment": false,
+      "summary": "Enforce the front-end performance budget as part of local testing readiness."
+    }
+  ]
+}
