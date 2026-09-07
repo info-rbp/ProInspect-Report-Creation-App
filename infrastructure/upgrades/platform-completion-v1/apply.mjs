@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { applyStage02e } from './apply-02e.mjs';
+import { applyStage02e } from './apply-02e-v2.mjs';
 import { applyStage04 } from './apply-04.mjs';
 import { markStage, packageRoot } from './lib.mjs';
 import { writeIfChanged } from './patch-lib.mjs';
@@ -43,10 +43,7 @@ export async function applyUpdate({ persistState = true } = {}) {
 
     return completed;
   } catch (error) {
-    if (persistState) {
-      const current = completed.at(-1) ?? '02d';
-      markStage(current, 'failed', error instanceof Error ? error.message : String(error));
-    }
+    if (persistState) markStage('update', 'failed', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
