@@ -39,15 +39,25 @@ for (const stage of manifest.stages) {
 }
 
 for (const path of [
-  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
+  'manifest.json','README.md','lib.mjs','patch-lib.mjs','apply.mjs','apply-02e-v2.mjs','apply-04-v2.mjs','apply-07.mjs','apply-lint-cleanup.mjs','stage-verification.mjs','performance-budget.mjs','package-audit.mjs','diff-audit.mjs','upgrade.mjs',
   'payload/appwriteEvidenceStore.ts','payload/firestoreEvidenceStore.ts','payload/externalEvidenceCompletionRoutes.ts','payload/stage2eProviderBoundary.test.ts','payload/stage4RuntimeParity.test.ts','payload/stage7OfflineContract.test.ts',
 ]) check(packageHas(path), `package contains ${path}`);
 
 check(!packageHas('apply-02e.mjs') && !packageHas('apply-04.mjs'), 'superseded patchers are absent');
 
 const apply = packageText('apply.mjs');
-for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
+for (const marker of ["./apply-02e-v2.mjs","./apply-04-v2.mjs","./apply-07.mjs","./apply-lint-cleanup.mjs","applyLintCleanup()","stage2eProviderBoundary.test.ts","stage4RuntimeParity.test.ts","stage7OfflineContract.test.ts"]) {
   check(apply.includes(marker), `apply sequence contains ${marker}`);
+}
+
+const lintCleanup = packageText('apply-lint-cleanup.mjs');
+for (const marker of [
+  'remoteInspectionPortalRoutes.ts',
+  'Firebase admin helper removed',
+  'notification-worker/src/index.ts',
+  "import { createHash } from 'node:crypto';",
+]) {
+  check(lintCleanup.includes(marker), `lint cleanup contains ${marker}`);
 }
 
 const stage07 = packageText('apply-07.mjs');
@@ -71,6 +81,14 @@ const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8
 for (const script of ['appwrite:smoke:portals','upgrade:status','upgrade:preflight','upgrade:apply','upgrade:verify','upgrade:audit','upgrade:local','upgrade:install']) {
   check(Boolean(rootPackage.scripts?.[script]), `root package exposes ${script}`);
 }
+
+const eslintConfig = readFileSync(resolve(root, 'eslint.config.js'), 'utf8');
+check(
+  eslintConfig.includes("'infrastructure/upgrades/platform-completion-v1/apply-02e-v2.mjs'")
+    && eslintConfig.includes("'infrastructure/upgrades/platform-completion-v1/apply-04-v2.mjs'")
+    && eslintConfig.includes("'no-useless-escape': 'off'"),
+  'nested source-generator escape lint exception is path-scoped to Stage 2E/4 patchers',
+);
 
 const installer = packageText('upgrade.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
