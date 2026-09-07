@@ -1,5 +1,26 @@
 import { replaceOnce, replaceSection } from './patch-lib.mjs';
 
+const legacyOfflineReceiptTable = `  agencyEntity('offline_sync_receipts', [
+    str('userId', 36, true), str('deviceId', 128, true), str('clientSubmissionId', 128, true),
+    str('entityType', 64, true), str('entityId', 36), str('payloadHash', 128, true), str('syncState', 32, true),
+    integer('attempts', true), datetime('firstReceivedAt', true), datetime('lastAttemptedAt'), datetime('completedAt'),
+    text('conflictDetail'), text('errorDetail'),
+  ], [unique('device_submission', ['deviceId', 'clientSubmissionId']), index('user_state', ['userId', 'syncState']), index('user_status', ['userId', 'status']), index('entity_state', ['entityType', 'entityId', 'syncState'])]),`;
+
+const upgradedOfflineReceiptTable = `  agencyEntity('offline_sync_receipts', [
+    str('userId', 36), str('deviceId', 128), str('clientSubmissionId', 128),
+    str('inspectionJobId', 36, true), str('operationId', 128, true), str('operation', 64, true),
+    str('entityType', 64), str('entityId', 36), integer('baseVersion', true), integer('resultVersion'),
+    str('payloadHash', 128, true), str('resultHash', 128), datetime('receivedAt', true), datetime('appliedAt'),
+    text('conflictReason'), str('syncState', 32), integer('attempts'), datetime('firstReceivedAt'),
+    datetime('lastAttemptedAt'), datetime('completedAt'), text('conflictDetail'), text('errorDetail'),
+  ], [
+    unique('operation_once', ['agencyId', 'operationId']), index('job_received', ['inspectionJobId', 'receivedAt']),
+    index('operation_received', ['operation', 'receivedAt']), unique('device_submission', ['deviceId', 'clientSubmissionId']),
+    index('user_state', ['userId', 'syncState']), index('user_status', ['userId', 'status']),
+    index('entity_state', ['entityType', 'entityId', 'syncState']),
+  ]),`;
+
 const offlineReplay = `async function replayMutation(item: MutationOutboxItem): Promise<number> {
   const payload = item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
     ? item.payload as Record<string, unknown>
@@ -224,16 +245,16 @@ const routeOffline = `async function routeOffline(req: IncomingMessage, deps: Ap
 
 export async function applyStage07() {
   replaceOnce(
-    'infrastructure/appwrite/tables/schema.test.mjs',
-    "'external_access_grants','client_approvals'])",
-    "'external_access_grants','client_approvals','offline_sync_receipts'])",
-    'offline receipt schema contract',
+    'infrastructure/appwrite/tables/unified-platform-extensions.mjs',
+    legacyOfflineReceiptTable,
+    upgradedOfflineReceiptTable,
+    'offline receipt schema migration',
   );
   replaceOnce(
     'infrastructure/appwrite/tables/schema.test.mjs',
-    'expect(allTables).toHaveLength(120);',
-    'expect(allTables).toHaveLength(121);',
-    '121-table Stage 7 baseline',
+    "expect(byId.get('offline_sync_receipts').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['device_submission','user_state','entity_state']));",
+    "expect(byId.get('offline_sync_receipts').indexes.map((item) => item.key)).toEqual(expect.arrayContaining(['operation_once','job_received','operation_received','device_submission','user_state','entity_state']));",
+    'offline receipt index contract',
   );
 
   replaceSection(
