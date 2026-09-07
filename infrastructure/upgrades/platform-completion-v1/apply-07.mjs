@@ -1,5 +1,6 @@
-import { insertBefore, replaceOnce, replaceSection } from './patch-lib.mjs';
+import { insertAfter, replaceOnce, replaceSection } from './patch-lib.mjs';
 
+const clientApprovalAnchor = `  agencyEntity('client_approvals', [str('propertyId',36,true),str('maintenanceItemId',36,true),str('clientId',36,true),str('clientContactId',36),str('recipientEmail',320,true,'email'),text('summary',true),text('recommendedAction',true),str('priority',32,true),text('evidencePhotoIds'),text('clientNotes'),datetime('respondedAt'),str('accessGrantId',36),str('quoteId',36),str('quoteVersionId',36),str('quoteNumber',128),number('amount'),str('currency',3),datetime('quoteExpiresAt'),datetime('decisionTokenVerifiedAt'),integer('version',true)], [index('item_status',['maintenanceItemId','status']),index('client_status',['clientId','status']),index('recipient_status',['recipientEmail','status'])]),\n`;
 const offlineReceiptTable = `  agencyEntity('offline_sync_receipts', [str('inspectionJobId',36,true),str('operationId',128,true),str('operation',128,true),str('deviceId',128),str('userId',36,true),str('entityType',96),str('entityId',36),integer('baseVersion'),integer('resultVersion'),str('payloadHash',64,true),str('resultHash',64),datetime('receivedAt',true),datetime('appliedAt'),text('conflictReason')], [unique('operation_once',['agencyId','operationId']),index('job_received',['inspectionJobId','receivedAt']),index('user_received',['userId','receivedAt']),index('status_received',['status','receivedAt'])]),\n`;
 
 const offlineReplay = `async function replayMutation(item: MutationOutboxItem): Promise<number> {
@@ -225,9 +226,9 @@ const routeOffline = `async function routeOffline(req: IncomingMessage, deps: Ap
 `;
 
 export async function applyStage07() {
-  insertBefore(
+  insertAfter(
     'infrastructure/appwrite/tables/schema.mjs',
-    '];\n',
+    clientApprovalAnchor,
     offlineReceiptTable,
     'offline sync receipt table',
   );
