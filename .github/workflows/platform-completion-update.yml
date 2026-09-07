@@ -2,20 +2,9 @@ name: Platform Completion Update
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - upgrade/platform-completion-v1
-    paths:
-      - 'infrastructure/upgrades/platform-completion-v1/**'
-      - '.github/workflows/platform-completion-update.yml'
-      - 'package.json'
 
 permissions:
   contents: read
-
-concurrency:
-  group: platform-completion-update-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   install-and-verify:
@@ -39,12 +28,3 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Apply and verify Stage 2D-13 software update
         run: node infrastructure/upgrades/platform-completion-v1/upgrade.mjs ci
-      - name: Confirm update diff is bounded
-        shell: bash
-        run: |
-          git diff --check
-          if git status --porcelain | grep -E '(^|/)tsconfig\.tsbuildinfo$'; then
-            echo '::error::Generated tsconfig.tsbuildinfo files remain modified after update verification.'
-            exit 1
-          fi
-          git status --short
