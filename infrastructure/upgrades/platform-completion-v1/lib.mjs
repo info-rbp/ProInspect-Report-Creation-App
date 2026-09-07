@@ -9,7 +9,7 @@ export const manifest = JSON.parse(readFileSync(resolve(packageRoot, 'manifest.j
 
 export function run(command, args = [], options = {}) {
   const result = spawnSync(command, args, {
-    cwd: root,
+    cwd: options.cwd || root,
     env: { ...process.env, ...(options.env || {}) },
     encoding: 'utf8',
     stdio: options.capture ? 'pipe' : 'inherit',
@@ -21,8 +21,12 @@ export function run(command, args = [], options = {}) {
   return options.capture ? String(result.stdout || '').trim() : '';
 }
 
-export function output(command, args = []) {
-  return execFileSync(command, args, { cwd: root, encoding: 'utf8', env: process.env }).trim();
+export function output(command, args = [], options = {}) {
+  return execFileSync(command, args, {
+    cwd: options.cwd || root,
+    encoding: 'utf8',
+    env: { ...process.env, ...(options.env || {}) },
+  }).trim();
 }
 
 export function assert(condition, message) {
