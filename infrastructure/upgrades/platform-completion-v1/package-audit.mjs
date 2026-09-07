@@ -68,6 +68,19 @@ check(stage2eContract.includes("expect(store).toContain('return Buffer.from(down
 check(stage2eContract.includes("expect(store).not.toContain('ArrayBuffer.isView(downloaded)')"), 'Stage 2E regression rejects impossible ArrayBuffer view narrowing branch');
 check(stage2eContract.includes("expect(store).not.toContain('downloaded.buffer')"), 'Stage 2E regression rejects downloaded.buffer access');
 
+const stage4Contract = packageText('payload/stage4RuntimeParity.test.ts');
+for (const marker of [
+  "parts[2] === 'internal'",
+  "parts[3] === 'tenant-portal-grants'",
+  "parts[4] === 'automation'",
+  "req.method === 'POST'",
+  'return automationGrant(req, dependencies, correlationId)',
+  '/api/v1/internal/tenant-portal-grants/automation',
+]) {
+  check(stage4Contract.includes(marker), `Stage 4 regression contains ${marker}`);
+}
+check(!stage4Contract.includes("expect(portal).toContain('/tenant-portal-grants')"), 'Stage 4 regression does not require a slash-prefixed literal from the segmented router');
+
 const stage07 = packageText('apply-07.mjs');
 for (const marker of [
   'unified-platform-extensions.mjs',
