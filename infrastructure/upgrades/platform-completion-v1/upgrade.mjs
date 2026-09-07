@@ -181,7 +181,8 @@ async function isolatedLocalValidation() {
   verifyToolchain();
   verifyCleanTree();
 
-  const sandbox = mkdtempSync(join(tmpdir(), 'proinspect-platform-completion-'));
+  const parent = mkdtempSync(join(tmpdir(), 'proinspect-platform-completion-'));
+  const sandbox = join(parent, 'worktree');
   const head = output('git', ['rev-parse', 'HEAD']);
   let attached = false;
   try {
@@ -194,7 +195,7 @@ async function isolatedLocalValidation() {
     if (attached) {
       try { run('git', ['worktree', 'remove', '--force', sandbox]); } catch { /* best-effort cleanup */ }
     }
-    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(parent, { recursive: true, force: true });
   }
 }
 
