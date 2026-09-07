@@ -121,6 +121,11 @@ check(
   'nested source-generator escape lint exception is path-scoped to Stage 2E/4 patchers',
 );
 
+const diffAudit = packageText('diff-audit.mjs');
+check(diffAudit.includes("output('git', ['diff', '--name-only'])"), 'bounded diff audit reads tracked filenames directly');
+check(diffAudit.includes("output('git', ['ls-files', '--others', '--exclude-standard'])"), 'bounded diff audit reads untracked filenames directly');
+check(!diffAudit.includes("line.slice(3)"), 'bounded diff audit does not parse trimmed porcelain status with fixed offsets');
+
 const installer = packageText('upgrade.mjs');
 check(installer.includes("'worktree', 'add', '--detach'"), 'isolated local validation uses a temporary Git worktree');
 const checkIndex = installer.indexOf("run('npm', ['run', 'check'])");
