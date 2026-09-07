@@ -4,6 +4,8 @@
   "baselineCommit": "030d2650870f09556e72b7aebb58a4bec2a7a75f",
   "baselineBranch": "feat/seven-portal-completion-chatgpt",
   "targetBranch": "upgrade/platform-completion-v1",
+  "targetSchemaTables": 121,
+  "localValidationRequired": true,
   "requiredToolchain": {
     "node": "22.23.2",
     "npm": "10.9.2",
@@ -13,112 +15,114 @@
     "endpoint": "https://syd.cloud.appwrite.io/v1",
     "projectId": "proinspect-development",
     "projectName": "ProInspect Development",
-    "prohibitedProjectIds": ["6a911f1e0031e90015b2"]
+    "shopifyStore": "proinspect-2.myshopify.com",
+    "prohibitedProjectIds": ["6a911f1e0031e90015b2"],
+    "prohibitedGoogleCloudProjectIds": ["business-plan-applicatio-17047"]
   },
   "stages": [
     {
       "id": "02d",
       "name": "External grant authority closeout",
-      "sourceIncluded": true,
+      "completionMode": "baseline",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Verify the Stage 2D canonical external grant table, runtime provider boundary, Development control-plane audit and seven-persona acceptance gate."
+      "summary": "Verify the completed Stage 2D canonical external grant table and runtime provider boundary before later stages are installed."
     },
     {
       "id": "02e",
       "name": "Appwrite storage and evidence authority",
-      "sourceIncluded": true,
+      "completionMode": "migration",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Cut upload-session completion, object verification, immutable evidence metadata and evidence processing queue authority to Appwrite Storage and TablesDB."
+      "summary": "Install Appwrite Storage and TablesDB evidence authority while retaining an explicit Firebase fallback for rollback and emulator compatibility."
     },
     {
       "id": "03",
       "name": "Transaction and recovery safety",
-      "sourceIncluded": true,
+      "completionMode": "verified-existing",
       "testBlocking": true,
       "requiresLiveDevelopment": false,
-      "summary": "Provide idempotent multi-record operation coordination, compensating recovery records and failure-safe workflow boundaries for high-risk business operations."
+      "summary": "Retain and verify the existing Appwrite transaction commit/rollback capability and Development rollback workflow."
     },
     {
       "id": "04",
       "name": "Runtime parity and worker authority",
-      "sourceIncluded": true,
+      "completionMode": "migration",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Close client approval parity and remove legacy grant/notification authority from worker runtime paths in Appwrite mode."
+      "summary": "Install a distinct canonical client approvals model and remove independent tenant grant creation authority from notification workers."
     },
     {
       "id": "05",
       "name": "Development personas and representative fixtures",
-      "sourceIncluded": true,
+      "completionMode": "verified-existing",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Create repeatable seven-portal identities, entitlements and representative building, resident, contractor, inspection, maintenance and reporting fixtures."
+      "summary": "Retain and verify the seven required portal identities, entitlements and representative Development fixtures."
     },
     {
       "id": "06",
       "name": "Structured UAT readiness",
-      "sourceIncluded": true,
+      "completionMode": "closure",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Add seven-portal happy-path, isolation, token, retry and recovery acceptance coverage plus a single readiness gate."
+      "summary": "Require local seven-portal acceptance and the consolidated readiness gate without depending on GitHub Actions."
     },
     {
       "id": "07",
       "name": "Offline inspector field operations",
-      "sourceIncluded": true,
+      "completionMode": "migration",
       "testBlocking": true,
       "requiresLiveDevelopment": false,
-      "summary": "Validate offline queue persistence, deterministic replay, conflict handling, media synchronization and recovery semantics."
+      "summary": "Install canonical idempotent offline sync receipts and retain queue persistence, replay, conflict and recovery semantics."
     },
     {
       "id": "08",
       "name": "Migration dry-run and reconciliation",
-      "sourceIncluded": true,
+      "completionMode": "verified-existing",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Wrap the existing migration framework in dry-run, checksum, reconciliation, rerun and recovery gates before any representative Development migration."
+      "summary": "Verify the existing dry-run, checksum, reconciliation, rerun and recovery framework before representative migration testing."
     },
     {
       "id": "09",
       "name": "Shopify Development integration",
-      "sourceIncluded": true,
+      "completionMode": "closure",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Validate service mappings, webhook idempotency, order linkage and bridge configuration without changing Production Shopify resources."
+      "summary": "Verify Shopify integration contracts and require the exact Development store target before integrated UAT."
     },
     {
       "id": "10",
       "name": "Google worker Development integration",
-      "sourceIncluded": true,
+      "completionMode": "closure",
       "testBlocking": true,
       "requiresLiveDevelopment": true,
-      "summary": "Validate AI, PDF, document, notification and integration workers against the canonical Appwrite outbox and delivery/result stores."
+      "summary": "Verify canonical worker/outbox contracts and require an explicitly declared non-Production Google Cloud project before integrated UAT."
     },
     {
       "id": "11",
       "name": "Environment bootstrap",
-      "sourceIncluded": true,
+      "completionMode": "closure",
       "testBlocking": true,
       "requiresLiveDevelopment": false,
-      "summary": "Pin and verify Node, npm, Appwrite CLI, clean Git state and safe Development environment variables before every upgrade run."
+      "summary": "Pin and verify Node, npm, Appwrite CLI, clean Git state and safe Development environment variables before remote mutation."
     },
     {
       "id": "12",
       "name": "Security and recovery hardening",
-      "sourceIncluded": true,
+      "completionMode": "closure",
       "testBlocking": true,
       "requiresLiveDevelopment": false,
-      "summary": "Run secret scanning, dependency policy, tenant isolation, grant misuse, recovery and failure-injection gates."
+      "summary": "Run secret scanning, dependency policy, tenant isolation, grant misuse, recovery and failure-safe gates before Development mutation."
     },
     {
       "id": "13",
       "name": "Testing performance polish",
-      "sourceIncluded": true,
-      "testBlocking": false,
+      "completionMode": "closure",
+      "testBlocking": true,
       "requiresLiveDevelopment": false,
-      "summary": "Reduce avoidable front-end bundle pressure, preserve lazy boundaries and add performance budget verification for testing."
+      "summary": "Enforce the front-end performance budget as part of local testing readiness."
     }
   ]
 }
