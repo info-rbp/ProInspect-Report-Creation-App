@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { firestoreDb } from './firestoreDatabase.js';

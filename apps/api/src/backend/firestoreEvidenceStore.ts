@@ -16,6 +16,11 @@ import type {
   EvidenceUploadSessionRecord,
 } from './types.js';
 
+type FirestoreEvidenceUploadSessionRecord =
+  EvidenceUploadSessionRecord & {
+    externalGrantId?: string;
+  };
+
 function adminApp() {
   return getApps()[0]
     ?? initializeApp({ credential: applicationDefault() });
@@ -31,7 +36,7 @@ function failure(
 
 function sessionRecord(
   value: UploadSessionRecord,
-): EvidenceUploadSessionRecord {
+): FirestoreEvidenceUploadSessionRecord {
   return {
     id: value.id,
     agencyId: value.agencyId,
@@ -47,6 +52,9 @@ function sessionRecord(
     ...(value.propertyId ? { propertyId: value.propertyId } : {}),
     ...(value.inspectionJobId ? { inspectionJobId: value.inspectionJobId } : {}),
     ...(value.reportId ? { reportId: value.reportId } : {}),
+    ...(value.externalGrantId
+      ? { externalGrantId: value.externalGrantId }
+      : {}),
     ...(value.externalResourceType
       ? { entityType: String(value.externalResourceType) }
       : {}),
@@ -94,7 +102,7 @@ export class FirestoreEvidenceStore implements EvidenceStore {
   async getSession(
     agencyId: string,
     uploadId: string,
-  ): Promise<EvidenceUploadSessionRecord> {
+  ): Promise<FirestoreEvidenceUploadSessionRecord> {
     const snapshot = await firestoreDb(adminApp())
       .doc(`agencies/${agencyId}/uploadSessions/${uploadId}`)
       .get();
@@ -220,6 +228,9 @@ export class FirestoreEvidenceStore implements EvidenceStore {
           source: input.source,
           entityType: input.entityType,
           entityId: input.entityId,
+          ...(session.externalGrantId
+            ? { externalGrantId: session.externalGrantId }
+            : {}),
           updatedAt: completedAt,
         },
         { merge: true },

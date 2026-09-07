@@ -22,8 +22,20 @@ describe('Stage 2E Appwrite evidence provider boundary', () => {
     expect(store).toContain('createTransaction');
     expect(store).toContain('commit: true');
     expect(store).toContain('rollback: true');
+    expect(store).toContain('return Buffer.from(downloaded);');
+    expect(store).not.toContain('ArrayBuffer.isView(downloaded)');
+    expect(store).not.toContain('downloaded.buffer');
+    expect(store).not.toContain('downloaded.byteOffset');
+    expect(store).not.toContain('downloaded.byteLength');
     expect(store).not.toContain('firebase-admin');
     expect(store).not.toContain('firestoreDb(');
+  });
+
+  it('preserves external grant provenance in Firestore rollback mode', () => {
+    const store = read('src/backend/firestoreEvidenceStore.ts');
+    expect(store).toContain('externalGrantId?: string');
+    expect(store).toContain('externalGrantId: value.externalGrantId');
+    expect(store).toContain('externalGrantId: session.externalGrantId');
   });
 
   it('keeps raw binary and completion behind grant and session scope', () => {

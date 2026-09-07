@@ -42,7 +42,7 @@ function remoteInspectionGrant(
   };
 }
 
-function adminApp() { return getApps()[0] ?? initializeApp({ credential: applicationDefault() }); }
+// Stage 2E: Firebase admin helper removed; Appwrite evidence provider is authoritative.
 function parts(req: IncomingMessage) { return new URL(req.url ?? '/', 'http://localhost').pathname.split('/').filter(Boolean); }
 async function readJson(req: IncomingMessage) { const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); if (!chunks.length) return {}; const value = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown; if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(400, 'INVALID_JSON', 'Request body must be an object.'); return value as Record<string, unknown>; }
 async function resolveGrant(

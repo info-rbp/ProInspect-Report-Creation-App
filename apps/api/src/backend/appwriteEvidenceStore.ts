@@ -196,21 +196,7 @@ implements EvidenceStore {
         fileId,
       });
 
-    if (downloaded instanceof ArrayBuffer) {
-      return Buffer.from(downloaded);
-    }
-
-    if (ArrayBuffer.isView(downloaded)) {
-      return Buffer.from(
-        downloaded.buffer,
-        downloaded.byteOffset,
-        downloaded.byteLength,
-      );
-    }
-
-    return Buffer.from(
-      downloaded as unknown as Uint8Array,
-    );
+    return Buffer.from(downloaded);
   }
 
   async uploadBinary(

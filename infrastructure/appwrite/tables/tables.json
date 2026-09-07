@@ -16705,19 +16705,22 @@
         "key": "userId",
         "type": "string",
         "size": 36,
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "deviceId",
         "type": "string",
         "size": 128,
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "clientSubmissionId",
         "type": "string",
         "size": 128,
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "inspectionJobId",
@@ -16741,7 +16744,8 @@
         "key": "entityType",
         "type": "string",
         "size": 64,
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "entityId",
@@ -16790,17 +16794,20 @@
         "key": "syncState",
         "type": "string",
         "size": 32,
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "attempts",
         "type": "integer",
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "firstReceivedAt",
         "type": "datetime",
-        "required": false
+        "required": false,
+        "default": null
       },
       {
         "key": "lastAttemptedAt",
