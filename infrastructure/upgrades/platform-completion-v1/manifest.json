@@ -4,7 +4,7 @@
   "baselineCommit": "030d2650870f09556e72b7aebb58a4bec2a7a75f",
   "baselineBranch": "feat/seven-portal-completion-chatgpt",
   "targetBranch": "upgrade/platform-completion-v1",
-  "targetSchemaTables": 121,
+  "targetSchemaTables": 120,
   "localValidationRequired": true,
   "requiredToolchain": {
     "node": "22.23.2",
@@ -74,7 +74,7 @@
       "completionMode": "migration",
       "testBlocking": true,
       "requiresLiveDevelopment": false,
-      "summary": "Install canonical idempotent offline sync receipts and retain queue persistence, replay, conflict and recovery semantics."
+      "summary": "Migrate the existing offline sync receipt table in place to canonical idempotent replay receipts while retaining queue persistence, replay, conflict and recovery semantics."
     },
     {
       "id": "08",
