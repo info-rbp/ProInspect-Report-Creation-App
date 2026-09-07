@@ -1,4 +1,19 @@
-import { replaceOnce } from './patch-lib.mjs';
+import { replaceOnce, replaceSection } from './patch-lib.mjs';
+
+const appwriteEvidenceBytes = `  private async bytes(
+    bucketId: string,
+    fileId: string,
+  ): Promise<Buffer> {
+    const downloaded =
+      await this.services.storage.getFileDownload({
+        bucketId,
+        fileId,
+      });
+
+    return Buffer.from(downloaded);
+  }
+
+`;
 
 export async function applyLintCleanup() {
   replaceOnce(
@@ -13,5 +28,13 @@ export async function applyLintCleanup() {
     "import { createHash, randomUUID } from 'node:crypto';",
     "import { createHash } from 'node:crypto';",
     'remove unused notification-worker randomUUID import',
+  );
+
+  replaceSection(
+    'apps/api/src/backend/appwriteEvidenceStore.ts',
+    '  private async bytes(',
+    '  async uploadBinary(',
+    appwriteEvidenceBytes,
+    'normalize Appwrite evidence download to Buffer.from(ArrayBuffer)',
   );
 }
