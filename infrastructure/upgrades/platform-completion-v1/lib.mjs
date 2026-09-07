@@ -104,9 +104,13 @@ export function verifyDevelopmentEnvironment() {
   const endpoint = process.env.APPWRITE_ENDPOINT?.trim();
   const projectId = process.env.APPWRITE_PROJECT_ID?.trim();
   const projectName = process.env.APPWRITE_PROJECT_NAME?.trim();
+  const confirmPush = process.env.APPWRITE_CONFIRM_PUSH?.trim();
+  const confirmVerify = process.env.APPWRITE_CONFIRM_VERIFY?.trim();
   assert(endpoint === expected.endpoint, `APPWRITE_ENDPOINT must be ${expected.endpoint}; found ${endpoint || '<unset>'}.`);
   assert(projectId === expected.projectId, `APPWRITE_PROJECT_ID must be ${expected.projectId}; found ${projectId || '<unset>'}.`);
   assert(projectName === expected.projectName, `APPWRITE_PROJECT_NAME must be ${expected.projectName}; found ${projectName || '<unset>'}.`);
+  assert(confirmPush === 'push-development', `APPWRITE_CONFIRM_PUSH must be push-development; found ${confirmPush || '<unset>'}.`);
+  assert(confirmVerify === 'verify-development', `APPWRITE_CONFIRM_VERIFY must be verify-development; found ${confirmVerify || '<unset>'}.`);
   assert(!expected.prohibitedProjectIds.includes(projectId), `Prohibited Appwrite project selected: ${projectId}.`);
   assert(!/[\[\]()]/u.test(endpoint), 'APPWRITE_ENDPOINT contains Markdown/link syntax; use the plain HTTPS URL.');
 }
