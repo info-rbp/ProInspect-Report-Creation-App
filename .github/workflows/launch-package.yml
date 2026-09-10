@@ -1,5 +1,6 @@
 name: Launch package validation
 on:
+  workflow_dispatch:
   push:
     branches: [feat/launch-readiness-installation-v2]
   pull_request:
