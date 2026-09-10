@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "approvedBy": null,
+  "policyDocument": null,
+  "environments": {
+    "development": {
+      "appwrite": {
+        "endpoint": "https://syd.cloud.appwrite.io/v1",
+        "projectId": "proinspect-development",
+        "projectName": "ProInspect Development",
+        "databaseId": "proinspect_core",
+        "approvedRuntimeKeys": [],
+        "runtimeCredentialPolicies": []
+      },
+      "google": {
+        "projectId": null,
+        "region": "australia-southeast1",
+        "environment": "development",
+        "services": [
+          "api",
+          "pdf-worker",
+          "notification-worker",
+          "dashboard-worker",
+          "document-worker",
+          "integration-worker"
+        ],
+        "aiRuntime": "api",
+        "imageRepository": "pcr-containers",
+        "runtimeBindings": {
+          "api": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "pdf-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "notification-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "dashboard-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "document-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "integration-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          }
+        }
+      },
+      "cloudflare": {
+        "accountId": null,
+        "workerName": null,
+        "apiOrigin": null,
+        "trustedEdgeSecretEnv": "PROINSPECT_EDGE_SECRET",
+        "contentSecurityPolicy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://syd.cloud.appwrite.io; connect-src 'self' https://syd.cloud.appwrite.io wss://syd.cloud.appwrite.io; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+      },
+      "shopify": {
+        "domain": "proinspect-2.myshopify.com",
+        "apiVersion": "2026-07",
+        "tokenEnv": "SHOPIFY_ADMIN_ACCESS_TOKEN"
+      },
+      "web": {
+        "origin": null,
+        "healthPath": "/health",
+        "revisionField": "commit",
+        "deniedPath": "/api/v1/platform/portal-entitlements/me"
+      },
+      "terraform": {
+        "root": "infrastructure/terraform/environments/development",
+        "variablesFile": null,
+        "backendFile": null
+      },
+      "migration": {
+        "bundleDirectory": null,
+        "bundleSha256": null,
+        "rollbackApproved": false
+      },
+      "backup": {
+        "directory": null,
+        "freezeApproved": false
+      },
+      "rollback": {
+        "googleRecord": null,
+        "cloudflareRecord": null
+      }
+    },
+    "staging": {
+      "appwrite": {
+        "endpoint": "https://syd.cloud.appwrite.io/v1",
+        "projectId": null,
+        "projectName": null,
+        "databaseId": "proinspect_core",
+        "approvedRuntimeKeys": [],
+        "runtimeCredentialPolicies": []
+      },
+      "google": {
+        "projectId": null,
+        "region": "australia-southeast1",
+        "environment": "staging",
+        "services": [
+          "api",
+          "pdf-worker",
+          "notification-worker",
+          "dashboard-worker",
+          "document-worker",
+          "integration-worker"
+        ],
+        "aiRuntime": "api",
+        "imageRepository": "pcr-containers",
+        "runtimeBindings": {
+          "api": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "pdf-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "notification-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "dashboard-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "document-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          },
+          "integration-worker": {
+            "env": {
+              "AUTH_PROVIDER": "appwrite",
+              "APPWRITE_BACKEND_MODE": "appwrite"
+            },
+            "secretRefs": {}
+          }
+        }
+      },
+      "cloudflare": {
+        "accountId": null,
+        "workerName": null,
+        "apiOrigin": null,
+        "trustedEdgeSecretEnv": "PROINSPECT_EDGE_SECRET",
+        "contentSecurityPolicy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://syd.cloud.appwrite.io; connect-src 'self' https://syd.cloud.appwrite.io wss://syd.cloud.appwrite.io; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+      },
+      "shopify": {
+        "domain": "proinspect-2.myshopify.com",
+        "apiVersion": "2026-07",
+        "tokenEnv": "SHOPIFY_ADMIN_ACCESS_TOKEN"
+      },
+      "web": {
+        "origin": null,
+        "healthPath": "/health",
+        "revisionField": "commit",
+        "deniedPath": "/api/v1/platform/portal-entitlements/me"
+      },
+      "terraform": {
+        "root": "infrastructure/terraform/environments/staging",
+        "variablesFile": null,
+        "backendFile": null
+      },
+      "migration": {
+        "bundleDirectory": null,
+        "bundleSha256": null,
+        "rollbackApproved": false
+      },
+      "backup": {
+        "directory": null,
+        "freezeApproved": false
+      },
+      "rollback": {
+        "googleRecord": null,
+        "cloudflareRecord": null
+      }
+    }
+  },
+  "adapters": {
+    "appwrite": "infrastructure/upgrades/launch-readiness-v2/adapters/appwrite-cli.mjs"
+  },
+  "scenarioFiles": {}
+}

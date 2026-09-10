@@ -61,7 +61,20 @@
     "upgrade:local": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs local",
     "upgrade:install": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs install",
     "upgrade:ci": "node infrastructure/upgrades/platform-completion-v1/upgrade.mjs ci",
-    "prepare": "node scripts/verify-workspace.mjs"
+    "prepare": "node scripts/verify-workspace.mjs",
+    "launch:init": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs init",
+    "launch:audit": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs audit",
+    "launch:local": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs local",
+    "launch:plan": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs plan",
+    "launch:doctor": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs doctor",
+    "launch:complete": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs complete",
+    "launch:install": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs install",
+    "launch:verify": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs verify",
+    "launch:deploy": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs deploy",
+    "launch:status": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs status",
+    "launch:gate": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs gate",
+    "launch:unlock": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs unlock",
+    "launch:test": "node --test infrastructure/upgrades/launch-readiness-v2/tests/installer.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.32.0",

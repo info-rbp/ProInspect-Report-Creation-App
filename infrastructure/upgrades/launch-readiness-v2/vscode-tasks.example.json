@@ -1,0 +1,83 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ProInspect: Audit launch package",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:audit"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Plan launch package",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:plan"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Local validation",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:local"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Live provider doctor",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:doctor",
+        "--",
+        "--live"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Export completion workpacks",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:complete",
+        "--",
+        "--stage",
+        "all"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Launch status",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:status"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Staging release gate",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:gate",
+        "--",
+        "--env",
+        "staging"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
