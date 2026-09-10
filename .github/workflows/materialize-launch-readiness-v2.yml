@@ -39,13 +39,14 @@ jobs:
           python - <<'PY'
           import pathlib, tarfile
           archive = pathlib.Path('${{ runner.temp }}/launchpkg.tgz')
-          prefix = 'infrastructure/upgrades/launch-readiness-v2/'
+          package_dir = 'infrastructure/upgrades/launch-readiness-v2'
+          prefix = package_dir + '/'
           with tarfile.open(archive, 'r:gz') as tf:
               members = tf.getmembers()
               if not members:
                   raise SystemExit('Archive is empty')
               for member in members:
-                  if not member.name.startswith(prefix) or '..' in pathlib.PurePosixPath(member.name).parts:
+                  if (member.name != package_dir and not member.name.startswith(prefix)) or '..' in pathlib.PurePosixPath(member.name).parts:
                       raise SystemExit(f'Unsafe archive path: {member.name}')
                   if member.issym() or member.islnk() or member.isdev():
                       raise SystemExit(f'Unsafe archive member: {member.name}')
