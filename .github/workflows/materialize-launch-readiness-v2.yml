@@ -24,16 +24,18 @@ jobs:
         run: |
           set -euo pipefail
           complete=true
-          for part in .github/launchpkg.part00 .github/launchpkg.part01 .github/launchpkg.part02 .github/launchpkg.part03 .github/launchpkg.part04 .github/launchpkg.part05; do
+          for part in .github/launchpkg.part00 .github/launchpkg.part01 .github/launchpkg.part02 .github/launchpkg.part03 .github/launchpkg.part04; do
             if [[ ! -f "$part" ]]; then complete=false; fi
           done
+          count=$(find .github -maxdepth 1 -type f -name 'launchpkg.part05.*' | wc -l | tr -d ' ')
+          if [[ "$count" != "11" ]]; then complete=false; fi
           echo "complete=$complete" >> "$GITHUB_OUTPUT"
       - name: Materialize, verify and commit
         if: steps.parts.outputs.complete == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/launchpkg.part0* | base64 --decode > "$RUNNER_TEMP/launchpkg.tgz"
+          cat .github/launchpkg.part00 .github/launchpkg.part01 .github/launchpkg.part02 .github/launchpkg.part03 .github/launchpkg.part04 .github/launchpkg.part05.* | base64 --decode > "$RUNNER_TEMP/launchpkg.tgz"
           python - <<'PY'
           import pathlib, tarfile
           archive = pathlib.Path('${{ runner.temp }}/launchpkg.tgz')
@@ -47,8 +49,7 @@ jobs:
                       raise SystemExit(f'Unsafe archive path: {member.name}')
                   if member.issym() or member.islnk() or member.isdev():
                       raise SystemExit(f'Unsafe archive member: {member.name}')
-              target = pathlib.Path('.')
-              tf.extractall(target, members=members, filter='data')
+              tf.extractall(pathlib.Path('.'), members=members, filter='data')
           PY
           node <<'NODE'
           const fs = require('fs');
