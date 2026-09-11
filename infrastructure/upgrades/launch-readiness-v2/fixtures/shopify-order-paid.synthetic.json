@@ -1,0 +1,26 @@
+{
+  "test": true,
+  "id": "90000000000001",
+  "admin_graphql_api_id": "gid://shopify/Order/90000000000001",
+  "name": "#DEV-LAUNCH-0001",
+  "order_number": "DEV-LAUNCH-0001",
+  "financial_status": "paid",
+  "fulfillment_status": "unfulfilled",
+  "currency": "AUD",
+  "current_total_price": "0.00",
+  "created_at": "2026-09-11T00:00:00.000Z",
+  "updated_at": "2026-09-11T00:00:00.000Z",
+  "line_items": [
+    {
+      "id": "90000000000011",
+      "admin_graphql_api_id": "gid://shopify/LineItem/90000000000011",
+      "product_id": "90000000000021",
+      "variant_id": "90000000000022",
+      "title": "DEV TEST - Routine Inspection",
+      "variant_title": "Synthetic acceptance fixture",
+      "sku": "DEV-ROUTINE",
+      "quantity": 1,
+      "price": "0.00"
+    }
+  ]
+}
