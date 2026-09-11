@@ -23,6 +23,13 @@ jobs:
         run: |
           set -euo pipefail
           sed -i 's/`READY_FOR_RELEASE_REVIEW`/READY_FOR_RELEASE_REVIEW/' .github/apply-launch-acceptance-v24.mjs
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path='.github/apply-launch-acceptance-v24.mjs';
+          let source=readFileSync(path,'utf8');
+          source=source.replaceAll("process.env.PROINSPECT_LAUNCH_OUTPUT.replace(/\\/result\\.json$/u,'')", "process.env.PROINSPECT_LAUNCH_OUTPUT.slice(0, process.env.PROINSPECT_LAUNCH_OUTPUT.lastIndexOf('/'))");
+          writeFileSync(path,source);
+          NODE
           node .github/apply-launch-acceptance-v24.mjs
           rm .github/apply-launch-acceptance-v24.mjs .github/workflows/finalize-launch-readiness-v24.yml
           git config user.name 'github-actions[bot]'
