@@ -60,3 +60,21 @@ test('package exposes all guided execution commands',()=>{
   const pkg=readJson(resolve(root,'package.json'));
   for(const id of ['launch:preflight','launch:check','launch:issues','launch:reconcile','launch:repair'])assert.equal(typeof pkg.scripts[id],'string');
 });
+
+test('diagnostic issues use executable diagnostic recheck commands',()=>{
+  const preflight=makeIssue({environment:'development',stage:'preflight',code:'CONFIGURATION',message:'missing'});
+  const reconciliation=makeIssue({environment:'staging',stage:'reconcile',code:'WORKTREE_DIRTY',message:'dirty'});
+  assert.equal(preflight.recheck,'npm run launch:preflight -- --all');
+  assert.equal(reconciliation.recheck,'npm run launch:reconcile -- --env staging --stage all');
+});
+
+test('reconciliation treats ledger blockers as blocking',()=>{
+  const source=readFileSync(resolve(packageRoot,'operator.mjs'),'utf8').replace(/\s+/gu,' ');
+  assert.match(source,/issues\.some\(\(item\) => item\.severity === 'BLOCKER'\)/u);
+});
+
+test('preflight and reconciliation preserve issue-ledger scope',()=>{
+  const source=readFileSync(resolve(packageRoot,'operator.mjs'),'utf8').replace(/\s+/gu,'');
+  assert.ok(source.includes("syncIssueLedger(directory,environment,context,issues,['preflight'])"));
+  assert.ok(source.includes("syncIssueLedger(directory,environment,context,issues,['reconcile',...scanned])"));
+});
