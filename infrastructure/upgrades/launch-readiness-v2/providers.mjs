@@ -35,21 +35,24 @@ export async function auditProviders(config,environment,directory) {
   for(const [id,call] of Object.entries(calls)) {try{results[id]=await call();}catch(error){errors[id]=redact(error.message);}}
   atomicJson(resolve(directory,'provider-inventory.json'),{results,errors});requireThat(!Object.keys(errors).length,`Provider checks failed: ${Object.keys(errors).join(', ')}; see private inventory`);return results;
 }
-export async function edgeAcceptance(target,commit,fetcher=fetch) {
-  const health=await request(`${target.origin}${target.healthPath}`,{},fetcher);
+export async function edgeAcceptance(target,commit,fetcher=fetch,{headers={},expectedVersionId=null,expectedVersionTag=null}={}) {
+  const options={headers};
+  const health=await request(`${target.origin}${target.healthPath}`,options,fetcher);
   requireThat(health.response.headers.get('content-type')?.includes('json'),'Health response is not JSON');
   const actual=target.revisionField.split('.').reduce((v,k)=>v?.[k],JSON.parse(health.text));requireThat(actual===commit,'Backend candidate mismatch');
-  const edge=await request(`${target.origin}/__launch/revision`,{},fetcher);requireThat(JSON.parse(edge.text).commit===commit,'Edge candidate mismatch');
+  const edge=await request(`${target.origin}/__launch/revision`,options,fetcher);const revision=JSON.parse(edge.text);requireThat(revision.commit===commit,'Edge candidate mismatch');
+  if(expectedVersionId)requireThat(revision.versionId===expectedVersionId,'Cloudflare version override was not applied');
+  if(expectedVersionTag)requireThat(revision.versionTag===expectedVersionTag,'Cloudflare version tag mismatch');
   const routes=[];
   for(const portal of ['admin','inspector','building','strata','resident','client','contractor']) {
-    const page=await request(`${target.origin}/${portal}`,{},fetcher);
+    const page=await request(`${target.origin}/${portal}`,options,fetcher);
     requireThat(page.response.headers.get('content-type')?.includes('text/html') && /id=["']root["']/u.test(page.text),'Portal shell missing');
     requireThat(page.response.headers.get('strict-transport-security') && page.response.headers.get('content-security-policy') && page.response.headers.get('x-content-type-options')==='nosniff','Security headers missing');
     routes.push({portal,bodySha256:hash(page.text)});
   }
-  const denial=await fetcher(`${target.origin}${target.deniedPath}`,{redirect:'error',signal:globalThis.AbortSignal.timeout(30000)});
+  const denial=await fetcher(`${target.origin}${target.deniedPath}`,{headers,redirect:'error',signal:globalThis.AbortSignal.timeout(30000)});
   requireThat([401,403].includes(denial.status),'Anonymous API access was not denied');if(denial.body)await denial.body.cancel();
-  return {commit:actual,routes,anonymousStatus:denial.status,shellOnly:true};
+  return {commit:actual,versionId:revision.versionId ?? null,versionTag:revision.versionTag ?? null,routes,anonymousStatus:denial.status,shellOnly:true};
 }
 export async function toolchain(live=false) {
   requireThat(process.versions.node.split('.')[0]==='22','Node 22 is required');
