@@ -31,6 +31,18 @@ jobs:
       - name: Materialize v2.7 safeguards
         run: node scripts/launch-v27-materialize.mjs
 
+      - name: Normalize operator signature
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync,writeFileSync } from 'node:fs';
+          const path='infrastructure/upgrades/launch-readiness-v2/operator.mjs';
+          const source=readFileSync(path,'utf8');
+          const before='export async function safeRepair(config, environment, directory) {';
+          if(!source.includes(before)) throw new Error('safeRepair signature not found');
+          writeFileSync(path,source.replace(before,'export async function safeRepair(config, environment) {'));
+          NODE
+
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
