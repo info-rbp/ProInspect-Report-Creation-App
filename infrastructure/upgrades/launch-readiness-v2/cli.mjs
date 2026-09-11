@@ -31,7 +31,10 @@ export async function main(argv=process.argv.slice(2)){
     if(args.command==='doctor'){const tools=await toolchain(true);const providers=await auditProviders(config,args.env,resolve(directory,args.env,'doctor'));return {status:'LIVE_DOCTOR_PASS',tools,providers,acceptanceAdapters:adapterCoverage(config,args.env)};}
     if(args.command==='complete')return await complete(config,context,directory,args);
     if(['install','deploy'].includes(args.command))return await install(config,args,directory);
-    if(args.command==='local')await verifyAll(config,context,directory,{...args,stage:'source'}),await verifyAll(config,context,directory,{...args,stage:'build'});
+    if(args.command==='local'){
+      await verifyAll(config,context,directory,{...args,stage:'source'});
+      await verifyAll(config,context,directory,{...args,stage:'build'});
+    }
     if(args.command==='verify')await verifyAll(config,context,directory,args);
     const developmentContext=args.env==='staging'?candidate(config,'development'):context;
     const report=writeScorecard(directory,context,developmentContext);
