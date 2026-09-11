@@ -123,6 +123,17 @@ jobs:
       - name: Repository typecheck
         run: npm run typecheck
 
+      - name: Normalize tracked TypeScript cache after typecheck
+        shell: bash
+        run: |
+          git ls-files -z '*tsconfig.tsbuildinfo' | xargs -0 -r git restore --worktree --
+          status="$(git status --porcelain --untracked-files=normal)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status"
+            echo 'Unexpected source changes after typecheck.' >&2
+            exit 1
+          fi
+
       - name: Repository unit and rules tests
         run: npm run test:run
 
@@ -139,6 +150,17 @@ jobs:
 
       - name: Build all packages and applications
         run: npm run build
+
+      - name: Normalize tracked TypeScript cache after build
+        shell: bash
+        run: |
+          git ls-files -z '*tsconfig.tsbuildinfo' | xargs -0 -r git restore --worktree --
+          status="$(git status --porcelain --untracked-files=normal)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status"
+            echo 'Unexpected source changes after build.' >&2
+            exit 1
+          fi
 
       - name: Verify built artifacts
         run: npm run verify:dist
