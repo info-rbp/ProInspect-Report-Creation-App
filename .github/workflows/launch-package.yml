@@ -20,7 +20,7 @@ jobs:
   source-snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Archive exact tracked source without credentials or local state
@@ -34,11 +34,11 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.23.2
       - uses: hashicorp/setup-terraform@v3
@@ -47,6 +47,8 @@ jobs:
           terraform_wrapper: false
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Scan tracked source for committed secrets
+        run: npm run security:scan
       - name: Syntax check launch modules
         run: find infrastructure/upgrades/launch-readiness-v2 infrastructure/launch-scenarios -name '*.mjs' -print0 | xargs -0 -n1 node --check
       - name: Validate Terraform module and all environments
