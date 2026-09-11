@@ -173,3 +173,12 @@ Rollback is never automatic. After inspecting the recorded deployment state, set
 V2.2 binds evidence to the selected environment rather than unrelated environment configuration, includes an explicit Appwrite schema fingerprint in candidate identity, requires exact assertion-set equality, reports missing acceptance adapters/scenarios up front, and supports a reviewed scenario-module protocol through `adapters/scenario-cli.mjs`. Development evidence is therefore not invalidated merely by completing Staging configuration, while Staging still proves the identical source commit/tree/schema/manifest that passed Development.
 
 `launch:doctor` now reports acceptance implementation coverage. A full `launch:verify -- --stage all` is fail-closed until every required adapter or tracked scenario exists. This is intentional: missing business, device, migration or operational proof is never converted into synthetic PASS evidence. Live doctor checks also verify the pinned Wrangler version and the presence/parseable versions of Terraform, Google Cloud CLI and Git in addition to Node, npm and Appwrite CLI.
+
+
+## V2.3 interrupted-deployment hardening
+
+V2.3 adds crash reconciliation for migration journals, rollback-safe Appwrite runtime-key rotation, mandatory Terraform plan review, two-phase Cloud Run rollout, and guaranteed cleanup attempts for isolated restore probes.
+
+A migration entry left `PENDING` by interruption is reconciled against the live row/file. An exact match is promoted to `CREATED`; an absent object is retried; a differing object blocks as `AMBIGUOUS_MIGRATION`. Runtime keys rotate before unsafe expiry or scope drift while still-valid previous keys are retained as approved `retiring` keys for rollback until expiry.
+
+Terraform now writes private `terraform-plan-review.json` and blocks with `TERRAFORM_REVIEW_REQUIRED:<digest>` until `LAUNCH_TERRAFORM_PLAN_SHA256` contains that exact reviewed digest. A changed plan is refused. Google deployment creates and verifies all six Cloud Run revisions with zero traffic before switching any service. A traffic-phase failure attempts restoration of already-switched services. Restore probes attempt cleanup of every owned temporary bucket/database even when verification fails.
