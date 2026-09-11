@@ -44,21 +44,45 @@ export function loadBundle(target) {
   requireThat(bundle.projectId === target.appwrite.projectId,'Migration bundle targets a different Appwrite project');
   return {bundle,directory};
 }
+export function reconcilePendingRow(item, actual) {
+  if (!item || item.status !== 'PENDING') return item?.status ?? null;
+  if (!actual) return 'RETRY';
+  requireThat(hash(rowData(actual)) === item.sha256 && hash(actual.$permissions ?? []) === hash(item.permissions),'AMBIGUOUS_MIGRATION: interrupted row exists but differs from the journal');
+  return 'CREATED';
+}
+export async function reconcilePendingFile(api,item,actual) {
+  if (!item || item.status !== 'PENDING') return item?.status ?? null;
+  if (!actual) return 'RETRY';
+  const bytes=Buffer.from(await api.storage.getFileDownload(item.params));
+  requireThat(hash(bytes)===item.sha256 && hash(actual.$permissions ?? [])===hash(item.permissions),'AMBIGUOUS_MIGRATION: interrupted file exists but differs from the journal');
+  return 'CREATED';
+}
 export async function migrate(api,target,stateDirectory,mode) {
   requireThat(target.backup.freezeApproved === true,'Freeze writes before migration');
   const {bundle,directory} = loadBundle(target); const dbid = target.appwrite.databaseId;
   const journalPath = resolve(stateDirectory,`migration-${target.migration.bundleSha256}.json`);
-  const journal = existsSync(journalPath) ? readJson(journalPath) : {projectId:target.appwrite.projectId,bundleSha256:target.migration.bundleSha256,rows:{},files:{}};
+  const journal = existsSync(journalPath) ? readJson(journalPath) : {projectId:target.appwrite.projectId,bundleSha256:target.migration.bundleSha256,rows:{},files:{},reconciliations:[]};
+  requireThat(journal.projectId===target.appwrite.projectId && journal.bundleSha256===target.migration.bundleSha256,'Foreign migration journal');
+  journal.reconciliations ??= [];
   const save = () => atomicJson(journalPath,journal);
   if (mode === 'data') for (const row of orderedRows(bundle.rows)) {
     const params = {databaseId:dbid,tableId:row.tableId,rowId:row.id}; const id = `${row.tableId}/${row.id}`;
     for (const parent of row.parents) requireThat(await optional(() => api.db.getRow({databaseId:dbid,tableId:parent.tableId,rowId:parent.id})),'Parent row is missing');
-    let actual = await optional(() => api.db.getRow(params));
+    let actual = await optional(() => api.db.getRow(params)); const pending=journal.rows[id];
+    if (pending?.status==='PENDING') {
+      const reconciled=reconcilePendingRow(pending,actual);
+      if(reconciled==='CREATED'){pending.status='CREATED';pending.reconciledAt=new Date().toISOString();journal.reconciliations.push({kind:'row',id,status:'CREATED_AFTER_INTERRUPTION'});}
+      else {delete journal.rows[id];journal.reconciliations.push({kind:'row',id,status:'RETRY_AFTER_MISSING'});}
+      save();
+    }
+    actual = await optional(() => api.db.getRow(params)); const recorded=journal.rows[id];
     if (!actual) {
+      requireThat(recorded?.status!=='PREEXISTING','AMBIGUOUS_MIGRATION: a pre-existing target row disappeared');
       journal.rows[id] = {status:'PENDING',params,sha256:row.sha256,permissions:row.permissions}; save();
       await api.db.createRow({...params,data:row.data,permissions:row.permissions});
       actual = await api.db.getRow(params);
-      journal.rows[id].status = 'CREATED';
+      requireThat(hash(rowData(actual)) === row.sha256 && hash(actual.$permissions ?? []) === hash(row.permissions),'Created row differs from migration');
+      journal.rows[id].status = 'CREATED'; journal.rows[id].completedAt=new Date().toISOString();
     } else if (!journal.rows[id]) journal.rows[id] = {status:'PREEXISTING',params,sha256:row.sha256,permissions:row.permissions};
     requireThat(hash(rowData(actual)) === row.sha256 && hash(actual.$permissions ?? []) === hash(row.permissions),'Existing row conflicts with migration; no overwrite allowed');
     save();
@@ -66,21 +90,31 @@ export async function migrate(api,target,stateDirectory,mode) {
   if (mode === 'files') for (const file of bundle.files) {
     const bytes = readFileSync(safePath(directory,file.path)); requireThat(bytes.length <= 64*1024*1024 && hash(bytes) === file.sha256,'Source file checksum or size mismatch');
     const params = {bucketId:file.bucketId,fileId:file.id}; const id = `${file.bucketId}/${file.id}`;
-    let actual = await optional(() => api.storage.getFile(params));
+    let actual = await optional(() => api.storage.getFile(params)); const pending=journal.files[id];
+    if(pending?.status==='PENDING'){
+      const reconciled=await reconcilePendingFile(api,pending,actual);
+      if(reconciled==='CREATED'){pending.status='CREATED';pending.reconciledAt=new Date().toISOString();journal.reconciliations.push({kind:'file',id,status:'CREATED_AFTER_INTERRUPTION'});}
+      else {delete journal.files[id];journal.reconciliations.push({kind:'file',id,status:'RETRY_AFTER_MISSING'});}
+      save();
+    }
+    actual=await optional(()=>api.storage.getFile(params)); const recorded=journal.files[id];
     if (!actual) {
+      requireThat(recorded?.status!=='PREEXISTING','AMBIGUOUS_MIGRATION: a pre-existing target file disappeared');
       journal.files[id] = {status:'PENDING',params,sha256:file.sha256,permissions:file.permissions}; save();
       await api.storage.createFile({...params,file:api.InputFile.fromBuffer(bytes,file.name),permissions:file.permissions});
-      actual = await api.storage.getFile(params); journal.files[id].status = 'CREATED';
+      actual = await api.storage.getFile(params);
+      requireThat(hash(Buffer.from(await api.storage.getFileDownload(params))) === file.sha256 && hash(actual.$permissions ?? []) === hash(file.permissions),'Created file differs from migration');
+      journal.files[id].status = 'CREATED'; journal.files[id].completedAt=new Date().toISOString();
     } else if (!journal.files[id]) journal.files[id] = {status:'PREEXISTING',params,sha256:file.sha256,permissions:file.permissions};
     requireThat(hash(Buffer.from(await api.storage.getFileDownload(params))) === file.sha256 && hash(actual.$permissions ?? []) === hash(file.permissions),'Target file differs; no overwrite allowed'); save();
   }
-  return {bundleSha256:target.migration.bundleSha256,mode,rows:bundle.rows.length,files:bundle.files.length,journalPath,sourceDeleted:false};
+  return {bundleSha256:target.migration.bundleSha256,mode,rows:bundle.rows.length,files:bundle.files.length,journalPath,reconciliations:journal.reconciliations.length,sourceDeleted:false};
 }
 export async function rollbackMigration(api,target,stateDirectory) {
   const {bundle} = loadBundle(target);
   const path = resolve(stateDirectory,`migration-${target.migration.bundleSha256}.json`); const journal = readJson(path);
   requireThat(journal.projectId === target.appwrite.projectId && journal.bundleSha256 === target.migration.bundleSha256,'Foreign migration journal');
-  for (const records of [journal.rows,journal.files]) requireThat(!Object.values(records).some((r) => r.status === 'PENDING'),'Ambiguous interrupted writes require manual reconciliation before rollback');
+  for (const records of [journal.rows,journal.files]) requireThat(!Object.values(records).some((r) => r.status === 'PENDING'),'Ambiguous interrupted writes require reconciliation by re-running the matching migration stage before rollback');
   for (const row of orderedRows(bundle.rows).reverse()) {
     const item = journal.rows[`${row.tableId}/${row.id}`]; if (item?.status !== 'CREATED') continue;
     const live = await optional(() => api.db.getRow(item.params));
