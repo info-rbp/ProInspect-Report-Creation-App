@@ -74,8 +74,9 @@
     "launch:status": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs status",
     "launch:gate": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs gate",
     "launch:unlock": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs unlock",
-    "launch:test": "node --test infrastructure/upgrades/launch-readiness-v2/tests/installer.test.mjs",
-    "launch:evidence": "node infrastructure/upgrades/launch-readiness-v2/external-evidence.mjs"
+    "launch:test": "node --test infrastructure/upgrades/launch-readiness-v2/tests/*.test.mjs",
+    "launch:evidence": "node infrastructure/upgrades/launch-readiness-v2/external-evidence.mjs",
+    "launch:release": "node infrastructure/upgrades/launch-readiness-v2/release.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.32.0",

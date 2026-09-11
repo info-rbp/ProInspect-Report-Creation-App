@@ -17,12 +17,6 @@ resource "google_service_account" "notification_worker" {
   display_name = "PCR notification worker"
 }
 
-resource "google_project_iam_member" "notification_worker_datastore" {
-  project = var.project_id
-  role    = "roles/datastore.user"
-  member  = "serviceAccount:${google_service_account.notification_worker.email}"
-}
-
 resource "google_project_iam_member" "notification_worker_secrets" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
@@ -84,14 +78,6 @@ resource "google_cloud_run_v2_service" "notification_worker" {
         value = var.project_id
       }
       env {
-        name  = "FIRESTORE_DATABASE_ID"
-        value = var.firestore_database_id
-      }
-      env {
-        name  = "WEB_APP_BASE_URL"
-        value = "https://${google_firebase_hosting_site.web.site_id}.web.app"
-      }
-      env {
         name  = "NOTIFICATION_CALLBACK_BASE_URL"
         value = google_cloud_run_v2_service.service["api"].uri
       }
@@ -120,7 +106,6 @@ resource "google_cloud_run_v2_service" "notification_worker" {
 
   depends_on = [
     google_project_service.required,
-    google_project_iam_member.notification_worker_datastore,
     google_project_iam_member.notification_worker_secrets,
   ]
 }

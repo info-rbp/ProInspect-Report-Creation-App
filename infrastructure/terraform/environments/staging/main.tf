@@ -68,6 +68,10 @@ variable "require_api_app_check" {
   type    = bool
   default = false
 }
+variable "appwrite_runtime_secret_ids" {
+  type    = map(string)
+  default = {}
+}
 
 module "environment" {
   source = "../../modules/environment"
@@ -89,6 +93,7 @@ module "environment" {
   app_check_recaptcha_enterprise_site_key = var.app_check_recaptcha_enterprise_site_key
   app_check_enforcement_mode              = var.app_check_enforcement_mode
   require_api_app_check                   = var.require_api_app_check
+  appwrite_runtime_secret_ids             = var.appwrite_runtime_secret_ids
   api_allow_unauthenticated               = true
 }
 

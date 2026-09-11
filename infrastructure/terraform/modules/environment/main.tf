@@ -56,6 +56,18 @@ variable "report_retention_days" {
   type    = number
   default = null
 }
+variable "appwrite_runtime_secret_ids" {
+  description = "Per-service Secret Manager containers for short-lived Appwrite runtime credentials. Keys are canonical Cloud Run service names."
+  type        = map(string)
+  default     = {}
+  validation {
+    condition = (
+      alltrue([for service, value in var.appwrite_runtime_secret_ids : contains(["api", "pdf-worker", "notification-worker", "dashboard-worker", "document-worker", "integration-worker"], service) && can(regex("^[a-z][a-z0-9_-]{2,200}$", value))]) &&
+      length(values(var.appwrite_runtime_secret_ids)) == length(toset(values(var.appwrite_runtime_secret_ids)))
+    )
+    error_message = "appwrite_runtime_secret_ids must map canonical services to unique valid Secret Manager secret IDs."
+  }
+}
 variable "labels" {
   type    = map(string)
   default = {}
@@ -78,11 +90,7 @@ locals {
     "clouddeploy.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "cloudtasks.googleapis.com",
-    "firebase.googleapis.com",
-    "firebasehosting.googleapis.com",
-    "firestore.googleapis.com",
     "iam.googleapis.com",
-    "identitytoolkit.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
     "pubsub.googleapis.com",
@@ -91,6 +99,22 @@ locals {
     "serviceusage.googleapis.com",
     "storage.googleapis.com",
   ])
+  core_services = {
+    api = {
+      service_account = google_service_account.runtime["api"].email
+      ingress         = "INGRESS_TRAFFIC_ALL"
+      cpu             = "1"
+      memory          = "1Gi"
+      max_instances   = local.production ? 30 : 5
+    }
+    "pdf-worker" = {
+      service_account = google_service_account.runtime["pdf_worker"].email
+      ingress         = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+      cpu             = "2"
+      memory          = "2Gi"
+      max_instances   = local.production ? 20 : 5
+    }
+  }
   runtime_accounts = {
     api          = "PCR API"
     ai_worker    = "PCR AI worker"
@@ -160,6 +184,17 @@ resource "google_artifact_registry_repository" "containers" {
   depends_on    = [google_project_service.required]
 }
 
+resource "google_pubsub_topic" "pdf" {
+  name    = "pdf-generation-requests"
+  project = var.project_id
+  labels  = local.labels
+
+  message_storage_policy {
+    allowed_persistence_regions = [var.region]
+    enforce_in_transit          = true
+  }
+}
+
 resource "google_storage_bucket" "assets" {
   name                        = "${var.project_id}-pcr-assets"
   location                    = var.region
@@ -189,52 +224,85 @@ resource "google_storage_bucket" "reports" {
   }
 }
 
-resource "google_service_account" "notification_worker" {
-  project      = var.project_id
-  account_id   = "notification-worker"
-  display_name = "PCR Notification worker"
-}
-
-resource "google_service_account" "dashboard_worker" {
-  project      = var.project_id
-  account_id   = "dashboard-worker"
-  display_name = "PCR Dashboard worker"
-}
-
-resource "google_service_account" "document_worker" {
-  project      = var.project_id
-  account_id   = "document-worker"
-  display_name = "PCR Document worker"
-}
-
-resource "google_service_account" "integration_worker" {
-  project      = var.project_id
-  account_id   = "integration-worker"
-  display_name = "PCR Integration worker"
-}
-
-resource "google_project_iam_member" "worker_secret_access" {
-  for_each = {
-    notification = google_service_account.notification_worker.email
-    dashboard    = google_service_account.dashboard_worker.email
-    document     = google_service_account.document_worker.email
-    integration  = google_service_account.integration_worker.email
+locals {
+  appwrite_runtime_service_accounts = {
+    api                   = google_service_account.runtime["api"].email
+    "pdf-worker"          = google_service_account.runtime["pdf_worker"].email
+    "notification-worker" = google_service_account.notification_worker.email
+    "dashboard-worker"    = google_service_account.dashboard_worker.email
+    "document-worker"     = google_service_account.enhancement_worker["document-worker"].email
+    "integration-worker"  = google_service_account.enhancement_worker["integration-worker"].email
   }
-  project = var.project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:${each.value}"
 }
 
-resource "google_project_iam_member" "worker_logging" {
-  for_each = {
-    notification = google_service_account.notification_worker.email
-    dashboard    = google_service_account.dashboard_worker.email
-    document     = google_service_account.document_worker.email
-    integration  = google_service_account.integration_worker.email
+resource "google_secret_manager_secret" "appwrite_runtime" {
+  for_each  = var.appwrite_runtime_secret_ids
+  project   = var.project_id
+  secret_id = each.value
+
+  replication {
+    auto {}
   }
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${each.value}"
+
+  labels     = merge(local.labels, { capability = "appwrite-runtime" })
+  depends_on = [google_project_service.required]
+}
+
+resource "google_secret_manager_secret_iam_member" "appwrite_runtime_access" {
+  for_each  = var.appwrite_runtime_secret_ids
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.appwrite_runtime[each.key].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${local.appwrite_runtime_service_accounts[each.key]}"
+}
+
+resource "google_cloud_run_v2_service" "service" {
+  for_each            = local.core_services
+  project             = var.project_id
+  location            = var.region
+  name                = each.key
+  ingress             = each.value.ingress
+  deletion_protection = local.production
+  labels              = local.labels
+
+  template {
+    service_account = each.value.service_account
+    scaling {
+      min_instance_count = 0
+      max_instance_count = each.value.max_instances
+    }
+    containers {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+      env {
+        name  = "APP_ENV"
+        value = var.environment
+      }
+      env {
+        name  = "NODE_ENV"
+        value = local.production ? "production" : "development"
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      resources {
+        limits = { cpu = each.value.cpu, memory = each.value.memory }
+      }
+    }
+  }
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image, template[0].containers[0].env]
+  }
+  depends_on = [google_project_service.required]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "api_public" {
+  count    = var.api_allow_unauthenticated ? 1 : 0
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.service["api"].name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 resource "google_billing_budget" "monthly" {
@@ -251,7 +319,7 @@ resource "google_billing_budget" "monthly" {
   threshold_rules { threshold_percent = 1.0 }
   all_updates_rule {
     monitoring_notification_channels = []
-    disable_default_iam_recipients    = false
+    disable_default_iam_recipients   = false
   }
 }
 
@@ -259,14 +327,17 @@ output "project_id" { value = data.google_project.current.project_id }
 output "container_repository" { value = google_artifact_registry_repository.containers.name }
 output "asset_bucket" { value = google_storage_bucket.assets.name }
 output "report_bucket" { value = google_storage_bucket.reports.name }
+output "api_url" { value = google_cloud_run_v2_service.service["api"].uri }
+output "pdf_worker_url" { value = google_cloud_run_v2_service.service["pdf-worker"].uri }
+output "appwrite_runtime_secret_ids" { value = var.appwrite_runtime_secret_ids }
 output "service_accounts" {
   value = merge(
     { for k, v in google_service_account.runtime : k => v.email },
     {
       notification_worker = google_service_account.notification_worker.email
       dashboard_worker    = google_service_account.dashboard_worker.email
-      document_worker     = google_service_account.document_worker.email
-      integration_worker  = google_service_account.integration_worker.email
+      document_worker     = google_service_account.enhancement_worker["document-worker"].email
+      integration_worker  = google_service_account.enhancement_worker["integration-worker"].email
     }
   )
 }

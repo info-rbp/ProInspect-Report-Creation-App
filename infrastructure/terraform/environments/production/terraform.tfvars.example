@@ -25,3 +25,13 @@ firebase_hosting_site_id = "business-plan-applicatio-17047-255b2"
 app_check_recaptcha_enterprise_site_key = null
 app_check_enforcement_mode              = "UNENFORCED"
 require_api_app_check                   = false
+
+# Must exactly match appwrite.runtimeCredentialPolicies service/secretId pairs in the private launch configuration.
+appwrite_runtime_secret_ids = {
+  api                   = "proinspect-api-appwrite"
+  "pdf-worker"          = "proinspect-pdf-worker-appwrite"
+  "notification-worker" = "proinspect-notification-worker-appwrite"
+  "dashboard-worker"    = "proinspect-dashboard-worker-appwrite"
+  "document-worker"     = "proinspect-document-worker-appwrite"
+  "integration-worker"  = "proinspect-integration-worker-appwrite"
+}

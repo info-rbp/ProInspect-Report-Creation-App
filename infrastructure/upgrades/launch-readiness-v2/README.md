@@ -202,3 +202,16 @@ Use the same synthetic fixture IDs in isolated Staging. Provider projects, secre
 ## Controlled external evidence capture
 
 For checks that require a physical device, a real migration export, operational monitoring or another machine-produced rehearsal, do not hand-author the final gate bundle. Create a private producer result containing schemaVersion 1, observedAt, producer.kind, producer.command, checks, artifactDirectory and artifacts, then run: npm run launch:evidence -- --env development --gate <gate> --input /absolute/private/result.json --approved-by "Release Owner". The capture command rejects Production, stale observations, credential-bearing commands/artifacts, unknown check IDs and unsupported producer types; it copies proof artifacts into the configured private acceptance directory and SHA-256 binds them to the exact candidate and Appwrite/Google Cloud/Cloudflare/Shopify targets.
+
+
+## V2.5 controlled Production release
+
+V2.5 adds a separate `launch:release` controller while keeping every existing `launch:* --env production` path locked. Production release configuration lives privately under Git state and is initialized from `release.example.json`. The controller requires the exact approved main commit, fresh Development and Staging acceptance including rehearsal, provider isolation, an active bounded release window, named support ownership, write-freeze/final-delta approvals, immutable Secret Manager references and a fresh encrypted Production backup/restore probe.
+
+Production stages are deliberately singular: `terraform -> credentials -> backup -> schema -> data -> files -> google -> cloudflare -> shopify -> verify`. There is no Production `all` stage. Each stage requires `RELEASE:<stage>:<production-appwrite-id>:<commit>`. Google and Cloudflare traffic rollback are separately exposed with exact rollback confirmations; Appwrite data rollback remains a separately reviewed recovery decision.
+
+Cloudflare deployment now uses Worker Versions for both non-production and Production. Existing deployments upload the candidate, place it at 0%, smoke the exact version using `Cloudflare-Workers-Version-Overrides`, verify version metadata/commit/backend/portal shells/security headers/anonymous denial, and only then promote it to 100%. Development/Staging may bootstrap an empty isolated Worker; Production requires an existing settled deployment so rollback is available before promotion.
+
+The Production Shopify stage uses the approved `proinspect-2.myshopify.com` store/API version, additively reconciles the five required ProInspect order/refund webhook topics to the Production Cloudflare edge, and never deletes legacy subscriptions automatically. Google Calendar remains server-side and the Production runtime validation pins its OAuth callback to the Production Cloudflare edge while Terraform manages the Calendar API.
+
+A successful final stage returns `PRODUCTION_PROMOTED_AWAITING_OBSERVATION`. It does not retire legacy Strata/D1/R2/Firebase/Firestore sources.

@@ -10,12 +10,6 @@ resource "google_service_account" "dashboard_worker" {
   display_name = "PCR dashboard metrics worker"
 }
 
-resource "google_project_iam_member" "dashboard_worker_datastore" {
-  project = var.project_id
-  role    = "roles/datastore.user"
-  member  = "serviceAccount:${google_service_account.dashboard_worker.email}"
-}
-
 resource "google_service_account_iam_member" "build_dashboard_act_as" {
   service_account_id = google_service_account.dashboard_worker.name
   role               = "roles/iam.serviceAccountUser"
@@ -59,10 +53,6 @@ resource "google_cloud_run_v2_service" "dashboard_worker" {
         name  = "GOOGLE_CLOUD_PROJECT"
         value = var.project_id
       }
-      env {
-        name  = "FIRESTORE_DATABASE_ID"
-        value = var.firestore_database_id
-      }
 
       resources {
         limits = {
@@ -77,10 +67,7 @@ resource "google_cloud_run_v2_service" "dashboard_worker" {
     ignore_changes = [template[0].containers[0].image]
   }
 
-  depends_on = [
-    google_project_service.required,
-    google_project_iam_member.dashboard_worker_datastore,
-  ]
+  depends_on = [google_project_service.required]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "dashboard_worker_invoker" {

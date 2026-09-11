@@ -7,12 +7,6 @@
 # The API also creates immutable archive manifests after finalisation, so it has
 # create-only access to the report bucket in addition to its existing viewer role.
 
-resource "google_storage_bucket_iam_member" "pdf_worker_upload_viewer" {
-  bucket = google_storage_bucket.uploads.name
-  role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${google_service_account.runtime["pdf_worker"].email}"
-}
-
 resource "google_cloud_run_v2_service_iam_member" "pdf_worker_pubsub_invoker" {
   project  = var.project_id
   location = var.region

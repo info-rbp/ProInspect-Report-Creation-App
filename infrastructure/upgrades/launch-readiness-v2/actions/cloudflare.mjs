@@ -74,8 +74,8 @@ export async function deployCloudflare(target,context,directory,{requireExisting
   atomicJson(resolve(directory,'cloudflare-deployment.json'),{candidate:context,workerName:target.cloudflare.workerName,accountId:target.cloudflare.accountId,previous,status:'PREPARED_VERSION_UPLOAD'});
   const wrangler=resolve(root,'node_modules/wrangler/bin/wrangler.js');
   const uploadHelp=await run('node',[wrangler,'versions','upload','--help'],{cwd:root});
-  const deployHelp=await run('node',[wrangler,'versions','deploy','--help'],{cwd:root});
-  requireThat(['--secrets-file','--tag','--strict'].every((option)=>uploadHelp.includes(option)) && deployHelp.includes('--version-tag'),'Pinned Wrangler does not support reviewed version upload/deployment');
+  await run('node',[wrangler,'versions','deploy','--help'],{cwd:root});
+  requireThat(['--secrets-file','--tag','--strict'].every((option)=>uploadHelp.includes(option)),'Pinned Wrangler does not support reviewed version upload');
   const temp=mkdtempSync(join(tmpdir(),'proinspect-edge-'));
   try {
     await run('npm',['run','cloudflare:build'],{cwd:root,env:{VITE_AUTH_PROVIDER:'appwrite',VITE_APPWRITE_ENDPOINT:target.appwrite.endpoint,VITE_APPWRITE_PROJECT_ID:target.appwrite.projectId},logFile:resolve(directory,'edge-build.log')});

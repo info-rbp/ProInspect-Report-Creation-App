@@ -28,13 +28,6 @@ resource "google_service_account" "enhancement_worker" {
   display_name = each.value.display_name
 }
 
-resource "google_project_iam_member" "enhancement_worker_datastore" {
-  for_each = local.enhancement_workers
-  project  = var.project_id
-  role     = "roles/datastore.user"
-  member   = "serviceAccount:${google_service_account.enhancement_worker[each.key].email}"
-}
-
 resource "google_project_iam_member" "enhancement_worker_pubsub" {
   for_each = local.enhancement_workers
   project  = var.project_id
@@ -112,10 +105,6 @@ resource "google_cloud_run_v2_service" "enhancement_worker" {
         value = var.project_id
       }
       env {
-        name  = "FIRESTORE_DATABASE_ID"
-        value = var.firestore_database_id
-      }
-      env {
         name  = "DOCUMENT_BUCKET"
         value = google_storage_bucket.reports.name
       }
@@ -133,10 +122,7 @@ resource "google_cloud_run_v2_service" "enhancement_worker" {
     ignore_changes = [template[0].containers[0].image]
   }
 
-  depends_on = [
-    google_project_service.required,
-    google_project_iam_member.enhancement_worker_datastore,
-  ]
+  depends_on = [google_project_service.required]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "enhancement_worker_pubsub_invoker" {

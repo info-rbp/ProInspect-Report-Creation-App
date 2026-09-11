@@ -23,6 +23,8 @@ export async function terraform(target,context,directory) {
   requireThat(isAbsolute(target.terraform.variablesFile ?? '') && isAbsolute(target.terraform.backendFile ?? ''),'Supply private absolute JSON tfvars/backend paths');
   const vars=readJson(target.terraform.variablesFile); const backend=readJson(target.terraform.backendFile);
   requireThat(vars.project_id===target.google.projectId && vars.region===target.google.region,'Terraform variables target mismatch');
+  const policySecrets=Object.fromEntries((target.appwrite.runtimeCredentialPolicies ?? []).map((item)=>[item.service,item.secretId]));
+  requireThat(canonical(vars.appwrite_runtime_secret_ids ?? {})===canonical(policySecrets),'Terraform Appwrite runtime Secret Manager containers must exactly match service credential policy secret IDs');
   requireThat(typeof backend.bucket==='string' && typeof backend.prefix==='string' && backend.prefix.includes(context.environment),'Use an environment-isolated GCS state prefix');
   await googleIdentity(target.google);
   const cwd=resolve(root,expected); const planFile=resolve(directory,'terraform.plan');

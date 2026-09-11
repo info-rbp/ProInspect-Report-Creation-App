@@ -16,3 +16,13 @@ notification_emails = ["platform-alerts@example.com"]
 app_check_recaptcha_enterprise_site_key = null
 app_check_enforcement_mode              = "UNENFORCED"
 require_api_app_check                   = false
+
+# Must exactly match appwrite.runtimeCredentialPolicies service/secretId pairs in the private launch configuration.
+appwrite_runtime_secret_ids = {
+  api                   = "proinspect-api-appwrite"
+  "pdf-worker"          = "proinspect-pdf-worker-appwrite"
+  "notification-worker" = "proinspect-notification-worker-appwrite"
+  "dashboard-worker"    = "proinspect-dashboard-worker-appwrite"
+  "document-worker"     = "proinspect-document-worker-appwrite"
+  "integration-worker"  = "proinspect-integration-worker-appwrite"
+}

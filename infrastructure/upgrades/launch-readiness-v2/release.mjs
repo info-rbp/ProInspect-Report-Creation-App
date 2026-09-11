@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { appwriteContext, withAppwrite } from './appwrite-session.mjs';
+import { withAppwrite } from './appwrite-session.mjs';
 import { privateDirectory } from './configuration.mjs';
 import { scorecard } from './evidence.mjs';
 import { appwriteAudit, edgeAcceptance, googleAudit, shopifyAudit, toolchain } from './providers.mjs';
@@ -14,7 +14,7 @@ import { migrate } from './actions/migrate.mjs';
 import { ensureSchema, sourceSchema } from './actions/schema.mjs';
 import { auditShopifySubscriptions, reconcileShopifySubscriptions } from './actions/shopify-production.mjs';
 import { terraform } from './actions/terraform.mjs';
-import { acquireLock, assertClean, assertRepository, atomicJson, candidate, canonical, git, hash, manifest, packageRoot, readJson, redact, requireThat, root, safePath, sameSourceCandidate, stateRoot } from './runtime.mjs';
+import { acquireLock, assertClean, assertRepository, atomicJson, candidate, canonical, git, hash, manifest, packageRoot, readJson, redact, requireThat, root, run, safePath, sameSourceCandidate, stateRoot } from './runtime.mjs';
 
 export const releaseStages=['terraform','credentials','backup','schema','data','files','google','cloudflare','shopify','verify'];
 const appwriteScopes=['databases.read','databases.write','tables.read','tables.write','columns.read','columns.write','indexes.read','indexes.write','rows.read','rows.write','buckets.read','buckets.write','files.read','files.write','teams.read','teams.write'];
@@ -36,13 +36,13 @@ export function validateProductionConfig(config,{forMutation=false,now=Date.now(
   requireThat(config?.schemaVersion===1 && canonical([...(config.providerStack ?? [])].sort())===canonical([...manifest.providerStack].sort()),'Production provider stack must exactly match the launch manifest');inspectSecrets(config);
   const target=config.environments?.production;requireThat(target,'Production target is missing');const app=target.appwrite;const google=target.google;const cloudflare=target.cloudflare;const shopify=target.shopify;const web=target.web;const control=config.releaseControl;
   requireThat(app?.endpoint==='https://syd.cloud.appwrite.io/v1'&&app.databaseId==='proinspect_core','Unexpected Production Appwrite endpoint/database');
-  requireThat(real(app.projectId)&&real(app.projectName)&&/production/i.test(app.projectName),'Use a dedicated named Production Appwrite project');
+  requireThat(real(app.projectId)&&/^[A-Za-z0-9][A-Za-z0-9._-]{0,35}$/u.test(app.projectId)&&real(app.projectName)&&/production/i.test(app.projectName),'Use a dedicated named Production Appwrite project');
   requireThat(app.projectId!=='proinspect-development'&&!manifest.prohibited.appwriteProjects.includes(app.projectId),'Legacy/Development Appwrite target is prohibited');
-  requireThat(real(google?.projectId)&&google.environment==='production'&&google.region==='australia-southeast1','Use a dedicated labelled Production Google Cloud project');
+  requireThat(real(google?.projectId)&&/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/u.test(google.projectId)&&google.environment==='production'&&google.region==='australia-southeast1','Use a dedicated labelled Production Google Cloud project');
   requireThat(!manifest.prohibited.googleProjects.includes(google.projectId)&&!/(?:dev|development|staging)(?:-|$)/u.test(google.projectId),'Legacy/non-production Google project is prohibited');
   requireThat(canonical([...google.services].sort())===canonical([...services].sort())&&google.aiRuntime==='api','Production must declare the six canonical Cloud Run services with AI in api');
   requireThat(manifest.requiredGoogleApis.every((id)=>google.requiredApis?.includes(id)),'Production Google Cloud APIs are incomplete');
-  requireThat(real(cloudflare?.accountId)&&/^[a-f0-9]{32}$/iu.test(cloudflare.accountId)&&real(cloudflare.workerName)&&/(?:prod|production)/u.test(cloudflare.workerName),'Use a dedicated Production Cloudflare account/worker binding');
+  requireThat(real(cloudflare?.accountId)&&/^[a-f0-9]{32}$/iu.test(cloudflare.accountId)&&real(cloudflare.workerName)&&/^[a-z0-9_-]+$/u.test(cloudflare.workerName)&&/(?:prod|production)/u.test(cloudflare.workerName),'Use a dedicated Production Cloudflare account/worker binding');
   requireThat(!manifest.prohibited.cloudflareWorkers.includes(cloudflare.workerName)&&!/(?:dev|development|staging)/u.test(cloudflare.workerName),'Legacy/non-production Cloudflare Worker is prohibited');
   requireThat(real(web?.origin)&&new URL(web.origin).protocol==='https:'&&new URL(web.origin).origin===web.origin&&!/(?:^|[.-])(?:dev|development|staging)(?:[.-]|$)/u.test(new URL(web.origin).hostname),'Use the exact Production HTTPS public origin');
   requireThat(real(cloudflare.apiOrigin)&&new URL(cloudflare.apiOrigin).protocol==='https:','Production Cloud Run API origin is required');
@@ -80,22 +80,24 @@ export function assertFreshStaging(platformConfig,productionCandidate,directory=
   requireThat(dev.every((gate)=>gate.status==='PASS')&&stage.every((gate)=>gate.status==='PASS'),'Fresh Development and full Staging acceptance, including rehearsal, are required');
   return {development,staging,developmentGates:dev,stagingGates:stage};
 }
-async function productionProviderPreflight(target,directory){
-  const appwrite=await appwriteAudit(target.appwrite,directory);const google=await googleAudit(target.google);const scripts=await cfRequest(target.cloudflare,'/workers/scripts');
+async function productionProviderPreflight(target,directory,{requireGoogleApis=false}={}){
+  const appwrite=await appwriteAudit(target.appwrite,directory);
+  const google=requireGoogleApis ? await googleAudit(target.google) : {projectId:await googleIdentity(target.google),requiredApisPendingVerification:true};
+  const scripts=await cfRequest(target.cloudflare,'/workers/scripts');
   requireThat(scripts.some((item)=>item.id===target.cloudflare.workerName),'Production Cloudflare Worker must already exist before release');
   const deployments=await cfRequest(target.cloudflare,`/workers/scripts/${target.cloudflare.workerName}/deployments`);const current=deployments.deployments?.[0];singlePreviousVersion(current);
   const shopify=await shopifyAudit(target.shopify);const subscriptions=await auditShopifySubscriptions(target.shopify);
   return {appwrite,google,cloudflare:{accountId:target.cloudflare.accountId,workerName:target.cloudflare.workerName,currentDeploymentId:current.id,currentVersionId:singlePreviousVersion(current)},shopify,subscriptions};
 }
-async function preflight(config,{forMutation=false}={}){
+async function preflight(config,{forMutation=false,requireGoogleApis=false}={}){
   assertRepository();assertClean();if(forMutation)requireThat(git(['branch','--show-current'])==='main','Production mutation is allowed only from the exact approved main commit');
   const target=validateProductionConfig(config,{forMutation});providerEnvGuard(target);const context=productionContext(config);const platformPath=resolve(stateRoot(root),'config.json');requireThat(existsSync(platformPath),'Development/Staging launch configuration is missing');
-  const platformConfig=readJson(platformPath);const acceptance=assertFreshStaging(platformConfig,context);await toolchain(true);const providers=await productionProviderPreflight(target,resolve(releaseDirectory(),'preflight'));
+  const platformConfig=readJson(platformPath);for(const environment of ['development','staging']){const other=platformConfig.environments?.[environment];requireThat(other&&target.appwrite.projectId!==other.appwrite.projectId&&target.google.projectId!==other.google.projectId&&target.cloudflare.workerName!==other.cloudflare.workerName&&target.web.origin!==other.web.origin,`Production provider targets must be isolated from ${environment}`);}const acceptance=assertFreshStaging(platformConfig,context);await toolchain(true);const providers=await productionProviderPreflight(target,resolve(releaseDirectory(),'preflight'),{requireGoogleApis});
   const result={status:'PRODUCTION_PREFLIGHT_PASS',candidate:context,targetFingerprint:targetFingerprint(target),acceptance:{development:acceptance.development.commit,staging:acceptance.staging.commit},providers,productionMutationEnabled:config.releaseControl.productionMutationEnabled===true};atomicJson(resolve(releaseDirectory(),'preflight.json'),result);return {target,context,result};
 }
 function currentBackup(context,target){const record=stageRecord('backup');requireThat(record?.status==='SUCCEEDED'&&record.candidate.configHash===context.configHash&&sameSourceCandidate(record.candidate,context)&&record.targetFingerprint===targetFingerprint(target),'Run a fresh Production backup/restore probe for the exact post-credential configuration');requireThat(Date.now()-Date.parse(record.completedAt)<3600000,'Production backup is more than one hour old');requireThat(record.result?.restored===true&&record.result?.probeRemoved===true,'Production restore probe is incomplete');requireThat(hash(readFileSync(resolve(record.result.directory,'index.enc')))===record.result.indexSha256,'Production backup index changed');return record;}
 async function executeStage(id,config,configPath){
-  const {target,context}=await preflight(config,{forMutation:true});const confirmation=`RELEASE:${id}:${target.appwrite.projectId}:${context.commit}`;return {target,context,confirmation,run:async()=>{
+  const {target,context}=await preflight(config,{forMutation:true,requireGoogleApis:id!=='terraform'});const confirmation=`RELEASE:${id}:${target.appwrite.projectId}:${context.commit}`;return {target,context,confirmation,run:async()=>{
     if(id==='terraform')return terraform(target,context,resolve(releaseDirectory(),'terraform'));
     if(id==='credentials'){requireStage('terraform',context,target);return provisionCredentials(config,'production',resolve(releaseDirectory(),'credentials'),configPath);}
     if(id==='backup'){requireStage('credentials',context,target);return withAppwrite(target.appwrite,resolve(releaseDirectory(),'backup'),appwriteScopes,async(api)=>{const receipt=await backup(api,target,resolve(releaseDirectory(),'backup'),`production-${Date.now()}`);return restoreProbe(api,receipt,target.appwrite,resolve(releaseDirectory(),'backup'));});}
@@ -108,7 +110,7 @@ async function executeStage(id,config,configPath){
     if(id==='shopify'){requireStage('cloudflare',context,target,{exactConfig:true});return reconcileShopifySubscriptions(target.shopify);}
     if(id==='verify'){
       requireStage('shopify',context,target,{exactConfig:true});const edge=await edgeAcceptance(target.web,context.commit);const shopify=await auditShopifySubscriptions(target.shopify);requireThat(shopify.missing.length===0,'Production Shopify subscriptions are incomplete after release');
-      const servicesState={};for(const name of services){const value=JSON.parse(await import('./process.mjs').then(({run})=>run('gcloud',['run','services','describe',name,'--project',target.google.projectId,'--region',target.google.region,'--format=json'],{live:true,sensitive:true})));const env=value.spec?.template?.spec?.containers?.[0]?.env ?? [];const plain=Object.fromEntries(env.filter((item)=>Object.hasOwn(item,'value')).map((item)=>[item.name,item.value]));requireThat(value.status?.latestReadyRevisionName&&plain.APP_VERSION===context.commit&&plain.AUTH_PROVIDER==='appwrite'&&plain.APPWRITE_BACKEND_MODE==='appwrite','Production Cloud Run runtime differs from approved candidate');servicesState[name]=value.status.latestReadyRevisionName;}
+      const servicesState={};for(const name of services){const value=JSON.parse(await run('gcloud',['run','services','describe',name,'--project',target.google.projectId,'--region',target.google.region,'--format=json'],{live:true,sensitive:true}));const env=value.spec?.template?.spec?.containers?.[0]?.env ?? [];const plain=Object.fromEntries(env.filter((item)=>Object.hasOwn(item,'value')).map((item)=>[item.name,item.value]));requireThat(value.status?.latestReadyRevisionName&&plain.APP_VERSION===context.commit&&plain.AUTH_PROVIDER==='appwrite'&&plain.APPWRITE_BACKEND_MODE==='appwrite','Production Cloud Run runtime differs from approved candidate');servicesState[name]=value.status.latestReadyRevisionName;}
       return {status:'PRODUCTION_PROMOTED_AWAITING_OBSERVATION',edge,shopify,services:servicesState,legacyRetired:false};
     }
     throw new Error(`Unknown Production release stage: ${id}`);
@@ -124,7 +126,8 @@ export async function release(argv=process.argv.slice(2)){
   if(args.command==='preflight')return (await preflight(config)).result;
   if(args.command==='rollback'){
     assertRepository();assertClean();const target=validateProductionConfig(config);const context=productionContext(config);requireThat(['google','cloudflare'].includes(args.provider),'Rollback provider must be google or cloudflare');const confirm=`ROLLBACK:${args.provider}:${target.appwrite.projectId}:${context.commit}`;requireThat(args.confirm===confirm,'Exact Production rollback confirmation is required');
-    let result;if(args.provider==='google')result=await rollbackGoogle(target,resolve(releaseDirectory(),'google','google-deployment.json'));else result=await rollbackCloudflare(target,resolve(releaseDirectory(),'cloudflare','cloudflare-deployment.json'));atomicJson(resolve(releaseDirectory(),`rollback-${args.provider}.json`),{candidate:context,completedAt:new Date().toISOString(),result,databaseRolledBack:false});return {status:'PRODUCTION_TRAFFIC_ROLLBACK_COMPLETE',provider:args.provider,databaseRolledBack:false,result};
+    const releaseLock=acquireLock(resolve(releaseDirectory(),'lock-root'));
+    try{let result;if(args.provider==='google')result=await rollbackGoogle(target,resolve(releaseDirectory(),'google','google-deployment.json'));else result=await rollbackCloudflare(target,resolve(releaseDirectory(),'cloudflare','cloudflare-deployment.json'));atomicJson(resolve(releaseDirectory(),`rollback-${args.provider}.json`),{candidate:context,completedAt:new Date().toISOString(),result,databaseRolledBack:false});return {status:'PRODUCTION_TRAFFIC_ROLLBACK_COMPLETE',provider:args.provider,databaseRolledBack:false,result};}finally{releaseLock();}
   }
   requireThat(args.stage&&releaseStages.includes(args.stage),'Use one explicit Production --stage');const unlock=acquireLock(resolve(releaseDirectory(),'lock-root'));
   try{const task=await executeStage(args.stage,config,configPath);requireThat(args.confirm===task.confirmation,`Exact confirmation required: ${task.confirmation}`);const result=await task.run();config=readJson(configPath);const finalContext=productionContext(config);saveStage(args.stage,finalContext,config.environments.production,result);return {status:args.stage==='verify'?'PRODUCTION_PROMOTED_AWAITING_OBSERVATION':'PRODUCTION_STAGE_COMPLETE',stage:args.stage,candidate:finalContext.commit,result};}finally{unlock();}
