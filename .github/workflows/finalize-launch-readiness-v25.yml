@@ -24,6 +24,7 @@ jobs:
           set -euo pipefail
           node .github/finalize-launch-v25.mjs
           node .github/harden-launch-release-v25.mjs
+          node .github/fix-launch-scenario-contract-v25.mjs
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Normalize repository formatting
@@ -45,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm .github/finalize-launch-v25.mjs .github/harden-launch-release-v25.mjs .github/workflows/finalize-launch-readiness-v25.yml
+          rm .github/finalize-launch-v25.mjs .github/harden-launch-release-v25.mjs .github/fix-launch-scenario-contract-v25.mjs .github/workflows/finalize-launch-readiness-v25.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
