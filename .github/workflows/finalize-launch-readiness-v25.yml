@@ -36,6 +36,19 @@ jobs:
         run: |
           npm run format
           terraform fmt -recursive infrastructure/terraform
+      - name: Refresh Terraform provider locks for supported operator platforms
+        shell: bash
+        run: |
+          set -euo pipefail
+          for env in development staging production; do
+            dir="infrastructure/terraform/environments/$env"
+            rm -f "$dir/.terraform.lock.hcl"
+            terraform -chdir="$dir" providers lock \
+              -platform=linux_amd64 \
+              -platform=darwin_arm64 \
+              -platform=darwin_amd64 \
+              -platform=windows_amd64
+          done
       - name: Regenerate exact package integrity after formatting
         shell: bash
         run: |
@@ -66,10 +79,27 @@ jobs:
         run: |
           set -euo pipefail
           terraform fmt -check -recursive infrastructure/terraform
+          terraform -chdir=infrastructure/terraform/modules/environment init -backend=false -input=false
+          terraform -chdir=infrastructure/terraform/modules/environment validate
+          rm -rf infrastructure/terraform/modules/environment/.terraform infrastructure/terraform/modules/environment/.terraform.lock.hcl
           for env in development staging production; do
-            terraform -chdir="infrastructure/terraform/environments/$env" init -backend=false -input=false -lockfile=readonly
-            terraform -chdir="infrastructure/terraform/environments/$env" validate
-            rm -rf "infrastructure/terraform/environments/$env/.terraform"
+            src="infrastructure/terraform/environments/$env"
+            tmp="infrastructure/terraform/environments/.validate-$env"
+            rm -rf "$tmp"
+            cp -R "$src" "$tmp"
+            rm -rf "$tmp/.terraform"
+            python3 - "$tmp/main.tf" <<'PY'
+          import re, sys
+          path=sys.argv[1]
+          text=open(path,encoding='utf-8').read()
+          text,count=re.subn(r'\n\s*backend\s+"gcs"\s*\{\s*\}\s*', '\n', text, count=1)
+          if count != 1:
+              raise SystemExit('expected exactly one empty gcs backend stanza')
+          open(path,'w',encoding='utf-8').write(text)
+          PY
+            terraform -chdir="$tmp" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$tmp" validate
+            rm -rf "$tmp"
           done
       - name: Repository validation
         run: npm run check
