@@ -21,7 +21,7 @@ function parse(argv){
   return out;
 }
 function targets(target){return {appwriteProjectId:target.appwrite.projectId,googleProjectId:target.google.projectId,cloudflareAccountId:target.cloudflare.accountId,cloudflareWorker:target.cloudflare.workerName,shopifyDomain:target.shopify.domain,webOrigin:target.web.origin};}
-function privateFile(path){requireThat(typeof path==='string'&&isAbsolute(path),'Evidence input must be an absolute private path');const absolute=resolve(path);privateDirectory(dirname(absolute));return absolute;}
+function privateFile(path){requireThat(typeof path==='string'&&isAbsolute(path),'Evidence input must be an absolute private path');const absolute=resolve(path);const directory=privateDirectory(dirname(absolute));return safePath(directory,basename(absolute));}
 export function validateCaptureInput(input,gate){
   requireThat(input.schemaVersion===1&&input.producer&&input.checks&&Array.isArray(input.artifacts)&&input.artifacts.length>0,'Invalid evidence capture input');
   requireThat(producerKinds.has(input.producer.kind)&&permittedKinds(gate).has(input.producer.kind),'Evidence producer kind is not permitted for this gate');
