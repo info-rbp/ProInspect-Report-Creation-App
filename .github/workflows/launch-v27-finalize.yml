@@ -1,0 +1,126 @@
+name: Launch v2.7 safeguard finalizer
+
+on:
+  push:
+    branches:
+      - feat/launch-readiness-v27-operator-safeguards
+
+permissions:
+  contents: write
+
+concurrency:
+  group: launch-v27-finalize
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+
+      - name: Materialize v2.7 safeguards
+        run: node scripts/launch-v27-materialize.mjs
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Format candidate
+        run: npm run format
+
+      - name: Regenerate exact launch package integrity
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          const base=resolve('infrastructure/upgrades/launch-readiness-v2');
+          function walk(prefix=''){
+            return readdirSync(resolve(base,prefix),{withFileTypes:true}).flatMap((entry)=>{
+              const rel=prefix ? `${prefix}/${entry.name}` : entry.name;
+              const full=resolve(base,rel);
+              if(entry.isDirectory()) return walk(rel);
+              if(!statSync(full).isFile()) throw new Error(`Unsupported package entry ${rel}`);
+              return rel==='integrity.json' ? [] : [rel];
+            }).sort();
+          }
+          const files={};
+          for(const rel of walk()) files[rel]=createHash('sha256').update(readFileSync(resolve(base,rel))).digest('hex');
+          writeFileSync(resolve(base,'integrity.json'),`${JSON.stringify({algorithm:'sha256',files},null,2)}\n`);
+          NODE
+
+      - name: Create exact candidate commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(launch): guided installation safeguards v2.7"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Syntax check launch modules
+        shell: bash
+        run: |
+          find infrastructure/upgrades/launch-readiness-v2 infrastructure/launch-scenarios -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check
+
+      - name: Full repository validation
+        run: npm run check
+
+      - name: Launch regression tests
+        run: npm run launch:test
+
+      - name: Exact package integrity audit
+        run: npm run launch:audit
+
+      - name: Non-production plan remains non-mutating
+        run: npm run launch:plan
+
+      - name: Guided diagnostics collect blockers instead of crashing
+        shell: bash
+        run: |
+          npm run launch:init
+          set +e
+          npm run launch:preflight -- --all > /tmp/preflight.log 2>&1
+          code=$?
+          set -e
+          cat /tmp/preflight.log
+          test "$code" -eq 2
+          grep -q 'PREFLIGHT_BLOCKED' /tmp/preflight.log
+          npm run launch:issues > /tmp/issues.log
+          cat /tmp/issues.log
+          grep -q 'OPEN_BLOCKERS' /tmp/issues.log
+          npm run launch:reconcile -- --stage all > /tmp/reconcile.log
+          cat /tmp/reconcile.log
+          test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/operator-report.md"
+          test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/issues.json"
+
+      - name: Authority safeguard blocks legacy worker runtime
+        shell: bash
+        run: |
+          set +e
+          npm run launch:authority > /tmp/authority.log 2>&1
+          code=$?
+          set -e
+          cat /tmp/authority.log
+          test "$code" -ne 0
+          grep -q '"pass": false' /tmp/authority.log
+
+      - name: Candidate stayed clean
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+
+      - name: Publish verified candidate
+        run: git push origin HEAD:feat/launch-readiness-v27-operator-safeguards
