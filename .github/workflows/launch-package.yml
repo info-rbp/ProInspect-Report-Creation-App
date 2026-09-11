@@ -1,5 +1,4 @@
 name: Launch package validation
-# v2.3 final validation trigger
 on:
   workflow_dispatch:
   push:
@@ -7,8 +6,14 @@ on:
   pull_request:
     paths:
       - infrastructure/upgrades/launch-readiness-v2/**
+      - infrastructure/launch-scenarios/**
+      - infrastructure/terraform/**
+      - docs/deployment/production-runbook.md
       - .github/workflows/launch-package.yml
       - package.json
+concurrency:
+  group: launch-package-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -26,7 +31,7 @@ jobs:
           path: ${{ runner.temp }}/proinspect-source.zip
           retention-days: 1
           if-no-files-found: error
-  installer:
+  package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,9 +41,48 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.23.2
-      - name: Installer regression tests
-        run: node --test infrastructure/upgrades/launch-readiness-v2/tests/installer.test.mjs
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Syntax check launch modules
+        run: find infrastructure/upgrades/launch-readiness-v2 infrastructure/launch-scenarios -name '*.mjs' -print0 | xargs -0 -n1 node --check
+      - name: Validate Terraform module and all environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive infrastructure/terraform
+          terraform -chdir=infrastructure/terraform/modules/environment init -backend=false -input=false
+          terraform -chdir=infrastructure/terraform/modules/environment validate
+          rm -rf infrastructure/terraform/modules/environment/.terraform infrastructure/terraform/modules/environment/.terraform.lock.hcl
+          for env in development staging production; do
+            src="infrastructure/terraform/environments/$env"
+            tmp="infrastructure/terraform/environments/.validate-$env"
+            rm -rf "$tmp"
+            cp -R "$src" "$tmp"
+            rm -rf "$tmp/.terraform"
+            python3 - "$tmp/main.tf" <<'PY'
+          import re, sys
+          path=sys.argv[1]
+          text=open(path,encoding='utf-8').read()
+          text,count=re.subn(r'\n\s*backend\s+"gcs"\s*\{\s*\}\s*', '\n', text, count=1)
+          if count != 1:
+              raise SystemExit('expected exactly one empty gcs backend stanza')
+          open(path,'w',encoding='utf-8').write(text)
+          PY
+            terraform -chdir="$tmp" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$tmp" validate
+            rm -rf "$tmp"
+          done
+      - name: Repository validation
+        run: npm run check
+      - name: All launch package regression tests
+        run: npm run launch:test
       - name: Exact package integrity
-        run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs audit
-      - name: Clean-checkout dry run
-        run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs plan
+        run: npm run launch:audit
+      - name: Development and Staging plan remains non-production
+        run: npm run launch:plan
+      - name: Production remains a separate release plan
+        run: npm run launch:release -- plan
