@@ -1,5 +1,36 @@
 import { isAbsolute, resolve } from 'node:path';
 import { manifest, root, readJson, safePath, git, requireThat, canonical } from './runtime.mjs';
+
+function containsSensitiveFixtureKey(value) {
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, item]) =>
+    /^(?:customer|email|phone|shipping_address|billing_address|access_token|token|secret|password)$/iu.test(key)
+      || containsSensitiveFixtureKey(item),
+  );
+}
+
+export function validateShopifyReplay(target) {
+  const replay = target?.shopify?.replay;
+  requireThat(replay?.syntheticOnly === true, 'Shopify replay must be explicitly synthetic-only');
+  requireThat(replay.agencyId === 'dev_agency', 'Shopify replay must use the deterministic synthetic dev_agency fixture');
+  requireThat(/^[A-Z][A-Z0-9_]*$/u.test(replay.secretEnv ?? ''), 'Shopify replay HMAC secret must be an environment-variable reference');
+  requireThat(replay.secretEnv === target.acceptance?.shopifyWebhookSecretEnv, 'Shopify replay and acceptance must use the same webhook-secret environment variable');
+  requireThat(typeof replay.fixture === 'string', 'Shopify replay fixture path is required');
+  const fixturePath = safePath(root, replay.fixture);
+  git(['ls-files', '--error-unmatch', '--', replay.fixture]);
+  const payload = readJson(fixturePath);
+  requireThat(payload?.test === true && !containsSensitiveFixtureKey(payload), 'Shopify replay fixture must be synthetic and contain no customer/contact/credential data');
+  requireThat(Array.isArray(payload.line_items) && payload.line_items.length === 1, 'Shopify replay fixture must contain exactly one deterministic synthetic line item');
+  const line = payload.line_items[0];
+  requireThat(String(line.product_id) === '90000000000021' && String(line.variant_id) === '90000000000022' && line.sku === 'DEV-ROUTINE', 'Shopify replay fixture identity drifted from the seeded synthetic service mapping');
+  return {
+    agencyId: replay.agencyId,
+    fixture: replay.fixture,
+    secretEnv: replay.secretEnv,
+    path: `/api/v1/integrations/shopify/webhooks/${encodeURIComponent(replay.agencyId)}`,
+  };
+}
+
 export function validateConfig(config, environment, { complete = true } = {}) {
   requireThat(config.schemaVersion === 1 && ['development', 'staging'].includes(environment), 'Unsupported configuration/environment');
   const inspect = (value, parent = '') => {
@@ -34,6 +65,7 @@ export function validateConfig(config, environment, { complete = true } = {}) {
   requireThat(Array.isArray(target.google.requiredApis) && manifest.requiredGoogleApis.every((id)=>target.google.requiredApis.includes(id)), 'Google Cloud must enable the required Cloud Run/build/secrets/monitoring/logging/Calendar APIs');
   requireThat(isAbsolute(target.acceptance?.evidenceDirectory ?? '') && Number.isInteger(target.acceptance?.evidenceMaxAgeHours) && target.acceptance.evidenceMaxAgeHours>=1 && target.acceptance.evidenceMaxAgeHours<=manifest.evidenceMaxAgeHours, 'Configure a private bounded acceptance evidence directory');
   requireThat(/^[A-Z][A-Z0-9_]*$/u.test(target.acceptance.seedPasswordEnv ?? '') && /^[A-Z][A-Z0-9_]*$/u.test(target.acceptance.shopifyWebhookSecretEnv ?? ''), 'Acceptance secrets must be environment-variable references');
+  validateShopifyReplay(target);
   for(const path of [target.acceptance.operationsRunbook,target.acceptance.cutoverRunbook]) { requireThat(typeof path==='string','Acceptance runbook path missing'); safePath(root,path); git(['ls-files','--error-unmatch','--',path]); }
   requireThat(/^[a-f0-9]{32}$/iu.test(target.cloudflare.accountId), 'Invalid Cloudflare account');
   requireThat(/^[A-Z][A-Z0-9_]*$/u.test(target.cloudflare.trustedEdgeSecretEnv ?? ''), 'Cloudflare origin secret must be referenced by an environment-variable name');
