@@ -1,12 +1,10 @@
-name: Finalize launch-readiness v2.3
+name: Finalize launch readiness v2.3
 on:
   push:
-    branches: [feat/launch-readiness-installation-v2]
+    branches:
+      - feat/launch-readiness-installation-v2
 permissions:
   contents: write
-concurrency:
-  group: finalize-launch-readiness-v23
-  cancel-in-progress: false
 jobs:
   finalize:
     if: github.actor != 'github-actions[bot]'
@@ -18,42 +16,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.23.2
-      - name: Update package documentation and exact integrity ledger
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat >> infrastructure/upgrades/launch-readiness-v2/README.md <<'EOF'
-
-## V2.3 interrupted-deployment hardening
-
-V2.3 adds crash reconciliation for migration journals, rollback-safe Appwrite runtime-key rotation, mandatory Terraform plan review, two-phase Cloud Run rollout, and guaranteed cleanup attempts for isolated restore probes.
-
-A migration entry left `PENDING` by interruption is now reconciled against the live row/file. An exact match is promoted to `CREATED`; an absent object is retried; a differing object blocks as `AMBIGUOUS_MIGRATION`. Runtime keys rotate before unsafe expiry or scope drift while still-valid previous keys are retained as explicitly approved `retiring` keys for rollback until expiry. Expired retiring keys are removed on the next credential pass.
-
-Terraform no longer moves directly from plan to apply. The first execution writes private `terraform-plan-review.json` and blocks with `TERRAFORM_REVIEW_REQUIRED:<digest>`. After reviewing the resource/output changes, export `LAUNCH_TERRAFORM_PLAN_SHA256` to that exact digest and rerun the stage. A changed plan produces a different digest and is refused.
-
-Google deployment now builds and creates all six Cloud Run revisions with no traffic, verifies every revision is Ready, and only then switches service traffic. A traffic-phase failure restores previously switched services to their recorded revisions; incomplete rollback is recorded distinctly. Restore probes attempt cleanup of every owned temporary bucket/database even if verification fails, and record cleanup failures separately.
-EOF
-          node --input-type=module <<'NODE'
-          import { createHash } from 'node:crypto';
-          import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
-          import { resolve } from 'node:path';
-          const base='infrastructure/upgrades/launch-readiness-v2';
-          function files(prefix=''){return readdirSync(resolve(base,prefix),{withFileTypes:true}).flatMap((e)=>{const n=prefix?`${prefix}/${e.name}`:e.name;return e.isDirectory()?files(n):[n];}).sort();}
-          const index={algorithm:'sha256',files:{}};
-          for(const name of files().filter((n)=>n!=='integrity.json'))index.files[name]=createHash('sha256').update(readFileSync(resolve(base,name))).digest('hex');
-          writeFileSync(resolve(base,'integrity.json'),JSON.stringify(index,null,2)+'\n');
-          NODE
+      - name: Regenerate documentation and integrity ledger
+        run: node .github/finalize-launch-readiness-v23.mjs
       - name: Installer regression tests
         run: node --test infrastructure/upgrades/launch-readiness-v2/tests/installer.test.mjs
       - name: Package integrity audit
         run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs audit
-      - name: Clean-checkout dry run
+      - name: Clean checkout dry run
         run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs plan
-      - name: Commit verified v2.3 package
+      - name: Commit verified package
         shell: bash
         run: |
           set -euo pipefail
+          rm .github/finalize-launch-readiness-v23.mjs
           rm .github/workflows/finalize-launch-readiness-v23.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
