@@ -50,6 +50,8 @@ jobs:
           operator=operator.replace("return `Re-run npm run launch:check --${suffix} --stage ${stage} after correcting the reported condition.`;","return `Correct the reported condition, then re-run: ${recheckCommand(environment, stage)}`;");
           operator=operator.replace("recheck: recheck || `npm run launch:check --${suffix} --stage ${stage}`,","recheck: recheck || recheckCommand(environment, stage),");
           operator=operator.replace("  const suffix = commandSuffix(environment);\n  return {\n    id: issueId(environment, stage, code),","  return {\n    id: issueId(environment, stage, code),");
+          operator=operator.replace("  const ledger = syncIssueLedger(directory, environment, context, issues, ['*']);","  const ledger = syncIssueLedger(directory, environment, context, issues, ['preflight']);");
+          operator=operator.replace("  syncIssueLedger(directory, environment, context, issues, scanned);","  syncIssueLedger(directory, environment, context, issues, ['reconcile', ...scanned]);");
           operator=operator.replace("  const blocked = states.some((item) => ['INVALIDATED', 'RECHECK_REQUIRED'].includes(item.status));","  const blocked = issues.some((item) => item.severity === 'BLOCKER') || states.some((item) => ['INVALIDATED', 'RECHECK_REQUIRED'].includes(item.status));");
           writeFileSync(operatorPath,operator);
 
@@ -61,7 +63,7 @@ jobs:
           const testPath='infrastructure/upgrades/launch-readiness-v2/tests/operator.test.mjs';
           let tests=readFileSync(testPath,'utf8');
           if(!tests.includes('diagnostic issues use executable diagnostic recheck commands')) {
-            tests += `\n\ntest('diagnostic issues use executable diagnostic recheck commands',()=>{\n  const preflight=makeIssue({environment:'development',stage:'preflight',code:'CONFIGURATION',message:'missing'});\n  const reconciliation=makeIssue({environment:'staging',stage:'reconcile',code:'WORKTREE_DIRTY',message:'dirty'});\n  assert.equal(preflight.recheck,'npm run launch:preflight -- --all');\n  assert.equal(reconciliation.recheck,'npm run launch:reconcile -- --env staging --stage all');\n});\n\ntest('reconciliation treats ledger blockers as blocking',()=>{\n  const source=readFileSync(resolve(packageRoot,'operator.mjs'),'utf8');\n  assert.match(source,/issues\.some\(\(item\) => item\.severity === 'BLOCKER'\)/u);\n});\n`;
+            tests += `\n\ntest('diagnostic issues use executable diagnostic recheck commands',()=>{\n  const preflight=makeIssue({environment:'development',stage:'preflight',code:'CONFIGURATION',message:'missing'});\n  const reconciliation=makeIssue({environment:'staging',stage:'reconcile',code:'WORKTREE_DIRTY',message:'dirty'});\n  assert.equal(preflight.recheck,'npm run launch:preflight -- --all');\n  assert.equal(reconciliation.recheck,'npm run launch:reconcile -- --env staging --stage all');\n});\n\ntest('reconciliation treats ledger blockers as blocking',()=>{\n  const source=readFileSync(resolve(packageRoot,'operator.mjs'),'utf8');\n  assert.match(source,/issues\.some\(\(item\) => item\.severity === 'BLOCKER'\)/u);\n});\n\ntest('preflight and reconciliation preserve issue-ledger scope',()=>{\n  const source=readFileSync(resolve(packageRoot,'operator.mjs'),'utf8');\n  assert.match(source,/syncIssueLedger\(directory, environment, context, issues, \['preflight'\]\)/u);\n  assert.match(source,/\['reconcile', \.\.\.scanned\]/u);\n});\n`;
           }
           writeFileSync(testPath,tests);
           NODE
@@ -167,12 +169,8 @@ jobs:
           npm run launch:issues > /tmp/issues.log
           cat /tmp/issues.log
           grep -q 'OPEN_BLOCKERS' /tmp/issues.log
-          set +e
           npm run launch:reconcile -- --stage all > /tmp/reconcile.log 2>&1
-          reconcile_code=$?
-          set -e
           cat /tmp/reconcile.log
-          test "$reconcile_code" -eq 0
           grep -q 'SAFE_TO_CONTINUE' /tmp/reconcile.log
           test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/operator-report.md"
           test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/issues.json"
