@@ -52,7 +52,6 @@ export async function backup(api, target, directory, runId) {
       result.files.push({bucketId:bucket.$id,id:file.$id,name:file.name,permissions:file.$permissions ?? [],path,bytes:bytes.length,sha256:save(path,bytes)});
     }
   }
-  // A second full read detects changes during export. The operator must still freeze writers.
   for (const item of result.rows) {
     const rows = normalizedRows(await paged((queries) => db.listRows({databaseId,tableId:item.tableId,queries}),'rows',Query));
     requireThat(hash(JSON.stringify(rows)) === item.sha256,'Rows changed during backup; snapshot rejected');
@@ -79,28 +78,37 @@ export async function restoreProbe(api, receipt, sourceTarget, directory) {
   const schema = {...snapshot.schema,buckets:snapshot.schema.buckets.map((b) => ({...b,$id:buckets.get(b.$id)}))};
   requireThat(!(await optional(() => api.db.get({databaseId}))), 'Restore target already exists; never overwrite');
   for (const bucketId of buckets.values()) requireThat(!(await optional(() => api.storage.getBucket({bucketId}))), 'Restore bucket already exists');
-  atomicJson(resolve(directory,'restore-probe.json'), {runId:receipt.runId,databaseId,buckets:[...buckets.values()],state:'STARTING'});
-  // Every probe ID was checked absent before this run; only these IDs may be removed.
-  await ensureSchema(api,schema,databaseId);
-  for (const item of snapshot.rows) {
-    const bytes = unseal(readFileSync(safePath(receipt.directory,item.path)),key); requireThat(hash(bytes) === item.sha256,'Backup rows failed checksum');
-    for (const row of JSON.parse(bytes)) await api.db.createRow({databaseId,tableId:item.tableId,rowId:row.id,data:row.data,permissions:row.permissions});
-    const actual = normalizedRows(await paged((queries) => api.db.listRows({databaseId,tableId:item.tableId,queries}),'rows',api.Query));
-    requireThat(hash(JSON.stringify(actual)) === item.sha256,'Restored rows differ');
+  const probeState={runId:receipt.runId,databaseId,buckets:[...buckets.values()],state:'STARTING'};atomicJson(resolve(directory,'restore-probe.json'),probeState);
+  let primaryError=null;const cleanupErrors=[];let verified=false;
+  try {
+    await ensureSchema(api,schema,databaseId);
+    for (const item of snapshot.rows) {
+      const bytes = unseal(readFileSync(safePath(receipt.directory,item.path)),key); requireThat(hash(bytes) === item.sha256,'Backup rows failed checksum');
+      for (const row of JSON.parse(bytes)) await api.db.createRow({databaseId,tableId:item.tableId,rowId:row.id,data:row.data,permissions:row.permissions});
+      const actual = normalizedRows(await paged((queries) => api.db.listRows({databaseId,tableId:item.tableId,queries}),'rows',api.Query));
+      requireThat(hash(JSON.stringify(actual)) === item.sha256,'Restored rows differ');
+    }
+    for (const item of snapshot.files) {
+      const bytes = unseal(readFileSync(safePath(receipt.directory,item.path)),key); requireThat(hash(bytes) === item.sha256,'Backup file failed checksum');
+      const bucketId = buckets.get(item.bucketId);
+      await api.storage.createFile({bucketId,fileId:item.id,file:api.InputFile.fromBuffer(bytes,item.name),permissions:item.permissions});
+      requireThat(hash(Buffer.from(await api.storage.getFileDownload({bucketId,fileId:item.id}))) === item.sha256,'Restored file differs');
+    }
+    for (const item of snapshot.files) {
+      const file = await api.storage.getFile({bucketId:buckets.get(item.bucketId),fileId:item.id});
+      requireThat(hash(file.$permissions ?? []) === hash(item.permissions), 'Restored file permissions differ');
+    }
+    verified=true;
+  } catch(error) { primaryError=error; }
+  finally {
+    for(const bucketId of buckets.values()){
+      try{if(await optional(()=>api.storage.getBucket({bucketId})))await api.storage.deleteBucket({bucketId});}catch(error){cleanupErrors.push(`bucket:${bucketId}:${error.message}`);}
+    }
+    try{if(await optional(()=>api.db.get({databaseId})))await api.db.delete({databaseId});}catch(error){cleanupErrors.push(`database:${databaseId}:${error.message}`);}
+    atomicJson(resolve(directory,'restore-probe.json'),{...probeState,state:cleanupErrors.length?'CLEANUP_FAILED':verified?'VERIFIED_AND_REMOVED':'VERIFICATION_FAILED_CLEANUP_SUCCEEDED',cleanupErrors});
   }
-  for (const item of snapshot.files) {
-    const bytes = unseal(readFileSync(safePath(receipt.directory,item.path)),key); requireThat(hash(bytes) === item.sha256,'Backup file failed checksum');
-    const bucketId = buckets.get(item.bucketId);
-    await api.storage.createFile({bucketId,fileId:item.id,file:api.InputFile.fromBuffer(bytes,item.name),permissions:item.permissions});
-    requireThat(hash(Buffer.from(await api.storage.getFileDownload({bucketId,fileId:item.id}))) === item.sha256,'Restored file differs');
-  }
-  for (const item of snapshot.files) {
-    const file = await api.storage.getFile({bucketId:buckets.get(item.bucketId),fileId:item.id});
-    requireThat(hash(file.$permissions ?? []) === hash(item.permissions), 'Restored file permissions differ');
-  }
-  for (const bucketId of buckets.values()) await api.storage.deleteBucket({bucketId});
-  await api.db.delete({databaseId});
-  atomicJson(resolve(directory,'restore-probe.json'), {runId:receipt.runId,databaseId,buckets:[...buckets.values()],state:'VERIFIED_AND_REMOVED'});
+  requireThat(cleanupErrors.length===0,`Restore probe cleanup failed: ${cleanupErrors.join('; ')}${primaryError ? `; verification error: ${primaryError.message}` : ''}`);
+  if(primaryError)throw primaryError;
   const result = {...receipt,restored:true,completedAt:new Date().toISOString(),restoreDatabaseId:databaseId,restoreBuckets:[...buckets.values()],probeRemoved:true};
   atomicJson(resolve(directory,'backup.json'),result); return result;
 }
