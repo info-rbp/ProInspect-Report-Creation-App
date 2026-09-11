@@ -35,7 +35,7 @@
     "release.mjs": "81df404423f03ebeba8d2bc66f10e45a04ba4576d6c52afebce82b99e1036a7f",
     "runtime.mjs": "13420591882bfeca37939cb4a821646b1a769274131bad1c70396dfe87fa4f54",
     "tests/final-review.test.mjs": "fc7dddb7934c47b49b747aecfb7481baabc7f2534d643a22152c487219215e62",
-    "tests/installer.test.mjs": "2c24077f30b91ebe2f82d9303b7eeea691f454d46cbb6de1757eb288822461be",
+    "tests/installer.test.mjs": "ddc2c4a8d11460c9bb6bd558ff213fba85a8cf3412f9465a7e1718be214b8b89",
     "tests/release.test.mjs": "3ac02da22da6953f605bff600f37cd8d297f0c2ee3a5919c7df7183a7b52e09d",
     "tests/scenario-contract.test.mjs": "949c81fe74e31833621e7539a1970aa9424cdfc96276cd83f69a3af27422ff6a",
     "verification.mjs": "765417aaa5fcb13cce7763e02abdeb3053acb164d60068410daf3dba9f395cc8",
