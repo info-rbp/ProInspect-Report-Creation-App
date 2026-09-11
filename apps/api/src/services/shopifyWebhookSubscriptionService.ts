@@ -66,13 +66,13 @@ export async function ensureShopifyWebhookSubscriptions(
 ): Promise<Array<{ topic: string; id?: string; created: boolean; errors: string[] }>> {
   const existing = await graphQl<{
     webhookSubscriptions: {
-      nodes: Array<{ id: string; topic: string; endpoint: { __typename: string; callbackUrl?: string } }>;
+      nodes: Array<{ id: string; topic: string; uri: string }>;
     };
   }>(
     credentials,
     `query ProInspectWebhookSubscriptions {
       webhookSubscriptions(first: 250) {
-        nodes { id topic endpoint { __typename ... on WebhookHttpEndpoint { callbackUrl } } }
+        nodes { id topic uri }
       }
     }`,
     {},
@@ -81,7 +81,7 @@ export async function ensureShopifyWebhookSubscriptions(
   const results: Array<{ topic: string; id?: string; created: boolean; errors: string[] }> = [];
   for (const topic of WEBHOOK_TOPICS) {
     const current = existing.webhookSubscriptions.nodes.find(
-      (item) => item.topic === topic && item.endpoint.callbackUrl === webhookUri,
+      (item) => item.topic === topic && item.uri === webhookUri,
     );
     if (current) {
       results.push({ topic, id: current.id, created: false, errors: [] });
@@ -89,18 +89,27 @@ export async function ensureShopifyWebhookSubscriptions(
     }
     const created = await graphQl<{
       webhookSubscriptionCreate: {
-        webhookSubscription?: { id: string } | null;
+        webhookSubscription?: { id: string; topic: string; uri: string } | null;
         userErrors: Array<{ field?: string[]; message: string }>;
       };
     }>(
       credentials,
-      `mutation ProInspectWebhookCreate($topic: WebhookSubscriptionTopic!, $uri: URL!) {
-        webhookSubscriptionCreate(topic: $topic, webhookSubscription: { uri: $uri, format: JSON }) {
-          webhookSubscription { id }
+      `mutation ProInspectWebhookCreate(
+        $topic: WebhookSubscriptionTopic!
+        $webhookSubscription: WebhookSubscriptionInput!
+      ) {
+        webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+          webhookSubscription { id topic uri }
           userErrors { field message }
         }
       }`,
-      { topic, uri: webhookUri },
+      {
+        topic,
+        webhookSubscription: {
+          uri: webhookUri,
+          format: 'JSON',
+        },
+      },
     );
     results.push({
       topic,
