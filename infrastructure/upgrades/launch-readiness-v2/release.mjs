@@ -2,7 +2,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { withAppwrite } from './appwrite-session.mjs';
+import { withAppwrite,ensureWebPlatform } from './appwrite-session.mjs';
+import { appwriteSchemaAudit } from './adapters/appwrite-cli.mjs';
 import { privateDirectory } from './configuration.mjs';
 import { scorecard } from './evidence.mjs';
 import { appwriteAudit, edgeAcceptance, googleAudit, shopifyAudit, toolchain } from './providers.mjs';
@@ -86,7 +87,7 @@ async function productionProviderPreflight(target,directory,{requireGoogleApis=f
   const scripts=await cfRequest(target.cloudflare,'/workers/scripts');
   requireThat(scripts.some((item)=>item.id===target.cloudflare.workerName),'Production Cloudflare Worker must already exist before release');
   const deployments=await cfRequest(target.cloudflare,`/workers/scripts/${target.cloudflare.workerName}/deployments`);const current=deployments.deployments?.[0];singlePreviousVersion(current);
-  const shopify=await shopifyAudit(target.shopify);const subscriptions=await auditShopifySubscriptions(target.shopify);
+  const shopify=await shopifyAudit(target.shopify);const subscriptions=await auditShopifySubscriptions(target.shopify);requireThat(subscriptions.duplicates.length===0,'Duplicate Production Shopify webhook subscriptions require manual cleanup');
   return {appwrite,google,cloudflare:{accountId:target.cloudflare.accountId,workerName:target.cloudflare.workerName,currentDeploymentId:current.id,currentVersionId:singlePreviousVersion(current)},shopify,subscriptions};
 }
 async function preflight(config,{forMutation=false,requireGoogleApis=false}={}){
@@ -102,16 +103,19 @@ async function executeStage(id,config,configPath){
     if(id==='credentials'){requireStage('terraform',context,target);return provisionCredentials(config,'production',resolve(releaseDirectory(),'credentials'),configPath);}
     if(id==='backup'){requireStage('credentials',context,target);return withAppwrite(target.appwrite,resolve(releaseDirectory(),'backup'),appwriteScopes,async(api)=>{const receipt=await backup(api,target,resolve(releaseDirectory(),'backup'),`production-${Date.now()}`);return restoreProbe(api,receipt,target.appwrite,resolve(releaseDirectory(),'backup'));});}
     currentBackup(context,target);
-    if(id==='schema'){return withAppwrite(target.appwrite,resolve(releaseDirectory(),'schema'),appwriteScopes,(api)=>sourceSchema().then((schema)=>ensureSchema(api,schema,target.appwrite.databaseId)));}
+    if(id==='schema'){return withAppwrite(target.appwrite,resolve(releaseDirectory(),'schema'),appwriteScopes,async(api)=>{const schema=await sourceSchema();const installed=await ensureSchema(api,schema,target.appwrite.databaseId);const platform=await ensureWebPlatform(target.appwrite,target.web,resolve(releaseDirectory(),'schema'));return {...installed,platform};});}
     if(id==='data'){requireStage('schema',context,target,{exactConfig:true});return withAppwrite(target.appwrite,resolve(releaseDirectory(),'data'),appwriteScopes,(api)=>migrate(api,target,releaseDirectory(),'data'));}
     if(id==='files'){requireStage('data',context,target,{exactConfig:true});return withAppwrite(target.appwrite,resolve(releaseDirectory(),'files'),appwriteScopes,(api)=>migrate(api,target,releaseDirectory(),'files'));}
     if(id==='google'){requireStage('files',context,target,{exactConfig:true});return deployGoogle(target,context,resolve(releaseDirectory(),'google'));}
     if(id==='cloudflare'){requireStage('google',context,target,{exactConfig:true});return deployCloudflare(target,context,resolve(releaseDirectory(),'cloudflare'),{requireExisting:true});}
     if(id==='shopify'){requireStage('cloudflare',context,target,{exactConfig:true});return reconcileShopifySubscriptions(target.shopify);}
     if(id==='verify'){
-      requireStage('shopify',context,target,{exactConfig:true});const edge=await edgeAcceptance(target.web,context.commit);const shopify=await auditShopifySubscriptions(target.shopify);requireThat(shopify.missing.length===0,'Production Shopify subscriptions are incomplete after release');
-      const servicesState={};for(const name of services){const value=JSON.parse(await run('gcloud',['run','services','describe',name,'--project',target.google.projectId,'--region',target.google.region,'--format=json'],{live:true,sensitive:true}));const env=value.spec?.template?.spec?.containers?.[0]?.env ?? [];const plain=Object.fromEntries(env.filter((item)=>Object.hasOwn(item,'value')).map((item)=>[item.name,item.value]));requireThat(value.status?.latestReadyRevisionName&&plain.APP_VERSION===context.commit&&plain.AUTH_PROVIDER==='appwrite'&&plain.APPWRITE_BACKEND_MODE==='appwrite','Production Cloud Run runtime differs from approved candidate');servicesState[name]=value.status.latestReadyRevisionName;}
-      return {status:'PRODUCTION_PROMOTED_AWAITING_OBSERVATION',edge,shopify,services:servicesState,legacyRetired:false};
+      const shopifyStage=requireStage('shopify',context,target,{exactConfig:true});const googleStage=requireStage('google',context,target,{exactConfig:true});const cloudflareStage=requireStage('cloudflare',context,target,{exactConfig:true});
+      const cfLive=await cfRequest(target.cloudflare,`/workers/scripts/${target.cloudflare.workerName}/deployments`);const cfCurrent=cfLive.deployments?.[0];requireThat(cfCurrent?.id===cloudflareStage.result.current?.id&&singlePreviousVersion(cfCurrent)===cloudflareStage.result.candidateVersion?.id,'Production Cloudflare traffic differs from the recorded promoted candidate');
+      const edge=await edgeAcceptance(target.web,context.commit,fetch,{expectedVersionId:cloudflareStage.result.candidateVersion.id,expectedVersionTag:cloudflareStage.result.candidateVersion.tag});const shopify=await auditShopifySubscriptions(target.shopify);requireThat(shopify.missing.length===0&&shopify.duplicates.length===0,'Production Shopify subscriptions are incomplete or duplicated after release');
+      const appwrite=await appwriteSchemaAudit(target,resolve(releaseDirectory(),'verify-appwrite'));requireThat(appwrite.errors.length===0&&appwrite.unavailable.length===0&&appwrite.bucketErrors.length===0&&appwrite.leastPrivilege&&appwrite.approvedKeys&&appwrite.registeredDomains,'Production Appwrite schema, keys or registered domain differ from the approved release');
+      const servicesState={};for(const name of services){const expected=googleStage.result.services.find((item)=>item.name===name);requireThat(expected?.deployedRevision&&expected?.image,'Recorded Google deployment is incomplete: '+name);const value=JSON.parse(await run('gcloud',['run','services','describe',name,'--project',target.google.projectId,'--region',target.google.region,'--format=json'],{live:true,sensitive:true}));const container=value.spec?.template?.spec?.containers?.[0]??{};const env=container.env??[];const plain=Object.fromEntries(env.filter((item)=>Object.hasOwn(item,'value')).map((item)=>[item.name,item.value]));const active=(value.status?.traffic??[]).filter((item)=>Number(item.percent)>0);requireThat(value.status?.latestReadyRevisionName===expected.deployedRevision&&container.image===expected.image&&active.length===1&&active[0].revisionName===expected.deployedRevision&&Number(active[0].percent)===100&&plain.APP_VERSION===context.commit&&plain.AUTH_PROVIDER==='appwrite'&&plain.APPWRITE_BACKEND_MODE==='appwrite','Production Cloud Run live revision/image/traffic/runtime differs from the recorded candidate');servicesState[name]={revision:expected.deployedRevision,image:expected.image,traffic:100};}
+      return {status:'PRODUCTION_PROMOTED_AWAITING_OBSERVATION',edge,shopify,shopifyStage:shopifyStage.completedAt,appwrite,services:servicesState,cloudflare:{deploymentId:cfCurrent.id,versionId:cloudflareStage.result.candidateVersion.id},legacyRetired:false};
     }
     throw new Error(`Unknown Production release stage: ${id}`);
   }};

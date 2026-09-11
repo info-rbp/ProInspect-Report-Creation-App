@@ -16,14 +16,16 @@ export function columnChanges(expected, actual) {
 }
 export async function ensureSchema(api, schema, databaseId) {
   const { db, storage, Query } = api;
+  const wantedDatabase=schema.databases?.find((d)=>d.$id===databaseId);requireThat(wantedDatabase,'Source database definition is missing');
   const database = await optional(() => db.get({ databaseId }));
-  if (!database) await db.create({ databaseId, name: schema.databases?.find((d) => d.$id === databaseId)?.name ?? databaseId, enabled: true });
+  if (!database) await db.create({ databaseId, name: wantedDatabase.name ?? databaseId, enabled: wantedDatabase.enabled ?? true });
+  else requireThat(database.name===wantedDatabase.name && database.enabled===wantedDatabase.enabled,'Existing database definition differs from source');
   for (const table of schema.tables) {
     requireThat(table.rowSecurity === true && table.$permissions?.length === 0, 'Unsafe source table permissions');
     const common = { databaseId, tableId: table.$id };
     const existing = await optional(() => db.getTable(common));
     if (!existing) await db.createTable({ ...common, name: table.name, permissions: [], rowSecurity: true, enabled: true });
-    else requireThat(existing.rowSecurity === true && existing.$permissions?.length === 0, `Unexpected live table permissions: ${table.$id}`);
+    else requireThat(existing.name===table.name && existing.rowSecurity===table.rowSecurity && existing.enabled===table.enabled && canonical(existing.$permissions ?? [])===canonical(table.$permissions ?? []), `Existing table definition differs from source: ${table.$id}`);
     const columns = await paged((queries) => db.listColumns({ ...common, queries }), 'columns', Query);
     for (const actual of columns) requireThat(table.columns.some((c) => c.key === actual.key), `Destructive column removal blocked: ${table.$id}.${actual.key}`);
     for (const column of table.columns) {
@@ -59,7 +61,7 @@ export async function ensureSchema(api, schema, databaseId) {
     requireThat(bucket.fileSecurity && bucket.$permissions?.length === 0, 'Unsafe source bucket');
     const existing = await optional(() => storage.getBucket({ bucketId: bucket.$id }));
     if (!existing) { const data = { ...bucket, bucketId: bucket.$id, permissions: bucket.$permissions }; delete data.$id; delete data.$permissions; await storage.createBucket(data); }
-    else for (const key of ['fileSecurity','$permissions','encryption','antivirus','maximumFileSize','allowedFileExtensions']) requireThat(canonical(existing[key]) === canonical(bucket[key]), `Bucket drift requires review: ${bucket.$id}.${key}`);
+    else for (const key of ['name','fileSecurity','$permissions','enabled','encryption','antivirus','maximumFileSize','allowedFileExtensions','compression']) requireThat(canonical(existing[key]) === canonical(bucket[key]), `Bucket drift requires review: ${bucket.$id}.${key}`);
   }
   for (const team of schema.teams ?? []) {
     const live = await optional(() => api.teams.get({teamId:team.$id}));

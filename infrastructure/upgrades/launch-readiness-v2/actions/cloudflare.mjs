@@ -79,8 +79,9 @@ export async function deployCloudflare(target,context,directory,{requireExisting
   const temp=mkdtempSync(join(tmpdir(),'proinspect-edge-'));
   try {
     await run('npm',['run','cloudflare:build'],{cwd:root,env:{VITE_AUTH_PROVIDER:'appwrite',VITE_APPWRITE_ENDPOINT:target.appwrite.endpoint,VITE_APPWRITE_PROJECT_ID:target.appwrite.projectId},logFile:resolve(directory,'edge-build.log')});
-    const config={name:target.cloudflare.workerName,account_id:target.cloudflare.accountId,main:resolve(packageRoot,'edge-entry.mjs'),compatibility_date:'2026-08-23',workers_dev:true,assets:{directory:resolve(root,'apps/web/dist'),binding:'ASSETS',not_found_handling:'single-page-application',run_worker_first:['/api/*','/v1/*','/health','/__launch/*']},vars:{GOOGLE_API_ORIGIN:target.cloudflare.apiOrigin,RELEASE_SHA:context.commit,CONTENT_SECURITY_POLICY:target.cloudflare.contentSecurityPolicy},version_metadata:{binding:'CF_VERSION_METADATA'},observability:{enabled:true}};
-    const origin=new URL(target.web.origin); if(!origin.hostname.endsWith('.workers.dev'))config.routes=[{pattern:origin.hostname,custom_domain:true}];
+    const origin=new URL(target.web.origin);
+    const config={name:target.cloudflare.workerName,account_id:target.cloudflare.accountId,main:resolve(packageRoot,'edge-entry.mjs'),compatibility_date:'2026-08-23',workers_dev:origin.hostname.endsWith('.workers.dev'),assets:{directory:resolve(root,'apps/web/dist'),binding:'ASSETS',not_found_handling:'single-page-application',run_worker_first:['/api/*','/v1/*','/health','/__launch/*']},vars:{GOOGLE_API_ORIGIN:target.cloudflare.apiOrigin,RELEASE_SHA:context.commit,CONTENT_SECURITY_POLICY:target.cloudflare.contentSecurityPolicy},version_metadata:{binding:'CF_VERSION_METADATA'},observability:{enabled:true}};
+    if(!origin.hostname.endsWith('.workers.dev'))config.routes=[{pattern:origin.hostname,custom_domain:true}];
     const configPath=resolve(temp,'wrangler.json'); const secretsPath=resolve(temp,'secrets.json'); atomicJson(configPath,config); atomicJson(secretsPath,{CLOUDFLARE_ORIGIN_SECRET:secret});
     if(!exists) {
       await run('node',[wrangler,'deploy','--config',configPath,'--secrets-file',secretsPath],{cwd:root,live:true,sensitive:true,logFile:resolve(directory,'edge-bootstrap.log')});

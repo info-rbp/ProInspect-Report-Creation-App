@@ -20,11 +20,12 @@ export function validateConfig(config, environment, { complete = true } = {}) {
   requireThat(!manifest.prohibited.cloudflareWorkers.includes(target.cloudflare?.workerName), 'Production Worker is prohibited');
   if (environment === 'development') requireThat(app.projectId === 'proinspect-development' && app.projectName === 'ProInspect Development', 'Unexpected Development target');
   else if (app.projectId) requireThat(app.projectId !== 'proinspect-development', 'Staging cannot use Development');
-  requireThat(target.shopify?.domain === 'proinspect-2.myshopify.com' && target.shopify.apiVersion === '2026-07', 'Unexpected Shopify target');
+  requireThat(target.shopify?.domain === 'proinspect-2.myshopify.com' && target.shopify.apiVersion === '2026-07' && target.shopify.tokenEnv === 'SHOPIFY_ADMIN_ACCESS_TOKEN', 'Unexpected Shopify target');
   if (!complete) return target;
   requireThat(config.approvedBy?.trim().length >= 3, 'Configuration requires named approval');
   for (const value of [app.projectId, app.projectName, target.google.projectId, target.cloudflare.accountId, target.cloudflare.workerName, target.web.origin]) requireThat(typeof value === 'string' && value.trim() && !/REPLACE|example\.|<|>/iu.test(value), 'A real approved target value is missing');
   requireThat(/^[A-Za-z0-9][A-Za-z0-9._-]{0,35}$/u.test(app.projectId), 'Invalid Appwrite project ID');
+  if (environment === 'staging') requireThat(/staging/iu.test(app.projectName) && !/(?:prod|production)/iu.test(app.projectName), 'Staging Appwrite project name must explicitly identify Staging and cannot identify Production');
   requireThat(/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/u.test(target.google.projectId), 'Invalid Google project ID');
   requireThat(target.google.environment === environment && /^[a-z]+-[a-z]+[0-9]$/u.test(target.google.region), 'Invalid Google environment/region');
   requireThat(Array.isArray(target.google.services) && new Set(target.google.services).size === target.google.services.length && ['api','pdf-worker','document-worker','notification-worker','dashboard-worker','integration-worker'].every((id) => target.google.services.includes(id)), 'Declare the six existing deployable services');
@@ -34,6 +35,8 @@ export function validateConfig(config, environment, { complete = true } = {}) {
   requireThat(/^[A-Z][A-Z0-9_]*$/u.test(target.acceptance.seedPasswordEnv ?? '') && /^[A-Z][A-Z0-9_]*$/u.test(target.acceptance.shopifyWebhookSecretEnv ?? ''), 'Acceptance secrets must be environment-variable references');
   for(const path of [target.acceptance.operationsRunbook,target.acceptance.cutoverRunbook]) { requireThat(typeof path==='string','Acceptance runbook path missing'); safePath(root,path); git(['ls-files','--error-unmatch','--',path]); }
   requireThat(/^[a-f0-9]{32}$/iu.test(target.cloudflare.accountId), 'Invalid Cloudflare account');
+  requireThat(/^[A-Z][A-Z0-9_]*$/u.test(target.cloudflare.trustedEdgeSecretEnv ?? ''), 'Cloudflare origin secret must be referenced by an environment-variable name');
+  requireThat(typeof target.cloudflare.contentSecurityPolicy === 'string' && target.cloudflare.contentSecurityPolicy.includes("object-src 'none'") && target.cloudflare.contentSecurityPolicy.includes("frame-ancestors 'none'") && !/default-src\s+\*/iu.test(target.cloudflare.contentSecurityPolicy), 'Cloudflare CSP must explicitly block objects/framing and cannot use a wildcard default source');
   requireThat(/^[a-z0-9_-]+$/u.test(target.cloudflare.workerName) && (environment === 'development' ? /(?:^|[-_])(dev|development)(?:$|[-_])/u : /(?:^|[-_])staging(?:$|[-_])/u).test(target.cloudflare.workerName), 'Use an environment-specific Worker');
   for (const name of ['origin']) {
     const url = new URL(target.web[name]);

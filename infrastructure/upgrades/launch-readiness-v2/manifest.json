@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "launch-readiness-v2",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "baselineCommit": "a27cf680a858961f141a6421278f89f95d38a162",
   "baselinePackage": "infrastructure/upgrades/platform-completion-v1",
   "targetSchemaTables": 120,
@@ -39,5 +39,6 @@
     "calendar-json.googleapis.com"
   ],
   "productionReleaseController": true,
-  "cloudflareVersionPromotion": true
+  "cloudflareVersionPromotion": true,
+  "finalReviewHardening": true
 }

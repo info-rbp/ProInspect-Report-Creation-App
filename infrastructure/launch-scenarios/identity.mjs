@@ -25,7 +25,7 @@ export async function runScenario(probe) {
   probe.check('all_seven_portals',Object.keys(services).sort(),portals.map(([id])=>id).sort());
   const siteDenial=await expectDenied(()=>services.building.getRow({databaseId:app.databaseId,tableId:'managed_sites',rowId:'dev_site_commercial'}));
   const assignmentDiagnostic=await expectDenied(()=>services.contractor.getRow({databaseId:app.databaseId,tableId:'inspection_jobs',rowId:'dev_inspection_job'})) && await expectDenied(()=>services.inspector.getRow({databaseId:app.databaseId,tableId:'maintenance_work_orders',rowId:'dev_work_order'}));
-  let sessionRevoked=false;let mfaPassed=false;
+  let sessionRevoked=false;let mfaPassed=false;let recoveryPassed=false;
   await withAppwrite(app,process.env.PROINSPECT_LAUNCH_OUTPUT.slice(0,process.env.PROINSPECT_LAUNCH_OUTPUT.lastIndexOf('/')),['users.read','users.write'],async(api)=>{
     const userId='accept_mfa_'+randomUUID().replaceAll('-','').slice(0,16);const email=userId+'@example.com';
     try{
@@ -39,10 +39,12 @@ export async function runScenario(probe) {
       const challengeSession=await authenticate(app,userId,password);const challengeAccount=new Account(new Client().setEndpoint(app.endpoint).setProject(app.projectId).setSession(challengeSession));
       const challenge=await challengeAccount.createMFAChallenge({factor:AuthenticationFactor.Totp});await challengeAccount.updateMFAChallenge({challengeId:challenge.$id,otp:totp(authenticator.secret)});
       const verified=await challengeAccount.getSession({sessionId:'current'});mfaPassed=verified.factors?.includes('totp')===true;
+      await api.users.deleteSessions({userId});const recoverySession=await authenticate(app,userId,password);const recoveryAccount=new Account(new Client().setEndpoint(app.endpoint).setProject(app.projectId).setSession(recoverySession));const recoveryChallenge=await recoveryAccount.createMFAChallenge({factor:'recoverycode'});await recoveryAccount.updateMFAChallenge({challengeId:recoveryChallenge.$id,otp:recovery.recoveryCodes[0]});recoveryPassed=Boolean((await recoveryAccount.get()).$id);
     }finally{await api.users.delete({userId}).catch(()=>{});}
   });
-  probe.check('mfa_enrol_challenge_recover',mfaPassed,true);
+  probe.check('mfa_enrol_challenge_recover',mfaPassed&&recoveryPassed,true);
   probe.check('session_revocation',sessionRevoked,true);
-  applyExternalChecks(probe,probe.input,['email_verification_recovery','cross_agency_site_client_unit_denial','contractor_inspector_assignment_denial','relief_expiry','stale_occupancy_denial','multi_portal_identity'],['automated-test']);
-  probe.artifact('identity-live.json',Buffer.from(JSON.stringify({portals:portals.map(([id,userId])=>({id,userId})),mfaPassed,sessionRevoked,siteDenial,assignmentDiagnostic})));
+  probe.check('contractor_inspector_assignment_denial',assignmentDiagnostic,true);
+  applyExternalChecks(probe,probe.input,['email_verification_recovery','cross_agency_site_client_unit_denial','relief_expiry','stale_occupancy_denial','multi_portal_identity'],['automated-test']);
+  probe.artifact('identity-live.json',Buffer.from(JSON.stringify({portals:portals.map(([id,userId])=>({id,userId})),mfaPassed,recoveryPassed,sessionRevoked,siteDenial,assignmentDiagnostic})));
 }

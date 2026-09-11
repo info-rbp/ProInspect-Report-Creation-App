@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Client, Query, TablesDB } from 'node-appwrite';
 import { privateDirectory } from '../upgrades/launch-readiness-v2/configuration.mjs';
-import { canonical, hash, readJson, requireThat, safePath } from '../upgrades/launch-readiness-v2/runtime.mjs';
+import { canonical, hash, readJson, requireThat, safePath, sameSourceCandidate } from '../upgrades/launch-readiness-v2/runtime.mjs';
 
 export const portals = [
   ['admin','dev_admin'], ['inspector','dev_inspector'], ['building','dev_building_manager'],
@@ -17,6 +17,12 @@ export function stateEnvironmentDirectory() {
 export function actionState(id) {
   const path = resolve(stateEnvironmentDirectory(), 'actions', id + '.json');
   return existsSync(path) ? readJson(path) : null;
+}
+export function currentAction(id, input, { exactConfig = true } = {}) {
+  const value = actionState(id);
+  requireThat(value?.status === 'SUCCEEDED' && sameSourceCandidate(value.candidate, input.candidate), 'Action state is missing or belongs to another source candidate: ' + id);
+  if (exactConfig) requireThat(value.candidate?.configHash === input.candidate.configHash, 'Action state belongs to another environment configuration: ' + id);
+  return value;
 }
 export function receipt(id) {
   const path = resolve(stateEnvironmentDirectory(), 'receipts', id + '.json');

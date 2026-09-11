@@ -7,6 +7,8 @@ import { privateDirectory } from '../configuration.mjs';
 import { paged, rowData, optional } from '../appwrite-session.mjs';
 import { ensureSchema } from './schema.mjs';
 
+export const MAX_BACKUP_FILE_BYTES = 128 * 1024 * 1024;
+
 export function encryptionKey(env = process.env) {
   requireThat(/^[a-f0-9]{64}$/iu.test(env.LAUNCH_BACKUP_KEY ?? ''), 'Supply LAUNCH_BACKUP_KEY as a securely stored 32-byte hexadecimal key');
   return Buffer.from(env.LAUNCH_BACKUP_KEY,'hex');
@@ -45,7 +47,7 @@ export async function backup(api, target, directory, runId) {
     result.schema.buckets.push(pick(bucket,['$id','name','$permissions','fileSecurity','enabled','maximumFileSize','allowedFileExtensions','compression','encryption','antivirus']));
     const files = await paged((queries) => storage.listFiles({bucketId:bucket.$id,queries}),'files',Query);
     for (const file of files) {
-      requireThat(file.sizeOriginal <= 64*1024*1024,'File exceeds 64 MiB; use a reviewed streaming adapter');
+      requireThat(file.sizeOriginal <= MAX_BACKUP_FILE_BYTES,'File exceeds the 128 MiB bounded backup adapter; use a reviewed streaming adapter');
       const bytes = Buffer.from(await storage.getFileDownload({bucketId:bucket.$id,fileId:file.$id}));
       requireThat(bytes.length === file.sizeOriginal,'File length mismatch');
       const path = `${hash(`${bucket.$id}/${file.$id}`)}.file.enc`;

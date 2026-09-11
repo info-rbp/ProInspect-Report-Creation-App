@@ -23,8 +23,9 @@ export async function runScenario(probe) {
   probe.check('source_target_counts_checksums',count===bundle.rows.length && checksums,true);
   const journalPath=stateEnvironmentDirectory()+'/migration-'+target.migration.bundleSha256+'.json';const before=readFileSync(journalPath,'utf8');
   await withAppwrite(target.appwrite,process.env.PROINSPECT_LAUNCH_OUTPUT.slice(0,process.env.PROINSPECT_LAUNCH_OUTPUT.lastIndexOf('/')),['rows.read','rows.write'],(api)=>migrate(api,target,stateEnvironmentDirectory(),'data'));
-  const after=readFileSync(journalPath,'utf8');
-  probe.check('zero_duplicate_rerun',duplicateRejected && JSON.parse(after).bundleSha256===JSON.parse(before).bundleSha256,true);
+  const after=readFileSync(journalPath,'utf8');let afterCount=0;let afterChecksums=true;
+  await withAppwrite(target.appwrite,process.env.PROINSPECT_LAUNCH_OUTPUT.slice(0,process.env.PROINSPECT_LAUNCH_OUTPUT.lastIndexOf('/')),['rows.read'],async(api)=>{for(const row of bundle.rows){const live=await optional(()=>api.db.getRow({databaseId:target.appwrite.databaseId,tableId:row.tableId,rowId:row.id}));if(live)afterCount+=1;if(!live||hash(rowData(live))!==row.sha256||hash(live.$permissions??[])!==hash(row.permissions))afterChecksums=false;}});
+  probe.check('zero_duplicate_rerun',duplicateRejected && hash(JSON.parse(after))===hash(JSON.parse(before)) && afterCount===bundle.rows.length && afterChecksums,true);
   const external=applyExternalChecks(probe,probe.input,['all_49_d1_tables_disposition','firestore_domain_disposition','approved_unit_role_mapping','interrupted_resume','rollback_rehearsal','final_delta_rehearsal','no_source_deletion'],['migration-rehearsal','automated-test']);
   probe.artifact('migration-live.json',Buffer.from(JSON.stringify({rows:bundle.rows.length,dispositions:(bundle.sourceDisposition??[]).length,count,checksums,externalObservedAt:external?.observedAt??null,bundleDirectory:privateDirectory(target.migration.bundleDirectory)?'[private]':null})));
 }

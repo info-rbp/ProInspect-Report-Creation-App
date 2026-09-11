@@ -45,7 +45,7 @@ export function run(command, args = [], options = {}) {
     const clean = () => { clearTimeout(timer); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); };
     child.once('error', (error) => { clean(); reject(new Error(redact(error.message, env))); });
     child.once('close', (code) => {
-      clean(); if (!stopped) clearTimeout(killTimer);
+      clean(); if (killTimer) clearTimeout(killTimer);
       const log = redact(`${stdout}\n${stderr}`, env);
       if (options.logFile) { mkdirSync(dirname(options.logFile), { recursive: true, mode: 0o700 }); writeFileSync(options.logFile, log, { mode: 0o600 }); }
       if (stopped || code !== 0) reject(new Error(`${command}: ${stopped ?? `exit ${code}`}. ${options.sensitive ? 'Output suppressed.' : log.slice(-2000)}`));

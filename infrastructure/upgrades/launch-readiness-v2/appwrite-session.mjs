@@ -54,3 +54,25 @@ export async function paged(call, collection, Query) {
 }
 export async function optional(call) { try { return await call(); } catch (error) { if (Number(error.code) === 404) return null; throw error; } }
 export const rowData = (row) => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith('$')));
+
+export async function ensureWebPlatform(target, web, directory) {
+  const { cli, cwd } = await appwriteContext(target, directory);
+  const hostname = new URL(web.origin).hostname;
+  const list = async () => {
+    const result = await cli(['project','list-platforms','--project-id',target.projectId,'--limit','100']);
+    requireThat(Array.isArray(result.platforms) && result.total === result.platforms.length, 'Appwrite platform inventory is truncated');
+    return result.platforms;
+  };
+  let platforms = await list();
+  let matches = platforms.filter((item) => item.hostname === hostname);
+  let created = false;
+  requireThat(matches.length <= 1, 'Duplicate Appwrite platform hostname requires manual review');
+  if (matches.length === 0) {
+    const help = await run('appwrite',['project','create-platform','--help'],{cwd,timeoutMs:30000});
+    for (const flag of ['--project-id','--type','--name','--hostname']) requireThat(help.includes(flag), 'Pinned Appwrite CLI cannot create the required web platform: ' + flag);
+    await cli(['project','create-platform','--project-id',target.projectId,'--type','web','--name','ProInspect '+hostname,'--hostname',hostname]);
+    created = true; platforms = await list(); matches = platforms.filter((item) => item.hostname === hostname);
+  }
+  requireThat(matches.length === 1 && matches[0].type === 'web', 'Required Appwrite web platform was not reconciled');
+  return { hostname, platformId: matches[0].$id, created };
+}

@@ -61,7 +61,8 @@ export async function install(config,args,directory){
         const sourceResult=await action('source',current,context,sourceFolder,directory,randomUUID());
         atomicJson(resolve(directory,args.env,'actions','source.json'),{status:'SUCCEEDED',id:'source',candidate:context,folder:sourceFolder,result:sourceResult,completedAt:new Date().toISOString()});
         const backupFolder=resolve(session,'post-credential-backup');mkdirSync(backupFolder,{recursive:true,mode:0o700});
-        await action('backup',current,context,backupFolder,directory,randomUUID());
+        const backupResult=await action('backup',current,context,backupFolder,directory,randomUUID());
+        atomicJson(resolve(directory,args.env,'actions','backup.json'),{status:'SUCCEEDED',id:'backup',candidate:context,folder:backupFolder,result:backupResult,completedAt:new Date().toISOString()});
       }
     }catch(error){atomicJson(statePath,{status:'FAILED',id,candidate:context,folder,error:redact(error.message),inspectBeforeRetry:true});throw error;}
   }

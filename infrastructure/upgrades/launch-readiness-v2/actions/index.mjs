@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readJson,atomicJson,requireThat,hash } from '../runtime.mjs';
-import { withAppwrite } from '../appwrite-session.mjs';
+import { withAppwrite,ensureWebPlatform } from '../appwrite-session.mjs';
 import { sourceSchema,ensureSchema } from './schema.mjs';
 import { backup,restoreProbe } from './backup.mjs';
 import { migrate,rollbackMigration } from './migrate.mjs';
@@ -31,7 +31,7 @@ export async function action(id,config,context,directory,stateDirectory,runId){
       atomicJson(resolve(stateDirectory,context.environment,'last-backup.json'),{...restored,candidate:context});return restored;
     }
     if(id==='schema'){
-      const schema=await sourceSchema();return ensureSchema(api,schema,app.databaseId);
+      const schema=await sourceSchema();const installed=await ensureSchema(api,schema,app.databaseId);const platform=await ensureWebPlatform(app,target.web,directory);return {...installed,platform};
     }
     if(['data','files'].includes(id))return migrate(api,target,resolve(stateDirectory,context.environment),id);
     if(id==='rollback-migration'){

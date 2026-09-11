@@ -5,11 +5,14 @@ import { hash, readJson, safePath, atomicJson, requireThat } from '../runtime.mj
 import { privateDirectory } from '../configuration.mjs';
 import { optional, rowData } from '../appwrite-session.mjs';
 
+export const MAX_MIGRATION_FILE_BYTES = 128 * 1024 * 1024;
+
 const ident = (value) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,35}$/u.test(value);
 export function validateBundle(bundle) {
   requireThat(bundle.schemaVersion === 1 && Array.isArray(bundle.rows) && Array.isArray(bundle.files), 'Invalid normalized migration bundle');
-  requireThat(bundle.approvedBy?.length >= 3 && Number.isFinite(Date.parse(bundle.approvedAt)), 'Migration mapping requires named, dated approval');
+  requireThat(bundle.approvedBy?.length >= 3 && Number.isFinite(Date.parse(bundle.approvedAt)) && Date.parse(bundle.approvedAt) <= Date.now(), 'Migration mapping requires named, non-future dated approval');
   requireThat(Array.isArray(bundle.sourceDisposition) && bundle.sourceDisposition.length > 0,'Source disposition is required, including omitted sources');
+  const dispositions=new Set();for(const item of bundle.sourceDisposition){requireThat(typeof item?.table==='string'&&item.table.trim()&&typeof item?.mode==='string'&&item.mode.trim()&&!dispositions.has(item.table),'Every source disposition requires one unique table and explicit mode');dispositions.add(item.table);}
   const seen = new Set();
   for (const row of bundle.rows) {
     requireThat(ident(row.tableId) && ident(row.id) && row.sourceSystem && row.sourceId !== undefined,'Invalid row identity');
@@ -21,7 +24,7 @@ export function validateBundle(bundle) {
   }
   const files = new Set();
   for (const file of bundle.files) {
-    requireThat(ident(file.bucketId) && ident(file.id) && typeof file.path === 'string' && /^[a-f0-9]{64}$/u.test(file.sha256),'Invalid file mapping');
+    requireThat(ident(file.bucketId) && ident(file.id) && typeof file.name === 'string' && file.name.trim().length > 0 && !/[\0]/u.test(file.name) && typeof file.path === 'string' && /^[a-f0-9]{64}$/u.test(file.sha256),'Invalid file mapping');
     const id = `${file.bucketId}/${file.id}`; requireThat(!files.has(id),'Duplicate target file'); files.add(id);
     requireThat(Array.isArray(file.permissions) && !file.permissions.some((p) => /any|guests/u.test(p)),'Explicit private file permissions required');
   }
@@ -88,7 +91,7 @@ export async function migrate(api,target,stateDirectory,mode) {
     save();
   }
   if (mode === 'files') for (const file of bundle.files) {
-    const bytes = readFileSync(safePath(directory,file.path)); requireThat(bytes.length <= 64*1024*1024 && hash(bytes) === file.sha256,'Source file checksum or size mismatch');
+    const bytes = readFileSync(safePath(directory,file.path)); requireThat(bytes.length <= MAX_MIGRATION_FILE_BYTES && hash(bytes) === file.sha256,'Source file checksum or size mismatch');
     const params = {bucketId:file.bucketId,fileId:file.id}; const id = `${file.bucketId}/${file.id}`;
     let actual = await optional(() => api.storage.getFile(params)); const pending=journal.files[id];
     if(pending?.status==='PENDING'){

@@ -1,11 +1,11 @@
 import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { hash, requireThat } from '../upgrades/launch-readiness-v2/runtime.mjs';
-import { actionState, applyExternalChecks } from './common.mjs';
+import { currentAction, applyExternalChecks } from './common.mjs';
 
 export async function runScenario(probe) {
-  const state=actionState('backup');
-  requireThat(state?.status==='SUCCEEDED' && state.candidate.commit===probe.input.candidate.commit,'Current-candidate backup action has not succeeded');
+  const state=currentAction('backup',probe.input);
+  requireThat(state.result?.restored===true,'Current-candidate backup action has not succeeded');
   const value=state.result;
   requireThat(value?.restored===true && value.probeRemoved===true,'Backup restore probe is incomplete');
   requireThat(hash(readFileSync(value.directory+'/index.enc'))===value.indexSha256,'Encrypted backup index changed');

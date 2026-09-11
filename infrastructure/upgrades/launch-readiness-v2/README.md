@@ -215,3 +215,13 @@ Cloudflare deployment now uses Worker Versions for both non-production and Produ
 The Production Shopify stage uses the approved `proinspect-2.myshopify.com` store/API version, additively reconciles the five required ProInspect order/refund webhook topics to the Production Cloudflare edge, and never deletes legacy subscriptions automatically. Google Calendar remains server-side and the Production runtime validation pins its OAuth callback to the Production Cloudflare edge while Terraform manages the Calendar API.
 
 A successful final stage returns `PRODUCTION_PROMOTED_AWAITING_OBSERVATION`. It does not retire legacy Strata/D1/R2/Firebase/Firestore sources.
+
+## V2.6 final release-candidate review
+
+The final release-candidate review closes several gaps that could otherwise produce misleading green evidence or incomplete deployment state. Permanent CI now validates all launch tests plus Development, Staging and Production Terraform roots. Backup and migration adapters support every currently configured Appwrite bucket up to a bounded 128 MiB. Migration rerun assertions now compare journals and live hashes instead of returning unconditional PASS.
+
+Google Cloud deployment replaces the complete runtime env/Secret Manager binding set so stale Firebase-era configuration cannot survive an Appwrite cutover. Cloudflare disables workers.dev exposure when a custom domain is configured. Production verification is bound to the recorded Google revision/image/traffic set and Cloudflare deployment/version, and re-audits Appwrite schema, runtime keys and the registered web domain.
+
+Appwrite schema installation now reconciles the approved web hostname and performs stricter drift checks for existing database, table and bucket definitions. Shopify Production webhook inventory is cursor-paginated, duplicate canonical subscriptions block release, and reconciliation remains additive rather than silently deleting legacy subscriptions. Appwrite MFA acceptance now exercises both TOTP and a recovery-code challenge.
+
+These controls still do not convert legacy worker business logic. The workers gate remains responsible for proving no Firestore writeback and real Appwrite-backed job execution before release review can pass.

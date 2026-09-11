@@ -24,11 +24,12 @@ export function buildConfiguration(target,commit) {
 export function runtimeArguments(target,service,commit) {
   const configured=target.google.runtimeBindings[service];
   requireThat(configured && configured.env && configured.secretRefs,'Review env and secretRefs for every service before deployment');
-  const vars={...configured.env,APP_VERSION:commit,APPWRITE_ENDPOINT:target.appwrite.endpoint,APPWRITE_PROJECT_ID:target.appwrite.projectId,APPWRITE_DATABASE_ID:target.appwrite.databaseId};
+  const vars={...configured.env,APP_ENV:target.google.environment,NODE_ENV:target.google.environment==='production'?'production':'development',GOOGLE_CLOUD_PROJECT:target.google.projectId,APP_VERSION:commit,APPWRITE_ENDPOINT:target.appwrite.endpoint,APPWRITE_PROJECT_ID:target.appwrite.projectId,APPWRITE_DATABASE_ID:target.appwrite.databaseId};
   for(const [key,value] of Object.entries(vars)) requireThat(/^[A-Z][A-Z0-9_]*$/u.test(key) && !/SECRET|TOKEN|PASSWORD|API_KEY/u.test(key) && typeof value === 'string' && !/[|\n\r]/u.test(value),'Unsafe runtime variable; use a Secret Manager reference');
   const secrets=Object.entries(configured.secretRefs).map(([key,value])=>{requireThat(/^[A-Z][A-Z0-9_]*$/u.test(key) && /^[A-Za-z0-9_-]+:[0-9]+$/u.test(value),'Use numeric, immutable Secret Manager versions');return `${key}=${value}`;});
   requireThat(configured.env.AUTH_PROVIDER === 'appwrite' && configured.env.APPWRITE_BACKEND_MODE === 'appwrite','Explicit Appwrite runtime configuration required');
-  return ['--update-env-vars',`^|^${Object.entries(vars).map(([k,v])=>`${k}=${v}`).join('|')}`,...(secrets.length ? ['--update-secrets',secrets.join(',')] : [])];
+  requireThat(secrets.some((value)=>value.startsWith('APPWRITE_API_KEY=')),'Every deployed service requires an immutable Appwrite runtime credential');
+  return ['--set-env-vars',`^|^${Object.entries(vars).map(([k,v])=>`${k}=${v}`).join('|')}`,...(secrets.length ? ['--set-secrets',secrets.join(',')] : ['--clear-secrets'])];
 }
 function trafficRoutes(traffic){const routes=(traffic??[]).filter((v)=>v.percent>0).map((v)=>{requireThat(v.revisionName,'Recorded traffic entry has no immutable revision');return `${v.revisionName}=${v.percent}`;});requireThat(routes.length,'No recorded prior traffic');return routes.join(',');}
 async function restoreTraffic(target,items){const errors=[];for(const item of [...items].reverse()){try{await run('gcloud',['run','services','update-traffic',item.name,'--project',target.google.projectId,'--region',target.google.region,'--to-revisions',trafficRoutes(item.traffic),'--quiet'],{live:true,sensitive:true});}catch(error){errors.push(`${item.name}:${error.message}`);}}requireThat(errors.length===0,`ROLLBACK_INCOMPLETE:${errors.join(';')}`);}
