@@ -74,8 +74,26 @@ jobs:
         run: |
           find infrastructure/upgrades/launch-readiness-v2 infrastructure/launch-scenarios -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check
 
-      - name: Full repository validation
-        run: npm run check
+      - name: Repository formatting check
+        run: npm run format:check
+
+      - name: Repository lint
+        run: npm run lint
+
+      - name: Repository typecheck
+        run: npm run typecheck
+
+      - name: Repository unit and rules tests
+        run: npm run test:run
+
+      - name: Appwrite schema generation and validation
+        run: npm run appwrite:validate
+
+      - name: Build all packages and applications
+        run: npm run build
+
+      - name: Verify built artifacts
+        run: npm run verify:dist
 
       - name: Launch regression tests
         run: npm run launch:test
