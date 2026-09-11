@@ -1,268 +1,219 @@
-# ProInspect production activation and release runbook
+# ProInspect Production release runbook
 
-## Release gate and architecture
+## Authority model
 
-Production traffic is `browser -> Cloudflare Worker/assets -> Cloud Run API -> named Firestore, Cloud Storage and Pub/Sub workers`. Cloudflare is the only public API edge. The API verifies the shared edge secret before protected-route identity, membership, agency and capability checks. Firestore rules remain deny-by-default for browser writes.
+Production is the unified ProInspect platform. The target authority stack is:
 
-Do not merge or deploy until the repository CI validation and browser jobs are green, the secret scan is clean, and the pull-request diff has been reviewed. A local or Cloud Build pass is useful evidence but does not replace a required GitHub status unless an explicit, candidate-specific repository-owner infrastructure waiver records why hosted checks could not execute and equivalent validation has passed. Deploy only an immutable commit from `main`.
+- **Appwrite**: authentication, MFA/session authority, database and file storage;
+- **Google Cloud**: Cloud Run API/workers, Artifact Registry, Cloud Build, Secret Manager, Monitoring/Logging and Google Calendar API;
+- **Cloudflare**: the public web/edge runtime and the only public path to the Google Cloud API;
+- **Shopify**: paid service/order intake and signed webhook delivery.
 
-The application excludes trust accounting, payment processing, rent collection and all other money handling.
+The standalone Strata D1/R2 estate and older Firebase/Firestore resources are migration or explicitly retained legacy sources only. They are not allowed to become the target authority for a migrated domain.
 
-## Identity Platform and TOTP MFA
+The Appwrite project `6a911f1e0031e90015b2`, Google project `business-plan-applicatio-17047`, and root Cloudflare Worker `proinspect` are explicitly prohibited targets for the new release controller. Do not repurpose them as a shortcut.
 
-Production has no public registration UI. Identity Platform must also enforce this at the service boundary: anonymous sign-in disabled and `client.permissions.disabledUserSignup=true`. Users are created only through audited invitation or administrator provisioning. Do not grant a default agency membership.
+## Release boundary
 
-Privileged roles are `super_admin`, `proinspect_admin` and `reviewer`. They require Firebase TOTP MFA. Only the signed `firebase.sign_in_second_factor` ID-token field is accepted as MFA evidence. A restored privileged session without that field is signed out and must complete a fresh MFA sign-in.
+The normal `launch:*` controller supports only Development and Staging. Production is deliberately handled by the separate `launch:release` controller.
 
-From Google Cloud Shell, in a reviewed checkout:
+A Production release is blocked unless the exact source candidate has fresh passing Development evidence and fresh passing Staging evidence for all 19 gates, including Staging migration, device acceptance, provider integration, rollback and restore rehearsal.
+
+The release controller also requires:
+
+- the exact approved commit on `main`;
+- dedicated Production Appwrite, Google Cloud and Cloudflare targets;
+- the approved ProInspect Shopify store and API version;
+- a named/datetime-bound release approval and change ticket;
+- an active release window no longer than eight hours;
+- named support/on-call ownership;
+- legacy write freeze approval;
+- final migration-delta approval;
+- a one-to-seven-day rollback window;
+- private Terraform, migration and backup paths outside the checkout;
+- immutable Secret Manager version references;
+- a fresh encrypted Production Appwrite database/file backup and isolated restore probe.
+
+`legacyRetirementApproved` is intentionally separate from release. A successful release does not delete D1/R2/Firestore/Firebase data or archive the standalone Strata repository.
+
+## Initial configuration
+
+From the exact reviewed `main` commit:
 
 ```bash
-export GOOGLE_CLOUD_PROJECT=business-plan-applicatio-17047
-export FIREBASE_PROJECT_ID=business-plan-applicatio-17047
-gcloud config set project "$GOOGLE_CLOUD_PROJECT"
-gcloud auth application-default login
 npm ci --ignore-scripts --no-audit --no-fund
-node scripts/enable-totp-mfa.mjs
+npm run launch:audit
+npm run launch:release -- init
 ```
 
-The script reads current project configuration, preserves unrelated factors/settings, accepts adjacent interval values from 0 through 10, and makes no update if TOTP is already correctly enabled. It never prints credentials or TOTP secrets.
+This creates the private Production release configuration under Git state. It is not committed. Open the path returned by the command and populate real Production identifiers, runtime bindings and private paths.
 
-Verify service-side sign-up controls without printing access tokens:
+The Production Appwrite project must use the Sydney endpoint and `proinspect_core` database, but it must not be the prohibited legacy project or Development/Staging project.
 
-```bash
-PROJECT_ID=business-plan-applicatio-17047
-curl --fail-with-body --silent --show-error \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-  "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT_ID/config"
-```
+Google Cloud must use `environment=production` and enable at least Cloud Run, Artifact Registry, Cloud Build, Secret Manager, Monitoring, Logging and `calendar-json.googleapis.com`. Terraform manages these APIs.
 
-The returned configuration must show TOTP enabled, anonymous sign-in disabled and user sign-up disabled. Terraform declares the same controls in `google_identity_platform_config.this`.
-
-Add the canonical Cloudflare production host `proinspect.delicate-dream-e4c9.workers.dev` and every final custom domain to Firebase Authentication authorised domains. The older `proinspect-property-inspection-platform.delicate-dream-e4c9.workers.dev` hostname is legacy and should be retired or redirected after canonical acceptance. For Google sign-in, register the Cloudflare/custom origin and the Firebase handler URI `https://business-plan-applicatio-17047.firebaseapp.com/__/auth/handler` in the OAuth client. If `authDomain` changes to a custom domain, register its `/__/auth/handler` URI as well.
-
-## App Check activation
-
-`VITE_FIREBASE_APP_CHECK_SITE_KEY` is intentionally external configuration. Do not commit a site key placeholder and do not set `REQUIRE_APP_CHECK=true` before acceptance succeeds.
-
-Owner activation sequence:
-
-1. Create or reuse a reCAPTCHA Enterprise score key whose web allow-list contains the Workers host and final custom domains.
-2. Register that key against the production Firebase web app in App Check.
-3. Supply the public key as `VITE_FIREBASE_APP_CHECK_SITE_KEY` to the Cloudflare build; keep `app_check_enforcement_mode=UNENFORCED` and `REQUIRE_APP_CHECK=false` while observing metrics.
-4. Validate sign-in, authenticated API acceptance, missing/invalid App Check rejection in a staging-enforced environment, Firestore and Storage access, MFA enrolment and MFA challenge.
-5. Set Terraform `app_check_enforcement_mode="ENFORCED"` and `require_api_app_check=true`, apply them together, and re-run the production smoke suite immediately. Terraform rejects API enforcement when no site key is configured.
-
-No App Check debug token may be used in production.
-
-## Named Firestore
-
-Production uses only:
+The API runtime must use:
 
 ```text
-ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60
-```
-
-The existing database is in `asia-southeast1`, independently of the
-`australia-southeast1` Cloud Run region. Set `firestore_location_id` explicitly
-when planning production; changing a Firestore database location requires
-replacement and is forbidden for this database.
-
-Set `FIRESTORE_DATABASE_ID` on the API, PDF, notification, dashboard, document and integration Cloud Run services, and on every migration/provisioning process. Those processes fail during production startup when it is missing. The AI worker does not access Firestore. The browser already uses the same ID through Firebase configuration.
-
-Terraform now declares the named database instead of `(default)`. Before the first apply against an existing project, import the existing database into the module address and inspect the plan; never allow Terraform to create, replace or delete a production database:
-
-```bash
-TERRAFORM_ROOT=infrastructure/terraform/environments/production
-TERRAFORM_AUDIT_DIR="$(mktemp -d /tmp/proinspect-terraform-audit.XXXXXX)"
-chmod 700 "$TERRAFORM_AUDIT_DIR"
-terraform -chdir="$TERRAFORM_ROOT" init \
-  -backend-config='<approved backend configuration>'
-terraform -chdir="$TERRAFORM_ROOT" import \
-  'module.environment.google_firestore_database.default' \
-  'projects/business-plan-applicatio-17047/databases/ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60'
-terraform -chdir="$TERRAFORM_ROOT" plan \
-  -out="$TERRAFORM_AUDIT_DIR/production.tfplan"
-terraform -chdir="$TERRAFORM_ROOT" show \
-  "$TERRAFORM_AUDIT_DIR/production.tfplan"
-```
-
-Treat the plan as sensitive and move required evidence to the owner's approved restricted store before removing the temporary directory. Stop if the plan proposes replacing or deleting Firestore, a service account, a secret, a bucket or a production Cloud Run service.
-
-## Dedicated API service account and IAM
-
-The final API runtime identity is:
-
-```text
-proinspect-api@business-plan-applicatio-17047.iam.gserviceaccount.com
-```
-
-Its minimum access, based on current API calls, is:
-
-- project `roles/datastore.user`;
-- project `roles/pubsub.publisher`;
-- project `roles/identityplatform.viewer` so Firebase Admin can perform ID-token revocation/user-state checks without Identity Platform administration rights;
-- `roles/storage.objectAdmin` on the upload and report buckets (the API creates, reads and deletes governed objects);
-- `roles/secretmanager.secretAccessor` only on `cloudflare-origin-secret` and `email-provider-config`;
-- `roles/iam.serviceAccountTokenCreator` on itself for V4 signed URLs.
-
-The API does not directly enqueue Cloud Tasks and does not require `roles/cloudtasks.enqueuer`. It must not receive Owner, Editor or `roles/identityplatform.admin`.
-
-Add or verify the dedicated account's unconditional bindings with:
-
-```bash
-PROJECT_ID=business-plan-applicatio-17047
-API_SA="proinspect-api@$PROJECT_ID.iam.gserviceaccount.com"
-gcloud iam service-accounts describe "$API_SA" --project="$PROJECT_ID"
-for ROLE in roles/datastore.user roles/pubsub.publisher roles/identityplatform.viewer; do
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:$API_SA" --role="$ROLE" --condition=None
-done
-for BUCKET in "$PROJECT_ID-uploads" "$PROJECT_ID-reports"; do
-  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
-    --member="serviceAccount:$API_SA" --role=roles/storage.objectAdmin
-done
-for SECRET in cloudflare-origin-secret email-provider-config; do
-  gcloud secrets add-iam-policy-binding "$SECRET" --project="$PROJECT_ID" \
-    --member="serviceAccount:$API_SA" --role=roles/secretmanager.secretAccessor
-done
-gcloud iam service-accounts add-iam-policy-binding "$API_SA" \
-  --project="$PROJECT_ID" --member="serviceAccount:$API_SA" \
-  --role=roles/iam.serviceAccountTokenCreator
-```
-
-First list the current conditional bindings and save the result as restricted release evidence:
-
-```bash
-gcloud projects get-iam-policy "$PROJECT_ID" \
-  --flatten='bindings[].members' \
-  --filter="bindings.members:serviceAccount:$API_SA" \
-  --format='table(bindings.role,bindings.condition.title,bindings.condition.expression)'
-```
-
-If an expired conditional binding exists, add the unconditional binding above first. Remove the old conditional binding only by copying its exact title/expression into a separately reviewed `gcloud projects remove-iam-policy-binding ... --condition=...` command. After validation, switch the service:
-
-```bash
-gcloud run services update api --project="$PROJECT_ID" \
-  --region=australia-southeast1 --service-account="$API_SA"
-```
-
-Confirm health, authenticated token verification, signed uploads, report/archive operations, notification callbacks and Pub/Sub dispatch before removing any role from the temporary broad runtime account. Terraform declares `proinspect-api` and its read-only Identity Platform viewer binding; if an older Terraform state contains `api@...`, import/move the existing dedicated account only after reviewing `terraform plan`.
-
-For the known existing production account and edge secret, first back up remote state, then reconcile their addresses before applying:
-
-```bash
-TERRAFORM_ROOT=infrastructure/terraform/environments/production
-TERRAFORM_AUDIT_DIR="$(mktemp -d /tmp/proinspect-terraform-audit.XXXXXX)"
-chmod 700 "$TERRAFORM_AUDIT_DIR"
-terraform -chdir="$TERRAFORM_ROOT" state pull \
-  > "$TERRAFORM_AUDIT_DIR/state-before-proinspect-api.json"
-chmod 600 "$TERRAFORM_AUDIT_DIR/state-before-proinspect-api.json"
-terraform -chdir="$TERRAFORM_ROOT" state show \
-  'module.environment.google_service_account.runtime["api"]'
-terraform -chdir="$TERRAFORM_ROOT" state show \
-  'module.environment.google_secret_manager_secret.runtime["cloudflare-origin-secret"]' || true
-```
-
-Treat the audit directory as sensitive, move its required evidence to the owner's approved restricted store, and securely remove the temporary copy after the change window. Never place state or plan files in the repository.
-
-If the API address still records `api@...`, remove only that state address (this does not delete the cloud account) and import the existing dedicated account. If the edge secret is absent from state, import it too:
-
-```bash
-terraform -chdir="$TERRAFORM_ROOT" state rm \
-  'module.environment.google_service_account.runtime["api"]'
-terraform -chdir="$TERRAFORM_ROOT" import \
-  'module.environment.google_service_account.runtime["api"]' \
-  'projects/business-plan-applicatio-17047/serviceAccounts/proinspect-api@business-plan-applicatio-17047.iam.gserviceaccount.com'
-terraform -chdir="$TERRAFORM_ROOT" import \
-  'module.environment.google_secret_manager_secret.runtime["cloudflare-origin-secret"]' \
-  'projects/business-plan-applicatio-17047/secrets/cloudflare-origin-secret'
-terraform -chdir="$TERRAFORM_ROOT" plan \
-  -out="$TERRAFORM_AUDIT_DIR/production.tfplan"
-terraform -chdir="$TERRAFORM_ROOT" show \
-  "$TERRAFORM_AUDIT_DIR/production.tfplan"
-```
-
-Do not run `terraform state rm` when the address already records `proinspect-api`, and do not apply a plan that deletes the former account or changes secret versions as a side effect. The old broad runtime identity is retired separately only after the dedicated identity passes production smoke checks.
-
-## Runtime configuration
-
-API requirements:
-
-```text
+AUTH_PROVIDER=appwrite
+APPWRITE_BACKEND_MODE=appwrite
 NODE_ENV=production
-GOOGLE_CLOUD_PROJECT=business-plan-applicatio-17047
-FIREBASE_PROJECT_ID=business-plan-applicatio-17047
-FIRESTORE_DATABASE_ID=ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60
-PROINSPECT_PROVIDER_ID=proinspect
-APP_VERSION=<full main commit SHA>
-CLOUDFLARE_ORIGIN_SECRET=<Secret Manager reference>
-REQUIRE_APP_CHECK=false until acceptance, then true
+PUBLIC_API_BASE_URL=<Production Cloudflare origin>
+WEB_APP_BASE_URL=<Production Cloudflare origin>
+SHOPIFY_API_VERSION=2026-07
+GOOGLE_CALENDAR_CLIENT_ID=<OAuth client ID>
+GOOGLE_CALENDAR_REDIRECT_URI=<Production Cloudflare origin>/api/v1/integrations/google-calendar/oauth/callback
+INTEGRATION_TOKEN_KEY_VERSION=v1
 ```
 
-Cloudflare runtime requires `GOOGLE_API_ORIGIN` and secret `CLOUDFLARE_ORIGIN_SECRET`. The two platforms must use the same secret. Never print it. Cloudflare builds require the public Firebase configuration and, after activation, `VITE_FIREBASE_APP_CHECK_SITE_KEY`.
+The API Secret Manager bindings must include immutable numeric versions for:
 
-## Post-merge release
+```text
+CLOUDFLARE_ORIGIN_SECRET
+SHOPIFY_WEBHOOK_SECRET
+GOOGLE_CALENDAR_CLIENT_SECRET
+INTEGRATION_TOKEN_ENCRYPTION_KEY
+INTEGRATION_STATE_SECRET
+AUTOMATION_RUNNER_SECRET
+```
 
-Run only after the release PR is merged and its required validation is green, or a candidate-specific owner infrastructure waiver has been recorded for demonstrably unavailable hosted runners after equivalent validation is green:
+The release credential stage creates/rotates the per-service `APPWRITE_API_KEY` versions. Do not put any secret value in the release JSON.
+
+## Shopify production target
+
+The canonical shop is `proinspect-2.myshopify.com` using Admin API `2026-07`. The Production webhook URI is derived from the approved agency ID and public Cloudflare origin:
+
+```text
+https://<production-origin>/api/v1/integrations/shopify/webhooks/<agencyId>
+```
+
+The release controller additively reconciles these topics and never deletes legacy subscriptions automatically:
+
+- `ORDERS_CREATE`
+- `ORDERS_PAID`
+- `ORDERS_UPDATED`
+- `ORDERS_CANCELLED`
+- `REFUNDS_CREATE`
+
+Legacy subscriptions are reported for later owner-reviewed retirement. Duplicate webhook deliveries remain subject to ProInspect idempotency handling.
+
+## Google Calendar production target
+
+The OAuth web-client redirect URI must exactly match the Production Cloudflare callback URI above. Google Calendar access remains server-side. The release package verifies the Calendar API is enabled; live Staging acceptance must already have proved OAuth, event create/reschedule/cancel, timezone handling, watch renewal and reconciliation before Production is permitted.
+
+## Production preflight
+
+Run read-only Production provider checks before the change window:
 
 ```bash
-git checkout main
-git pull --ff-only origin main
-MAIN_SHA="$(git rev-parse HEAD)"
-test -z "$(git status --porcelain)"
-bash scripts/google-cloud-release.sh business-plan-applicatio-17047 "$MAIN_SHA" australia-southeast1
-npm ci --ignore-scripts --no-audit --no-fund
-npm run cloudflare:ci
-npm run cloudflare:deploy
+npm run launch:release -- preflight
 ```
 
-The Cloud Build release updates `APP_VERSION` for the API. Verify both paths report the expected commit:
+Preflight revalidates fresh Development/Staging evidence and checks Appwrite project identity, Google Cloud project/APIs, an existing rollback-capable Cloudflare Worker deployment, Shopify identity/subscription inventory, the exact repository candidate and toolchain.
+
+Production Cloudflare must already have one settled active version before the release. The release process will not begin from a split/ambiguous deployment.
+
+## Production stage order
+
+Apply exactly one stage at a time. There is no `--stage all` Production shortcut.
+
+```text
+terraform
+credentials
+backup
+schema
+data
+files
+google
+cloudflare
+shopify
+verify
+```
+
+Each stage prints/requires an exact confirmation of the form:
+
+```text
+RELEASE:<stage>:<production-appwrite-project-id>:<approved-commit>
+```
+
+Example structure:
 
 ```bash
-gcloud run services describe api --project=business-plan-applicatio-17047 \
-  --region=australia-southeast1 --format='value(status.latestReadyRevisionName)'
-curl --fail-with-body --silent --show-error "$GOOGLE_API_ORIGIN/health"
-curl --fail-with-body --silent --show-error \
-  'https://proinspect.delicate-dream-e4c9.workers.dev/health'
+npm run launch:release -- apply --stage terraform \
+  --confirm RELEASE:terraform:<production-appwrite-id>:<full-commit-sha>
 ```
 
-## Production smoke checks
+Terraform still uses the launch package's reviewed plan-digest mechanism. The first Terraform attempt writes the private plan review and stops. Review it, export the exact `LAUNCH_TERRAFORM_PLAN_SHA256` digest, then rerun the same release stage.
 
-Use an interactive login or environment-provided short-lived ID/App Check tokens. Never place a password in a command, script, history or repository.
+The credential stage may change only private release metadata by recording Appwrite key IDs and immutable Secret Manager versions. The next required stage is therefore a fresh Production backup using that exact post-credential configuration.
 
-- Cloud Run and Cloudflare `/health` return 200 and the expected `APP_VERSION`.
-- A direct protected Cloud Run request returns `403 EDGE_REQUIRED`.
-- A Cloudflare-proxied authenticated request succeeds.
-- The provisioned provider administrator signs in without `MEMBERSHIP_INACTIVE`.
-- First privileged use enrols TOTP; the next login requires a TOTP challenge.
-- A wrong/expired code is rejected and retry remains available.
-- Dashboard, Properties, Inspection Jobs, Reports and Maintenance load after MFA.
-- User/admin routes follow the server membership role.
-- A cross-agency request fails; only a signed provider super administrator with explicit provider membership can select another agency.
-- An inspector never receives cached admin dashboard data after a downgrade.
-- Logout clears the session; restoring a password-only privileged session cannot bypass MFA.
+## Cloudflare candidate promotion
 
-## Rollback
+Cloudflare no longer uses a blind `wrangler deploy` for an existing release.
 
-Record the previous Cloud Run revision and Cloudflare deployment/version before release. If acceptance fails:
+The release path:
 
-```bash
-gcloud run revisions list --service=api --project=business-plan-applicatio-17047 \
-  --region=australia-southeast1
-gcloud run services update-traffic api --project=business-plan-applicatio-17047 \
-  --region=australia-southeast1 --to-revisions='<previous-revision>=100'
-npx wrangler deployments list
-npx wrangler rollback '<previous-deployment-id>'
+1. uploads the exact candidate as a Worker Version with an immutable release tag;
+2. creates a deployment containing the existing version at 100% and the candidate at 0%;
+3. sends smoke requests with `Cloudflare-Workers-Version-Overrides` pinned to the candidate version;
+4. verifies the candidate Worker version ID/tag, source commit, backend commit, seven portal shells, security headers and anonymous API denial;
+5. promotes the candidate to 100% only after those checks pass;
+6. records the previous deployment for exact rollback.
+
+A Production release requires an existing Worker/deployment. Development or Staging may bootstrap a new isolated Worker, but Production will not silently bootstrap one during the release window.
+
+## Backup, migration and recovery
+
+Before schema/data/file mutation, the release controller creates an AES-256-GCM encrypted Appwrite database/file backup outside the repository, performs consistency reads, restores into isolated probe resources, verifies checksums and permissions, and removes the probe resources.
+
+The backup must be less than one hour old for subsequent mutation and match the exact release configuration hash.
+
+Migration uses the approved SHA-256-pinned bundle and never overwrites conflicting targets. Interrupted writes are reconciled using the migration journal. Source records/files are never deleted by the installer. Database rollback remains a separately reviewed recovery operation because reverting code traffic and reverting business data are not equivalent acts.
+
+## Google Cloud release
+
+The six Production Cloud Run targets are:
+
+```text
+api
+pdf-worker
+notification-worker
+dashboard-worker
+document-worker
+integration-worker
 ```
 
-Rollback application images/traffic first. Do not roll back membership enforcement, MFA policy, edge protection, named Firestore selection, rules or IAM safeguards. If a data migration ran, follow its documented reconciliation/rollback plan rather than deleting production data.
+All images are built from the exact release commit. New revisions are created with no traffic and all six must become Ready before traffic begins switching. If the traffic phase fails, the deployment code attempts to restore services already switched to their recorded prior traffic configuration.
 
-## Current activation blockers
+Every service must run with Appwrite authority. The final verification checks the release SHA plus `AUTH_PROVIDER=appwrite` and `APPWRITE_BACKEND_MODE=appwrite`.
 
-The last accepted production release before the functional-QA remediation branch is based on `main` commit `dba7798af828ed387d59d0afaa5240d387303dc3`, with API revision `api-00007-nq9` and the canonical Cloudflare Worker `proinspect.delicate-dream-e4c9.workers.dev`. Edge health and bypass protection, TOTP MFA and the API's read-only Identity Platform access have been proven in production.
+## Final verification
 
-PR #57 (`fix/qa-operational-readiness`) contains the functional remediation identified by the 25 August 2026 browser QA pass. It must not be merged or deployed until the exact candidate passes the repository validation suite and the focused synthetic-data browser re-test documented in `docs/product/qa-operational-readiness-remediation.md`. GitHub-hosted Actions were still unable to start jobs when the PR was opened; red no-step statuses are infrastructure evidence, not test passes or code-test failures.
+Run the final `verify` release stage only after Shopify reconciliation succeeds. Its successful state is:
 
-App Check/reCAPTCHA activation, rotation/revocation for the historically exposed Firebase credential, retirement/redirect of the legacy Cloudflare hostname, normal GitHub Actions capacity and branch protection remain separate production-closeout actions.
+```text
+PRODUCTION_PROMOTED_AWAITING_OBSERVATION
+```
 
-The direct `xlsx` dependency was removed because its high-severity advisories have no npm fix; client and price-book imports now use a current XLSX reader plus a bounded CSV parser and reject legacy XLS input. `npm audit --omit=dev --audit-level=high` is a release gate. A remaining moderate `uuid` advisory is transitive through Firebase Admin's optional Google Storage 7.x dependency. The affected v3/v5/v6 buffer APIs are not called by ProInspect or the `teeny-request` path, which uses UUID v4. Do not force npm's suggested Firebase Admin downgrade; monitor Firebase Admin/Google Storage for a compatible upstream resolution.
+That wording is deliberate. Deployment is not the same thing as proving there was no latent operational problem five minutes later.
+
+Keep the declared support owner active for the rollback window and observe Cloud Run, Cloudflare, Appwrite, worker queues/retries, Shopify deliveries, Google Calendar reconciliation, notification delivery and backup/restore telemetry.
+
+## Traffic rollback
+
+The controller supports explicit traffic rollback for Cloudflare and Google Cloud:
+
+```text
+ROLLBACK:cloudflare:<production-appwrite-id>:<release-commit>
+ROLLBACK:google:<production-appwrite-id>:<release-commit>
+```
+
+Run only from the exact release candidate and after confirming the recorded deployment state. The rollback restores recorded traffic/revisions and does not alter Appwrite data.
+
+Data rollback is intentionally not automatic. Use the migration journal, immutable source snapshot, reconciliation report and encrypted backup to make a separately approved data-recovery decision.
+
+## Legacy retirement
+
+Do not retire the standalone Strata runtime, D1/R2, Firebase/Firestore compatibility data, prior workers/webhooks or rollback credentials merely because the release completed.
+
+Retirement requires an observation period, reconciliation sign-off, no unresolved queue/webhook discrepancies, confirmed Production backups, and explicit owner approval. Until then legacy systems remain read-only or otherwise isolated according to the cutover plan.
