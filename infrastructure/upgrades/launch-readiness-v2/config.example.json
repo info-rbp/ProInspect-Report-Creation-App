@@ -69,7 +69,16 @@
             },
             "secretRefs": {}
           }
-        }
+        },
+        "requiredApis": [
+          "run.googleapis.com",
+          "artifactregistry.googleapis.com",
+          "secretmanager.googleapis.com",
+          "cloudbuild.googleapis.com",
+          "monitoring.googleapis.com",
+          "logging.googleapis.com",
+          "calendar-json.googleapis.com"
+        ]
       },
       "cloudflare": {
         "accountId": null,
@@ -106,6 +115,14 @@
       "rollback": {
         "googleRecord": null,
         "cloudflareRecord": null
+      },
+      "acceptance": {
+        "evidenceDirectory": "/absolute-private-path/proinspect-acceptance/development",
+        "evidenceMaxAgeHours": 24,
+        "seedPasswordEnv": "APPWRITE_SEED_PASSWORD",
+        "shopifyWebhookSecretEnv": "SHOPIFY_WEBHOOK_SECRET",
+        "operationsRunbook": "docs/deployment/launch-operations-runbook.md",
+        "cutoverRunbook": "docs/deployment/launch-operations-runbook.md"
       }
     },
     "staging": {
@@ -174,7 +191,16 @@
             },
             "secretRefs": {}
           }
-        }
+        },
+        "requiredApis": [
+          "run.googleapis.com",
+          "artifactregistry.googleapis.com",
+          "secretmanager.googleapis.com",
+          "cloudbuild.googleapis.com",
+          "monitoring.googleapis.com",
+          "logging.googleapis.com",
+          "calendar-json.googleapis.com"
+        ]
       },
       "cloudflare": {
         "accountId": null,
@@ -211,11 +237,41 @@
       "rollback": {
         "googleRecord": null,
         "cloudflareRecord": null
+      },
+      "acceptance": {
+        "evidenceDirectory": "/absolute-private-path/proinspect-acceptance/staging",
+        "evidenceMaxAgeHours": 24,
+        "seedPasswordEnv": "APPWRITE_SEED_PASSWORD",
+        "shopifyWebhookSecretEnv": "SHOPIFY_WEBHOOK_SECRET",
+        "operationsRunbook": "docs/deployment/launch-operations-runbook.md",
+        "cutoverRunbook": "docs/deployment/launch-operations-runbook.md"
       }
     }
   },
   "adapters": {
     "appwrite": "infrastructure/upgrades/launch-readiness-v2/adapters/appwrite-cli.mjs"
   },
-  "scenarioFiles": {}
+  "scenarioFiles": {
+    "recovery": "infrastructure/launch-scenarios/recovery.mjs",
+    "identity": "infrastructure/launch-scenarios/identity.mjs",
+    "transactions": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "admin-client": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "inspection-reports": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "building-strata": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "resident-contractor": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "offers": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "offline": "infrastructure/launch-scenarios/evidence-gate.mjs",
+    "migration": "infrastructure/launch-scenarios/migration.mjs",
+    "files": "infrastructure/launch-scenarios/files.mjs",
+    "commerce-calendar": "infrastructure/launch-scenarios/commerce-calendar.mjs",
+    "workers": "infrastructure/launch-scenarios/workers.mjs",
+    "operations": "infrastructure/launch-scenarios/operations.mjs",
+    "rehearsal": "infrastructure/launch-scenarios/rehearsal.mjs"
+  },
+  "providerStack": [
+    "appwrite",
+    "google-cloud",
+    "cloudflare",
+    "shopify"
+  ]
 }

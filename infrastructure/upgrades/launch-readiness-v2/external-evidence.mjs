@@ -1,32 +1,4 @@
-import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const pkg='infrastructure/upgrades/launch-readiness-v2';
-const scenario='infrastructure/launch-scenarios';
-const read=(path)=>readFileSync(path,'utf8');
-const write=(path,value)=>writeFileSync(path,value);
-function prepend(path,line){const value=read(path);if(!value.startsWith(line))write(path,`${line}\n${value}`);}
-function replaceAll(path,before,after){const value=read(path);if(!value.includes(before))throw new Error(`Expected generated text missing in ${path}: ${before}`);write(path,value.split(before).join(after));}
-
-prepend(`${scenario}/common.mjs`,"import { Buffer } from 'node:buffer';");
-replaceAll(`${scenario}/common.mjs`,'AbortSignal.timeout(30000)','globalThis.AbortSignal.timeout(30000)');
-replaceAll(`${scenario}/common.mjs`,"import { hash, readJson, requireThat, safePath } from '../upgrades/launch-readiness-v2/runtime.mjs';","import { canonical, hash, readJson, requireThat, safePath } from '../upgrades/launch-readiness-v2/runtime.mjs';");
-replaceAll(`${scenario}/common.mjs`,'requireThat(JSON.stringify(bundle.targets) === JSON.stringify(providerTargets(input)),','requireThat(canonical(bundle.targets) === canonical(providerTargets(input)),');
-
-for(const name of ['commerce-calendar.mjs','identity.mjs','migration.mjs','operations.mjs','recovery.mjs','rehearsal.mjs','workers.mjs']) prepend(`${scenario}/${name}`,"import { Buffer } from 'node:buffer';");
-replaceAll(`${scenario}/identity.mjs`,'await delay(1000);',"const nextWindowDelay=30000-(Date.now()%30000)+750; await delay(nextWindowDelay);");
-replaceAll(`${scenario}/migration.mjs`,"import { hash, requireThat } from '../upgrades/launch-readiness-v2/runtime.mjs';","import { hash } from '../upgrades/launch-readiness-v2/runtime.mjs';");
-replaceAll(`${scenario}/migration.mjs`,"import { actionState, stateEnvironmentDirectory } from './common.mjs';","import { applyExternalChecks, stateEnvironmentDirectory } from './common.mjs';");
-replaceAll(`${scenario}/migration.mjs`,'structuredClone(bundle)','JSON.parse(JSON.stringify(bundle))');
-replaceAll(`${scenario}/migration.mjs`,'structuredClone(dupe.rows[0])','JSON.parse(JSON.stringify(dupe.rows[0]))');
-replaceAll(`${scenario}/migration.mjs`,"  probe.check('source_count', bundle.rows.length >= 0, true);\n",'');
-replaceAll(`${scenario}/migration.mjs`,"  const rollback = actionState('rollback-migration'); probe.check('rollback_rehearsal', rollback?.status==='SUCCEEDED' && rollback.result?.rolledBack===true, true);\n  probe.artifact('migration-live.json', Buffer.from(JSON.stringify({ rows:bundle.rows.length,dispositions:dispositions.length,counts,checksums,rollback:rollback?.completedAt ?? null,bundleDirectory:privateDirectory(target.migration.bundleDirectory) ? '[private]' : null })));","  const external=applyExternalChecks(probe,probe.input,['source_count','rollback_rehearsal'],['migration-rehearsal','automated-test']);\n  probe.artifact('migration-live.json', Buffer.from(JSON.stringify({ rows:bundle.rows.length,dispositions:dispositions.length,counts,checksums,rollbackObservedAt:external?.observedAt ?? null,bundleDirectory:privateDirectory(target.migration.bundleDirectory) ? '[private]' : null })));" );
-
-const tests=`${pkg}/tests/installer.test.mjs`;
-replaceAll(tests,"assert(!coverage.implemented.some((v)=>v.gate==='appwrite'));","assert(coverage.implemented.some((v)=>v.gate==='appwrite'));" );
-
-const evidenceCapture=`#!/usr/bin/env node
+#!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -53,7 +25,7 @@ function privateFile(path){requireThat(typeof path==='string'&&isAbsolute(path),
 export function validateCaptureInput(input,gate){
   requireThat(input.schemaVersion===1&&input.producer&&input.checks&&Array.isArray(input.artifacts)&&input.artifacts.length>0,'Invalid evidence capture input');
   requireThat(producerKinds.has(input.producer.kind)&&permittedKinds(gate).has(input.producer.kind),'Evidence producer kind is not permitted for this gate');
-  requireThat(typeof input.producer.command==='string'&&input.producer.command.trim().length>=3&&!/--(?:password|secret|token|api-?key)\\b/iu.test(input.producer.command),'Producer command is missing or contains credential arguments');
+  requireThat(typeof input.producer.command==='string'&&input.producer.command.trim().length>=3&&!/--(?:password|secret|token|api-?key)\b/iu.test(input.producer.command),'Producer command is missing or contains credential arguments');
   const observed=Date.parse(input.observedAt);requireThat(Number.isFinite(observed)&&observed<=Date.now()&&Date.now()-observed<=24*3600000,'Producer observation is stale or future-dated');
   const ids=Object.keys(input.checks);requireThat(ids.length>0&&ids.every((id)=>gate.checks.includes(id)&&input.checks[id]===true),'Evidence checks must be named gate assertions with true results');
   requireThat(new Set(ids).size===ids.length,'Duplicate evidence checks');
@@ -73,14 +45,3 @@ export function capture(argv=process.argv.slice(2)){
   atomicJson(resolve(evidenceRoot,gate.id+'.json'),bundle);return {status:'EVIDENCE_CAPTURED',gateId:gate.id,environment:args.env,candidateCommit:context.commit,checks:Object.keys(input.checks).length,artifacts:artifacts.length,path:resolve(evidenceRoot,gate.id+'.json')};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){try{console.log(JSON.stringify(capture(),null,2));}catch(error){console.error('EVIDENCE BLOCKED: '+redact(error.message));process.exitCode=1;}}
-`;
-write(`${pkg}/external-evidence.mjs`,evidenceCapture);
-
-const packageJson=JSON.parse(read('package.json'));packageJson.scripts['launch:evidence']='node infrastructure/upgrades/launch-readiness-v2/external-evidence.mjs';write('package.json',`${JSON.stringify(packageJson,null,2)}\n`);
-const readme=`${pkg}/README.md`;const evidenceDocs='\n\n## Controlled external evidence capture\n\nFor checks that require a physical device, a real migration export, operational monitoring or another machine-produced rehearsal, do not hand-author the final gate bundle. Create a private producer result containing schemaVersion 1, observedAt, producer.kind, producer.command, checks, artifactDirectory and artifacts, then run: npm run launch:evidence -- --env development --gate <gate> --input /absolute/private/result.json --approved-by "Release Owner". The capture command rejects Production, stale observations, credential-bearing commands/artifacts, unknown check IDs and unsupported producer types; it copies proof artifacts into the configured private acceptance directory and SHA-256 binds them to the exact candidate and Appwrite/Google Cloud/Cloudflare/Shopify targets.\n';if(!read(readme).includes('## Controlled external evidence capture'))write(readme,read(readme)+evidenceDocs);
-
-const integrity={algorithm:'sha256',files:{}};
-function files(prefix=''){return readdirSync(resolve(pkg,prefix),{withFileTypes:true}).flatMap((entry)=>{const name=prefix?`${prefix}/${entry.name}`:entry.name;return entry.isDirectory()?files(name):[name];}).sort();}
-for(const name of files().filter((name)=>name!=='integrity.json'))integrity.files[name]=createHash('sha256').update(readFileSync(resolve(pkg,name))).digest('hex');
-writeFileSync(resolve(pkg,'integrity.json'),`${JSON.stringify(integrity,null,2)}\n`);
-console.log('Normalized generated launch scenarios, added controlled evidence capture, and regenerated integrity.');

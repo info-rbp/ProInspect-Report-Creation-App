@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { resolve } from 'node:path';
-import { atomicJson, requireThat, run, validateConfig, redact, hash } from './runtime.mjs';
+import { atomicJson, requireThat, run, validateConfig, redact, hash, canonical, manifest } from './runtime.mjs';
 import { appwriteContext } from './appwrite-session.mjs';
 import { googleIdentity } from './actions/google.mjs';
 import { cfRequest } from './actions/cloudflare.mjs';
@@ -21,9 +21,17 @@ export async function shopifyAudit(target,{env=process.env,fetcher=fetch}={}) {
   return {shopId:result.data.shop.id,domain:target.domain,readOnly:true};
 }
 export async function appwriteAudit(target,directory) { const {project}=await appwriteContext(target,directory); return {projectId:project.$id,name:project.name}; }
+export async function googleAudit(target) {
+  await googleIdentity(target);
+  const services=JSON.parse(await run('gcloud',['services','list','--enabled','--project',target.projectId,'--format=json'],{live:true,sensitive:true}));
+  const enabled=services.map((v)=>v.config?.name).filter(Boolean).sort();
+  requireThat(target.requiredApis.every((id)=>enabled.includes(id)), 'Required Google Cloud API is not enabled');
+  return {projectId:target.projectId,region:target.region,requiredApis:[...target.requiredApis],enabledRequiredApis:target.requiredApis.filter((id)=>enabled.includes(id))};
+}
 export async function auditProviders(config,environment,directory) {
   const target=validateConfig(config,environment);const results={};const errors={};
-  const calls={appwrite:()=>appwriteAudit(target.appwrite,directory),google:()=>googleIdentity(target.google),cloudflare:async()=>{await cfRequest(target.cloudflare,'/workers/scripts');return {accountId:target.cloudflare.accountId,readOnly:true};},shopify:()=>shopifyAudit(target.shopify)};
+  requireThat(canonical([...config.providerStack].sort())===canonical([...manifest.providerStack].sort()),'Unexpected provider stack');
+  const calls={appwrite:()=>appwriteAudit(target.appwrite,directory),google:()=>googleAudit(target.google),cloudflare:async()=>{const scripts=await cfRequest(target.cloudflare,'/workers/scripts');return {accountId:target.cloudflare.accountId,workerName:target.cloudflare.workerName,workerPresent:scripts.some((s)=>s.id===target.cloudflare.workerName),readOnly:true};},shopify:()=>shopifyAudit(target.shopify)};
   for(const [id,call] of Object.entries(calls)) {try{results[id]=await call();}catch(error){errors[id]=redact(error.message);}}
   atomicJson(resolve(directory,'provider-inventory.json'),{results,errors});requireThat(!Object.keys(errors).length,`Provider checks failed: ${Object.keys(errors).join(', ')}; see private inventory`);return results;
 }

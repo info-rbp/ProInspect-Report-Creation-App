@@ -11,7 +11,8 @@ import { terraform } from './terraform.mjs';
 import { provisionCredentials } from './credentials.mjs';
 import { validateSource } from './source.mjs';
 import { replayShopify } from './shopify.mjs';
-export const installationOrder=['source','backup','schema','data','files','terraform','credentials','google','cloudflare','shopify'];
+import { seedAcceptanceFixtures } from './fixtures.mjs';
+export const installationOrder=['source','backup','schema','fixtures','data','files','terraform','credentials','google','cloudflare','shopify'];
 const scopes=['databases.read','databases.write','tables.read','tables.write','columns.read','columns.write','indexes.read','indexes.write','rows.read','rows.write','buckets.read','buckets.write','files.read','files.write','teams.read','teams.write'];
 export async function action(id,config,context,directory,stateDirectory,runId){
   const target=config.environments[context.environment];const app=target.appwrite;
@@ -21,6 +22,7 @@ export async function action(id,config,context,directory,stateDirectory,runId){
   if(id==='google')return deployGoogle(target,context,directory);
   if(id==='cloudflare')return deployCloudflare(target,context,directory);
   if(id==='shopify')return replayShopify(target,directory);
+  if(id==='fixtures')return withAppwrite(app,directory,[...scopes,'users.read','users.write'],(api)=>seedAcceptanceFixtures(api,target,context.environment));
   if(id==='rollback-google')return rollbackGoogle(target,target.rollback.googleRecord);
   if(id==='rollback-cloudflare')return rollbackCloudflare(target,target.rollback.cloudflareRecord);
   return withAppwrite(app,directory,scopes,async(api)=>{

@@ -65,7 +65,7 @@ export async function backup(api, target, directory, runId) {
     }
   }
   save('index.enc',Buffer.from(JSON.stringify(result)));
-  const receipt = {runId,directory:destination,indexSha256:hash(readFileSync(resolve(destination,'index.enc'))),tables:result.rows.length,rows:result.rows.reduce((n,r) => n+r.count,0),files:result.files.length,restored:false};
+  const receipt = {runId,directory:destination,indexSha256:hash(readFileSync(resolve(destination,'index.enc'))),tables:result.rows.length,rows:result.rows.reduce((n,r) => n+r.count,0),files:result.files.length,restored:false,encryption:'AES-256-GCM',databaseSnapshot:true,fileSnapshot:true,consistencyVerified:true};
   atomicJson(resolve(directory,'backup.json'),receipt); return receipt;
 }
 export async function restoreProbe(api, receipt, sourceTarget, directory) {
@@ -109,6 +109,6 @@ export async function restoreProbe(api, receipt, sourceTarget, directory) {
   }
   requireThat(cleanupErrors.length===0,`Restore probe cleanup failed: ${cleanupErrors.join('; ')}${primaryError ? `; verification error: ${primaryError.message}` : ''}`);
   if(primaryError)throw primaryError;
-  const result = {...receipt,restored:true,completedAt:new Date().toISOString(),restoreDatabaseId:databaseId,restoreBuckets:[...buckets.values()],probeRemoved:true};
+  const result = {...receipt,restored:true,completedAt:new Date().toISOString(),restoreDatabaseId:databaseId,restoreBuckets:[...buckets.values()],probeRemoved:true,checksumsVerified:true,permissionsVerified:true};
   atomicJson(resolve(directory,'backup.json'),result); return result;
 }

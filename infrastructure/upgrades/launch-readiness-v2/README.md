@@ -182,3 +182,23 @@ V2.3 adds crash reconciliation for migration journals, rollback-safe Appwrite ru
 A migration entry left `PENDING` by interruption is reconciled against the live row/file. An exact match is promoted to `CREATED`; an absent object is retried; a differing object blocks as `AMBIGUOUS_MIGRATION`. Runtime keys rotate before unsafe expiry or scope drift while still-valid previous keys are retained as approved `retiring` keys for rollback until expiry.
 
 Terraform now writes private `terraform-plan-review.json` and blocks with `TERRAFORM_REVIEW_REQUIRED:<digest>` until `LAUNCH_TERRAFORM_PLAN_SHA256` contains that exact reviewed digest. A changed plan is refused. Google deployment creates and verifies all six Cloud Run revisions with zero traffic before switching any service. A traffic-phase failure attempts restoration of already-switched services. Restore probes attempt cleanup of every owned temporary bucket/database even when verification fails.
+
+
+## V2.4 provider-complete acceptance package
+
+V2.4 explicitly fixes the target deployment provider stack to Appwrite, Google Cloud, Cloudflare and Shopify. Google Cloud acceptance includes Cloud Run, Artifact Registry, Cloud Build, Secret Manager, Monitoring, Logging and the Google Calendar API. The installer now has a non-production `fixtures` stage that seeds the deterministic synthetic persona/portal records required by both Development and Staging acceptance.
+
+Every live/device gate now resolves to executable scenario code. Recovery, identity, migration/file reconciliation, worker runtime configuration and Staging rehearsal have repository-native live checks. Complex business-workflow, device and operational checks use a private external-evidence contract that is bound to the exact commit/config/provider targets, limited to 24 hours, requires a named approval and machine/rehearsal producer metadata, and SHA-256 binds each proof artifact. Missing evidence fails the gate. Nothing converts absence into PASS.
+
+The intended authority stack is: Appwrite for identity/database/storage; Google Cloud for API/workers/builds/secrets/monitoring and Calendar API; Cloudflare for edge/web delivery; Shopify for paid service intake. D1/R2/Firestore/Firebase remain migration or explicitly legacy sources until their domains are cut over and are not treated as target deployment authorities.
+
+After schema installation, seed acceptance fixtures with:
+
+`npm run launch:install -- --stage fixtures --apply --confirm INSTALL:development:proinspect-development`
+
+Use the same synthetic fixture IDs in isolated Staging. Provider projects, secrets, workers and origins must remain different. Physical-device evidence and real migration-source exports still have to be produced outside CI because pretending a GitHub runner is an iPhone in a basement would be a particularly creative form of compliance theatre.
+
+
+## Controlled external evidence capture
+
+For checks that require a physical device, a real migration export, operational monitoring or another machine-produced rehearsal, do not hand-author the final gate bundle. Create a private producer result containing schemaVersion 1, observedAt, producer.kind, producer.command, checks, artifactDirectory and artifacts, then run: npm run launch:evidence -- --env development --gate <gate> --input /absolute/private/result.json --approved-by "Release Owner". The capture command rejects Production, stale observations, credential-bearing commands/artifacts, unknown check IDs and unsupported producer types; it copies proof artifacts into the configured private acceptance directory and SHA-256 binds them to the exact candidate and Appwrite/Google Cloud/Cloudflare/Shopify targets.

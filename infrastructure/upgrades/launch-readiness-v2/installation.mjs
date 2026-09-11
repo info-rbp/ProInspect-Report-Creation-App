@@ -16,7 +16,7 @@ export function actionPlan(args){
 export function actionPreflight(config,args){
   const target=approvedConfig(config,args.env);targetEnv(target);
   const selected=actionPlan(args);
-  if(selected.some((id)=>['backup','schema','data','files','terraform','credentials','google','cloudflare'].includes(id))){
+  if(selected.some((id)=>['backup','schema','fixtures','data','files','terraform','credentials','google','cloudflare'].includes(id))){
     privateDirectory(target.backup.directory);requireThat(target.backup.freezeApproved===true,'Freeze application and worker writes before changes');
   }
   if(selected.some((id)=>['data','files','rollback-migration'].includes(id)))loadBundle(target);

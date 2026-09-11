@@ -1,5 +1,5 @@
 import { isAbsolute, resolve } from 'node:path';
-import { manifest, root, readJson, safePath, git, requireThat } from './runtime.mjs';
+import { manifest, root, readJson, safePath, git, requireThat, canonical } from './runtime.mjs';
 export function validateConfig(config, environment, { complete = true } = {}) {
   requireThat(config.schemaVersion === 1 && ['development', 'staging'].includes(environment), 'Unsupported configuration/environment');
   const inspect = (value, parent = '') => {
@@ -10,6 +10,9 @@ export function validateConfig(config, environment, { complete = true } = {}) {
     }
   };
   inspect(config);
+  requireThat(canonical([...(config.providerStack ?? [])].sort())===canonical([...manifest.providerStack].sort()), 'Deployment provider stack must be exactly Appwrite, Google Cloud, Cloudflare and Shopify');
+  const scenarioGateIds=manifest.gates.filter((g)=>g.kind==='adapter' && g.id!=='appwrite').map((g)=>g.id);
+  requireThat(config.scenarioFiles && scenarioGateIds.every((id)=>typeof config.scenarioFiles[id]==='string'), 'Every non-Appwrite live/device gate requires a tracked scenario module');
   const target = config.environments?.[environment]; const app = target?.appwrite;
   requireThat(app?.endpoint === 'https://syd.cloud.appwrite.io/v1' && app.databaseId === 'proinspect_core', 'Unapproved Appwrite endpoint/database');
   requireThat(!manifest.prohibited.appwriteProjects.includes(app.projectId), 'Production Appwrite target is prohibited');
@@ -26,6 +29,10 @@ export function validateConfig(config, environment, { complete = true } = {}) {
   requireThat(target.google.environment === environment && /^[a-z]+-[a-z]+[0-9]$/u.test(target.google.region), 'Invalid Google environment/region');
   requireThat(Array.isArray(target.google.services) && new Set(target.google.services).size === target.google.services.length && ['api','pdf-worker','document-worker','notification-worker','dashboard-worker','integration-worker'].every((id) => target.google.services.includes(id)), 'Declare the six existing deployable services');
   requireThat(target.google.aiRuntime === 'api', 'Standalone AI deployment requires a reviewed entrypoint and infrastructure change');
+  requireThat(Array.isArray(target.google.requiredApis) && manifest.requiredGoogleApis.every((id)=>target.google.requiredApis.includes(id)), 'Google Cloud must enable the required Cloud Run/build/secrets/monitoring/logging/Calendar APIs');
+  requireThat(isAbsolute(target.acceptance?.evidenceDirectory ?? '') && Number.isInteger(target.acceptance?.evidenceMaxAgeHours) && target.acceptance.evidenceMaxAgeHours>=1 && target.acceptance.evidenceMaxAgeHours<=manifest.evidenceMaxAgeHours, 'Configure a private bounded acceptance evidence directory');
+  requireThat(/^[A-Z][A-Z0-9_]*$/u.test(target.acceptance.seedPasswordEnv ?? '') && /^[A-Z][A-Z0-9_]*$/u.test(target.acceptance.shopifyWebhookSecretEnv ?? ''), 'Acceptance secrets must be environment-variable references');
+  for(const path of [target.acceptance.operationsRunbook,target.acceptance.cutoverRunbook]) { requireThat(typeof path==='string','Acceptance runbook path missing'); safePath(root,path); git(['ls-files','--error-unmatch','--',path]); }
   requireThat(/^[a-f0-9]{32}$/iu.test(target.cloudflare.accountId), 'Invalid Cloudflare account');
   requireThat(/^[a-z0-9_-]+$/u.test(target.cloudflare.workerName) && (environment === 'development' ? /(?:^|[-_])(dev|development)(?:$|[-_])/u : /(?:^|[-_])staging(?:$|[-_])/u).test(target.cloudflare.workerName), 'Use an environment-specific Worker');
   for (const name of ['origin']) {

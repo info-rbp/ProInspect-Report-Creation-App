@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "launch-readiness-v2",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "baselineCommit": "a27cf680a858961f141a6421278f89f95d38a162",
   "baselinePackage": "infrastructure/upgrades/platform-completion-v1",
   "targetSchemaTables": 120,
@@ -22,5 +22,20 @@
       "proinspect"
     ]
   },
-  "evidenceMaxAgeHours": 24
+  "evidenceMaxAgeHours": 24,
+  "providerStack": [
+    "appwrite",
+    "google-cloud",
+    "cloudflare",
+    "shopify"
+  ],
+  "requiredGoogleApis": [
+    "run.googleapis.com",
+    "artifactregistry.googleapis.com",
+    "secretmanager.googleapis.com",
+    "cloudbuild.googleapis.com",
+    "monitoring.googleapis.com",
+    "logging.googleapis.com",
+    "calendar-json.googleapis.com"
+  ]
 }

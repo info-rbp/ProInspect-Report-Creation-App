@@ -26,7 +26,7 @@ export async function withAppwrite(target, directory, scopes, operation) {
     const sdk = await import('node-appwrite');
     const { InputFile } = await import('node-appwrite/file');
     const client = new sdk.Client().setEndpoint(target.endpoint).setProject(target.projectId).setKey(key.secret);
-    return await operation({ db: new sdk.TablesDB(client), storage: new sdk.Storage(client), teams: new sdk.Teams(client), Query: sdk.Query, InputFile });
+    return await operation({ db: new sdk.TablesDB(client), storage: new sdk.Storage(client), teams: new sdk.Teams(client), users: new sdk.Users(client), Query: sdk.Query, InputFile });
   } finally {
     if (key?.$id) {
       await cli(['project','delete-key','--project-id',target.projectId,'--key-id',key.$id]);
