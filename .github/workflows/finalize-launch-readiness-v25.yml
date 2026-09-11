@@ -18,19 +18,35 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.23.2
-      - name: Finalize v2.5 package metadata and integrity
+      - name: Finalize v2.5 package metadata
+        run: node .github/finalize-launch-v25.mjs
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Normalize repository formatting
+        run: npm run format
+      - name: Regenerate exact package integrity after formatting
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          const base='infrastructure/upgrades/launch-readiness-v2';
+          function files(prefix=''){return readdirSync(resolve(base,prefix),{withFileTypes:true}).flatMap((entry)=>{const name=prefix?`${prefix}/${entry.name}`:entry.name;return entry.isDirectory()?files(name):[name];}).sort();}
+          const index={algorithm:'sha256',files:{}};
+          for(const name of files().filter((name)=>name!=='integrity.json'))index.files[name]=createHash('sha256').update(readFileSync(resolve(base,name))).digest('hex');
+          writeFileSync(resolve(base,'integrity.json'),JSON.stringify(index,null,2)+'\n');
+          NODE
+      - name: Create candidate commit
         shell: bash
         run: |
           set -euo pipefail
-          node .github/finalize-launch-v25.mjs
           rm .github/finalize-launch-v25.mjs .github/workflows/finalize-launch-readiness-v25.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git diff --cached --check
           git commit -m 'feat(launch): complete deployment package v2.5'
-      - name: Install dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Syntax-check launch modules
         run: find infrastructure/upgrades/launch-readiness-v2 infrastructure/launch-scenarios -name '*.mjs' -print0 | xargs -0 -n1 node --check
       - name: Repository validation
