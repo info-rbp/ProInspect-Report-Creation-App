@@ -23,11 +23,11 @@ export async function provisionCredentials(config,environment,directory,configur
   const target=config.environments[environment];const policies=target.appwrite.runtimeCredentialPolicies;
   validateCredentialPolicy(policies,target.google.services);await googleIdentity(target.google);
   const {cli}=await appwriteContext(target.appwrite,directory);const created=[];const rotations=[];
-  const listKeys=async()=>{const result=await cli(['project','list-keys','--project-id',target.appwrite.projectId,'--limit','100']);requireThat(result.total===result.keys.length,'Key inventory truncated');return result.keys;};
+  const listKeys=async()=>{const result=await cli(['projects','list-keys','--project-id',target.appwrite.projectId,'--limit','100']);requireThat(result.total===result.keys.length,'Key inventory truncated');return result.keys;};
   let keys=await listKeys();let metadataChanged=false;
   for(const approved of [...target.appwrite.approvedRuntimeKeys]) {
     if(approved.status==='retiring' && Date.parse(approved.expire)<=Date.now()){
-      if(keys.some((key)=>key.$id===approved.id))await cli(['project','delete-key','--project-id',target.appwrite.projectId,'--key-id',approved.id]);
+      if(keys.some((key)=>key.$id===approved.id))await cli(['projects','delete-key','--project-id',target.appwrite.projectId,'--key-id',approved.id]);
       target.appwrite.approvedRuntimeKeys=target.appwrite.approvedRuntimeKeys.filter((item)=>item.id!==approved.id);keys=keys.filter((key)=>key.$id!==approved.id);metadataChanged=true;
     }
   }
@@ -43,10 +43,10 @@ export async function provisionCredentials(config,environment,directory,configur
     }
     await run('gcloud',['secrets','describe',policy.secretId,'--project',target.google.projectId,'--format=json'],{live:true,sensitive:true});
     const previous=approved && current && Date.parse(current.expire)>Date.now() ? {...approved,status:'retiring',retireAfter:current.expire} : null;
-    if(approved && current && !previous){await cli(['project','delete-key','--project-id',target.appwrite.projectId,'--key-id',approved.id]);keys=keys.filter((key)=>key.$id!==approved.id);}
+    if(approved && current && !previous){await cli(['projects','delete-key','--project-id',target.appwrite.projectId,'--key-id',approved.id]);keys=keys.filter((key)=>key.$id!==approved.id);}
     const expire=new Date(Date.now()+policy.expiryHours*3600000).toISOString();let key;let stored=false;let secretVersion=null;
     try {
-      key=await cli(['project','create-key','--project-id',target.appwrite.projectId,'--name',`launch-${environment}-${policy.service}-${Date.now()}`,'--scopes',...policy.scopes,'--expire',expire]);
+      key=await cli(['projects','create-key','--project-id',target.appwrite.projectId,'--name',`launch-${environment}-${policy.service}-${Date.now()}`,'--scopes',...policy.scopes,'--expire',expire]);
       requireThat(key.$id && key.secret,'Runtime key creation returned no credential');
       atomicJson(resolve(directory,`runtime-key-${policy.service}.json`),{id:key.$id,projectId:target.appwrite.projectId,expire,state:'CREATED_NOT_BOUND',previousKeyId:previous?.id ?? null});
       const version=JSON.parse(await run('gcloud',['secrets','versions','add',policy.secretId,'--project',target.google.projectId,'--data-file=-','--format=json'],{live:true,sensitive:true,input:key.secret}));
@@ -62,7 +62,7 @@ export async function provisionCredentials(config,environment,directory,configur
       atomicJson(resolve(directory,`runtime-key-${policy.service}.json`),{...result,state:previous?'ROTATED_BOUND_OLD_KEY_RETAINED':'BOUND'});
       keys.push({...key,secret:undefined});
     } finally {
-      if(key?.$id && !stored){await cli(['project','delete-key','--project-id',target.appwrite.projectId,'--key-id',key.$id]);if(secretVersion)await run('gcloud',['secrets','versions','disable',secretVersion,'--secret',policy.secretId,'--project',target.google.projectId,'--quiet'],{live:true,sensitive:true}).catch(()=>{});}
+      if(key?.$id && !stored){await cli(['projects','delete-key','--project-id',target.appwrite.projectId,'--key-id',key.$id]);if(secretVersion)await run('gcloud',['secrets','versions','disable',secretVersion,'--secret',policy.secretId,'--project',target.google.projectId,'--quiet'],{live:true,sensitive:true}).catch(()=>{});}
       if(key)key.secret=undefined;
     }
   }

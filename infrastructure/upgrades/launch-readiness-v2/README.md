@@ -225,3 +225,7 @@ Google Cloud deployment replaces the complete runtime env/Secret Manager binding
 Appwrite schema installation now reconciles the approved web hostname and performs stricter drift checks for existing database, table and bucket definitions. Shopify Production webhook inventory is cursor-paginated, duplicate canonical subscriptions block release, and reconciliation remains additive rather than silently deleting legacy subscriptions. Appwrite MFA acceptance now exercises both TOTP and a recovery-code challenge.
 
 These controls still do not convert legacy worker business logic. The workers gate remains responsible for proving no Firestore writeback and real Appwrite-backed job execution before release review can pass.
+
+### Appwrite console CLI surface correction
+
+V2.6 uses the authenticated Appwrite CLI `projects` service for project identity, platform and API-key administration. The singular `project` service is not used for these console-level operations. The installer still refuses a standing `APPWRITE_API_KEY` and creates only bounded temporary/runtime credentials after verifying the exact target project.
