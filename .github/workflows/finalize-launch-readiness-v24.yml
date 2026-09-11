@@ -1,0 +1,45 @@
+name: Finalize launch readiness v2.4
+on:
+  push:
+    branches: [feat/launch-readiness-installation-v2]
+permissions:
+  contents: write
+concurrency:
+  group: finalize-launch-readiness-v24
+  cancel-in-progress: false
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - name: Materialize provider acceptance implementation
+        run: node .github/apply-launch-acceptance-v24.mjs
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Syntax-check live scenarios
+        run: find infrastructure/launch-scenarios -name '*.mjs' -print0 | xargs -0 -n1 node --check
+      - name: Repository static validation
+        run: npm run check
+      - name: Installer regression tests
+        run: node --test infrastructure/upgrades/launch-readiness-v2/tests/installer.test.mjs
+      - name: Package integrity audit
+        run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs audit
+      - name: Clean-checkout dry run
+        run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs plan
+      - name: Commit verified v2.4 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/apply-launch-acceptance-v24.mjs .github/workflows/finalize-launch-readiness-v24.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(launch): complete four-provider acceptance package v2.4'
+          git push origin HEAD:feat/launch-readiness-installation-v2
