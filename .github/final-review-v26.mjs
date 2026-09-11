@@ -3,14 +3,11 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const read=(p)=>readFileSync(p,'utf8');
 const write=(p,v)=>writeFileSync(p,v);
 function replaceOne(path,before,after){const value=read(path);if(!value.includes(before))throw new Error(`Missing patch anchor: ${path}`);if(value.indexOf(before)!==value.lastIndexOf(before))throw new Error(`Non-unique patch anchor: ${path}`);write(path,value.replace(before,after));}
-function replaceAllChecked(path,before,after,min=1){const value=read(path);const count=value.split(before).length-1;if(count<min)throw new Error(`Expected at least ${min} anchors in ${path}, got ${count}`);write(path,value.split(before).join(after));}
 
 const pkg='infrastructure/upgrades/launch-readiness-v2';
 
-// Pin the operator runtime to the exact version required by the manifest.
 write('.nvmrc','22.23.2\n');
 
-// Runtime authority scanner: Appwrite must be the data/file authority for deployable workers.
 mkdirSync(`${pkg}/actions`,{recursive:true});
 write(`${pkg}/actions/runtime-authority.mjs`, `import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
@@ -34,10 +31,10 @@ export function inspectWorkerAuthority(base=root,services=workerServices){
     const packagePath=resolve(base,'apps',service,'package.json');
     if(!existsSync(packagePath)){violations.push({service,path:relative(base,packagePath),reason:'missing-package'});continue;}
     const manifest=JSON.parse(readFileSync(packagePath,'utf8'));
-    for(const name of Object.keys(manifest.dependencies??{}))if(forbiddenRuntimePackages.has(name))violations.push({service,path:relative(base,packagePath),reason:`forbidden-runtime-dependency:${name}`});
+    for(const name of Object.keys(manifest.dependencies??{}))if(forbiddenRuntimePackages.has(name))violations.push({service,path:relative(base,packagePath),reason:'forbidden-runtime-dependency:'+name});
     for(const path of walk(resolve(base,'apps',service,'src')).filter(isRuntimeSource)){
       const source=readFileSync(path,'utf8');
-      for(const rule of forbiddenSource)if(rule.pattern.test(source))violations.push({service,path:relative(base,path),reason:`forbidden-runtime-import:${rule.id}`});
+      for(const rule of forbiddenSource)if(rule.pattern.test(source))violations.push({service,path:relative(base,path),reason:'forbidden-runtime-import:'+rule.id});
     }
   }
   return {authority:'appwrite',services:[...services],violations,pass:violations.length===0};
@@ -60,7 +57,7 @@ export function inspectTerraformAuthority(base=root){
   return {authority:'google-compute-only',violations,pass:violations.length===0};
 }
 export function inspectTargetAuthority(base=root,services=workerServices){const workers=inspectWorkerAuthority(base,services);const terraform=inspectTerraformAuthority(base);return {workers,terraform,pass:workers.pass&&terraform.pass};}
-export function assertTargetAuthority(base=root,services=workerServices){const result=inspectTargetAuthority(base,services);requireThat(result.pass,`BLOCKED_LEGACY_RUNTIME: ${[...result.workers.violations,...result.terraform.violations].map((v)=>`${v.path}:${v.reason}`).join('; ')}`);return result;}
+export function assertTargetAuthority(base=root,services=workerServices){const result=inspectTargetAuthority(base,services);const detail=[...result.workers.violations,...result.terraform.violations].map((v)=>v.path+':'+v.reason).join('; ');requireThat(result.pass,'BLOCKED_LEGACY_RUNTIME: '+detail);return result;}
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const report=inspectTargetAuthority(root);console.log(JSON.stringify(report,null,2));if(!report.pass)process.exitCode=1;
@@ -87,12 +84,10 @@ replaceOne(`${pkg}/actions/google.mjs`,
 `    const archive=resolve(workspace,'source.tar');const source=resolve(workspace,'source');await run('git',['archive','--format=tar','--output',archive,context.commit],{cwd:root});await run('mkdir',['-p',source]);await run('tar',['-xf',archive,'-C',source]);atomicJson(resolve(workspace,'cloudbuild.json'),cloud);`,
 `    const archive=resolve(workspace,'source.tar');const source=resolve(workspace,'source');await run('git',['archive','--format=tar','--output',archive,context.commit],{cwd:root});await run('mkdir',['-p',source]);await run('tar',['-xf',archive,'-C',source]);const authority=assertTargetAuthority(source);atomicJson(resolve(directory,'runtime-authority.json'),authority);atomicJson(resolve(workspace,'cloudbuild.json'),cloud);`);
 
-// Validate runtime binding structure before reaching the deploy stage.
 replaceOne(`${pkg}/configuration.mjs`,
 `  requireThat(target.google.aiRuntime === 'api', 'Standalone AI deployment requires a reviewed entrypoint and infrastructure change');`,
 `  requireThat(target.google.aiRuntime === 'api', 'Standalone AI deployment requires a reviewed entrypoint and infrastructure change');\n  for (const service of ['api','pdf-worker','notification-worker','dashboard-worker','document-worker','integration-worker']) { const binding=target.google.runtimeBindings?.[service]; requireThat(binding?.env?.AUTH_PROVIDER==='appwrite'&&binding.env.APPWRITE_BACKEND_MODE==='appwrite'&&binding.secretRefs&&typeof binding.secretRefs==='object'&&!Array.isArray(binding.secretRefs), \`Missing Appwrite runtime binding for \${service}\`); }`);
 
-// Terraform owns landing zones; release tooling owns immutable revision env/secrets.
 replaceOne('infrastructure/terraform/modules/environment/main.tf',
 `    api_datastore   = { account = "api", role = "roles/datastore.user" }\n    api_pubsub      = { account = "api", role = "roles/pubsub.publisher" }`,
 `    api_pubsub      = { account = "api", role = "roles/pubsub.publisher" }`);
@@ -126,11 +121,9 @@ replaceOne('infrastructure/terraform/modules/environment/pdf_delivery.tf',
 `# The API also creates immutable archive manifests after finalisation, so it has\n# create-only access to the report bucket in addition to its existing viewer role.\n`,
 `# Final report files and archive manifests remain in Appwrite Storage. Google Cloud\n# provides compute and delivery only; it is not an application-file authority.\n`);
 
-// Manifest + operator commands.
 const manifest=JSON.parse(read(`${pkg}/manifest.json`));manifest.version='2.6.0';manifest.runtimeAuthority={applicationData:'appwrite',applicationFiles:'appwrite',googleRole:'compute-queues-secrets-monitoring-calendar',workerServices:['pdf-worker','notification-worker','dashboard-worker','document-worker','integration-worker']};write(`${pkg}/manifest.json`,JSON.stringify(manifest,null,2)+'\n');
 const packageJson=JSON.parse(read('package.json'));packageJson.scripts['launch:authority']=`node ${pkg}/actions/runtime-authority.mjs`;write('package.json',JSON.stringify(packageJson,null,2)+'\n');
 
-// Regression coverage for the newly hardened boundaries.
 write(`${pkg}/tests/authority.test.mjs`, `import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { mkdtempSync,mkdirSync,writeFileSync,rmSync } from 'node:fs';\nimport { tmpdir } from 'node:os';\nimport { resolve } from 'node:path';\nimport { inspectWorkerAuthority } from '../actions/runtime-authority.mjs';\nimport { buildConfiguration,runtimeArguments } from '../actions/google.mjs';\n\ntest('worker authority scanner rejects Firebase runtime dependencies/imports',()=>{const base=mkdtempSync(resolve(tmpdir(),'pi-authority-'));try{mkdirSync(resolve(base,'apps/pdf-worker/src'),{recursive:true});writeFileSync(resolve(base,'apps/pdf-worker/package.json'),JSON.stringify({dependencies:{'firebase-admin':'1.0.0'}}));writeFileSync(resolve(base,'apps/pdf-worker/src/index.ts'),\"import { getFirestore } from 'firebase-admin/firestore';\\n\");const report=inspectWorkerAuthority(base,['pdf-worker']);assert.equal(report.pass,false);assert(report.violations.some((v)=>v.reason.includes('firebase-admin')));}finally{rmSync(base,{recursive:true,force:true});}});\ntest('worker authority scanner accepts Appwrite-only runtime',()=>{const base=mkdtempSync(resolve(tmpdir(),'pi-authority-'));try{mkdirSync(resolve(base,'apps/pdf-worker/src'),{recursive:true});writeFileSync(resolve(base,'apps/pdf-worker/package.json'),JSON.stringify({dependencies:{'@pcr/appwrite-server':'*'}}));writeFileSync(resolve(base,'apps/pdf-worker/src/index.ts'),\"import { createAppwriteServerServices } from '@pcr/appwrite-server';\\n\");assert.equal(inspectWorkerAuthority(base,['pdf-worker']).pass,true);}finally{rmSync(base,{recursive:true,force:true});}});\ntest('Google build uses the provisioned Cloud Build service account',()=>{const target={projectId:'proinspect-development-gcp',region:'australia-southeast1',imageRepository:'pcr-containers',services:['api']};const build=buildConfiguration(target,'a'.repeat(40));assert.equal(build.serviceAccount,'projects/proinspect-development-gcp/serviceAccounts/cloud-build@proinspect-development-gcp.iam.gserviceaccount.com');});\ntest('Cloud Run deployment updates rather than clears Terraform service defaults',()=>{const target={google:{environment:'development',projectId:'proinspect-development-gcp',runtimeBindings:{api:{env:{AUTH_PROVIDER:'appwrite',APPWRITE_BACKEND_MODE:'appwrite'},secretRefs:{APPWRITE_API_KEY:'appwrite-api:1'}}}},appwrite:{endpoint:'https://syd.cloud.appwrite.io/v1',projectId:'proinspect-development',databaseId:'proinspect_core'}};const args=runtimeArguments(target,'api','a'.repeat(40));assert(args.includes('--update-env-vars'));assert(args.includes('--update-secrets'));assert(!args.includes('--set-env-vars'));assert(!args.includes('--clear-secrets'));});\n`);
 
 const marker='## Final deployment hardening v2.6';
