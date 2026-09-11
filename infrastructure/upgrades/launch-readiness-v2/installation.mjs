@@ -8,6 +8,7 @@ import { action,installationOrder,requireBackup } from './actions/index.mjs';
 import { scorecard } from './evidence.mjs';
 import { loadBundle } from './actions/migrate.mjs';
 import { validateCredentialPolicy } from './actions/credentials.mjs';
+import { checkStage,recordCheckpoint,recordRuntimeIssue } from './operator.mjs';
 export function actionPlan(args){
   const allowed=[...installationOrder,'rollback-google','rollback-cloudflare','rollback-migration'];
   const selected=args.stage && args.stage!=='all'?[args.stage]:args.command==='deploy'?['google','cloudflare']:installationOrder;
@@ -22,14 +23,17 @@ export function actionPreflight(config,args){
   if(selected.some((id)=>['data','files','rollback-migration'].includes(id)))loadBundle(target);
   if(selected.includes('credentials'))validateCredentialPolicy(target.appwrite.runtimeCredentialPolicies,target.google.services);
   if(selected.includes('terraform'))for(const path of [target.terraform.variablesFile,target.terraform.backendFile])requireThat(typeof path==='string' && existsSync(path),'Private Terraform input missing');
-  if(selected.includes('shopify'))requireThat(target.shopify.replay?.syntheticOnly===true,'Configure isolated synthetic Shopify replay fixtures before installation');
   return target;
 }
 export async function install(config,args,directory){
-  const selected=actionPlan(args);const target=actionPreflight(config,args);await toolchain(true);
+  const selected=actionPlan(args);let current=config;let context=candidate(current,args.env);const first=selected.find((id)=>installationOrder.includes(id));
+  if(first){
+    const readiness=await checkStage(current,context,directory,first,{live:true});
+    requireThat(!readiness.blocked,`STAGE_BLOCKED ${first}: ${readiness.issues.filter((item)=>item.severity==='BLOCKER').map((item)=>item.id).join(', ')}`);
+  }
+  const target=actionPreflight(current,args);await toolchain(true);
   const kind=args.command==='deploy'?'DEPLOY':'INSTALL';
   requireThat(args.apply && args.confirm===`${kind}:${args.env}:${target.appwrite.projectId}`,'Incorrect exact installation confirmation');
-  let current=config;let context=candidate(current,args.env);
   if(args.env==='staging' && selected.some((id)=>!id.startsWith('rollback-'))){
     const developmentContext=candidate(current,'development');
     requireThat(sameSourceCandidate(context,developmentContext),'Staging and Development must use the same immutable source candidate');
@@ -38,10 +42,14 @@ export async function install(config,args,directory){
   }
   requireThat(!args.resume,'Use --resume for verification only. Retry an explicit installation --stage after inspecting remote state');
   const session=resolve(directory,args.env,'installations',randomUUID());mkdirSync(session,{recursive:true,mode:0o700});
-  await auditProviders(current,args.env,session);
+  try{await auditProviders(current,args.env,session);}catch(error){recordRuntimeIssue(directory,context,'preflight','PROVIDERS',error,target);throw error;}
   const results=[];
   for(const id of selected){
     assertClean();requireThat(git(['rev-parse','HEAD'])===context.commit,'Source candidate changed');
+    if(installationOrder.includes(id)){
+      const readiness=await checkStage(current,context,directory,id,{live:true});
+      requireThat(!readiness.blocked,`STAGE_BLOCKED ${id}: ${readiness.issues.filter((item)=>item.severity==='BLOCKER').map((item)=>item.id).join(', ')}`);
+    }
     const folder=resolve(session,id);mkdirSync(folder,{recursive:true,mode:0o700});
     const statePath=resolve(directory,args.env,'actions',`${id}.json`);
     if(id!=='source' && !id.startsWith('rollback-')){
@@ -53,18 +61,27 @@ export async function install(config,args,directory){
     try{
       const result=await action(id,current,context,folder,directory,randomUUID());
       assertClean();requireThat(git(['rev-parse','HEAD'])===context.commit,'Action changed source');
-      atomicJson(statePath,{status:'SUCCEEDED',id,candidate:context,folder,result,completedAt:new Date().toISOString()});
+      const completed={status:'SUCCEEDED',id,candidate:context,folder,result,completedAt:new Date().toISOString()};
+      atomicJson(statePath,completed);
+      if(installationOrder.includes(id))recordCheckpoint(directory,context,id,completed);
       results.push({id,result});console.log(`SUCCEEDED ${id}; acceptance remains separate`);
       if(result.configurationChanged){
         current=readJson(resolve(directory,'config.json'));context=candidate(current,args.env);
         const sourceFolder=resolve(session,'post-credential-source');mkdirSync(sourceFolder,{recursive:true,mode:0o700});
         const sourceResult=await action('source',current,context,sourceFolder,directory,randomUUID());
-        atomicJson(resolve(directory,args.env,'actions','source.json'),{status:'SUCCEEDED',id:'source',candidate:context,folder:sourceFolder,result:sourceResult,completedAt:new Date().toISOString()});
+        const sourceCompleted={status:'SUCCEEDED',id:'source',candidate:context,folder:sourceFolder,result:sourceResult,completedAt:new Date().toISOString()};
+        atomicJson(resolve(directory,args.env,'actions','source.json'),sourceCompleted);recordCheckpoint(directory,context,'source',sourceCompleted);
         const backupFolder=resolve(session,'post-credential-backup');mkdirSync(backupFolder,{recursive:true,mode:0o700});
         const backupResult=await action('backup',current,context,backupFolder,directory,randomUUID());
-        atomicJson(resolve(directory,args.env,'actions','backup.json'),{status:'SUCCEEDED',id:'backup',candidate:context,folder:backupFolder,result:backupResult,completedAt:new Date().toISOString()});
+        const backupCompleted={status:'SUCCEEDED',id:'backup',candidate:context,folder:backupFolder,result:backupResult,completedAt:new Date().toISOString()};
+        atomicJson(resolve(directory,args.env,'actions','backup.json'),backupCompleted);recordCheckpoint(directory,context,'backup',backupCompleted);
+        recordCheckpoint(directory,context,id,completed);
       }
-    }catch(error){atomicJson(statePath,{status:'FAILED',id,candidate:context,folder,error:redact(error.message),inspectBeforeRetry:true});throw error;}
+    }catch(error){
+      atomicJson(statePath,{status:'FAILED',id,candidate:context,folder,error:redact(error.message),inspectBeforeRetry:true});
+      if(installationOrder.includes(id))recordRuntimeIssue(directory,context,id,'ACTION_FAILED',error,current.environments[args.env]);
+      throw error;
+    }
   }
-  return {status:'INSTALLED_NOT_LAUNCH_READY',results:results.map((r)=>r.id),session,sourceRoot:root};
+  return {status:'INSTALLED_NOT_LAUNCH_READY',results:results.map((r)=>r.id),session,sourceRoot:root,guidedExecution:true};
 }
