@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
+import { resolve } from 'node:path';
 
 const root=process.cwd();
 const read=(path)=>readFileSync(resolve(root,path),'utf8');
@@ -75,7 +75,9 @@ operator=replaceOnce(operator,checkNeedle,checkReplacement,'stage target/freeze 
 const preflightNeedle="  await collect(issues, { environment, stage: 'preflight', code: 'CONFIGURATION', target }, () => approvedConfig(config, environment));\n  await collect(issues, { environment, stage: 'preflight', code: 'TOOLCHAIN', target }, () => toolchain(all));";
 const preflightReplacement="  await collect(issues, { environment, stage: 'preflight', code: 'CONFIGURATION', target }, () => approvedConfig(config, environment));\n  await collect(issues, { environment, stage: 'preflight', code: 'TARGET_ENV', target }, () => targetEnv(target));\n  await collect(issues, { environment, stage: 'preflight', code: 'FREEZE_NOT_APPROVED', target }, () => requireThat(target?.backup?.freezeApproved === true, 'Application and worker write freeze is not approved for installation'));\n  await collect(issues, { environment, stage: 'preflight', code: 'TOOLCHAIN', target }, () => toolchain(all));";
 operator=replaceOnce(operator,preflightNeedle,preflightReplacement,'preflight target/freeze check');
-operator=operator.replace("  const issues = [];\n  const states = selected.map((id) => {","  const issues = [];\n  if (git(['status', '--porcelain', '--untracked-files=normal'])) issues.push(makeIssue({ environment, stage: 'reconcile', code: 'WORKTREE_DIRTY', target, message: 'Commit or move source changes before trusting checkpoint reconciliation.' }));\n  const states = selected.map((id) => {");
+const reconcileNeedle="  const target = config.environments[environment];\n  const issues = [];\n  const states = selected.map((id) => {";
+const reconcileReplacement="  const target = config.environments[environment];\n  const issues = [];\n  if (git(['status', '--porcelain', '--untracked-files=normal'])) issues.push(makeIssue({ environment, stage: 'reconcile', code: 'WORKTREE_DIRTY', target, message: 'Commit or move source changes before trusting checkpoint reconciliation.' }));\n  const states = selected.map((id) => {";
+operator=replaceOnce(operator,reconcileNeedle,reconcileReplacement,'reconciliation dirty-tree check');
 operator=operator.replace("  readFileSync;\n  // writeFileSync is intentionally loaded lazily so report generation stays private and simple.\n  return import('node:fs').then(({ writeFileSync, renameSync }) => {\n    writeFileSync(temp, text, { mode: 0o600 });\n    renameSync(temp, path);\n    atomicJson(resolve(directory, environment, 'operator-report.json'), { schemaVersion: 1, environment, generatedAt: new Date().toISOString(), candidate: context || null, command: meta.command || null, result: meta.result || null, error: meta.error ? redact(meta.error) : null, counts, reportSha256: hash(text) });\n    return path;\n  });","  writeFileSync(temp, text, { mode: 0o600 });\n  renameSync(temp, path);\n  atomicJson(resolve(directory, environment, 'operator-report.json'), { schemaVersion: 1, environment, generatedAt: new Date().toISOString(), candidate: context || null, command: meta.command || null, result: meta.result || null, error: meta.error ? redact(meta.error) : null, counts, reportSha256: hash(text) });\n  return path;");
 write(operatorPath,operator);
 
