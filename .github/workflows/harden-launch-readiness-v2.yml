@@ -1,0 +1,40 @@
+name: Harden launch-readiness v2
+on:
+  push:
+    branches: [feat/launch-readiness-installation-v2]
+permissions:
+  contents: write
+concurrency:
+  group: harden-launch-readiness-v2
+  cancel-in-progress: false
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+      - name: Apply reviewed hardening patch
+        run: node .github/harden-launch-readiness-v2.mjs
+      - name: Installer regression tests
+        run: node --test infrastructure/upgrades/launch-readiness-v2/tests/installer.test.mjs
+      - name: Package integrity audit
+        run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs audit
+      - name: Clean-checkout dry run
+        run: node infrastructure/upgrades/launch-readiness-v2/cli.mjs plan
+      - name: Commit hardened package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/harden-launch-readiness-v2.mjs
+          rm .github/workflows/harden-launch-readiness-v2.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix(launch): harden deployment readiness package v2.2'
+          git push origin HEAD:feat/launch-readiness-installation-v2
