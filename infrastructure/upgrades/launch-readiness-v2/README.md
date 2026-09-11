@@ -41,13 +41,14 @@ The package cannot truthfully pre-build business behavior that remains incomplet
 
 ## Prerequisites
 
-Use VS Code on macOS/Linux or WSL. The live path is pinned to Node `22.23.2`, npm `10.9.2`, Appwrite CLI `27.2.1` and Wrangler `4.120.0`. Terraform, `gcloud`, Appwrite CLI and optionally `codex` must already be authenticated in the VS Code terminal. Required cloud API tokens/credentials are supplied by environment variables or provider login, not saved in the repository.
+Use VS Code on macOS/Linux or WSL. The live path is pinned to Node `22.23.2`, npm `10.9.8`, Appwrite CLI `27.2.1` and Wrangler `4.120.0`. Terraform, `gcloud`, Appwrite CLI and optionally `codex` must already be authenticated in the VS Code terminal. Required cloud API tokens/credentials are supplied by environment variables or provider login, not saved in the repository.
 
 The repository itself requires `node-appwrite`; the Appwrite server package already depends on it. Do not run the live installer until `npm ci` has completed successfully.
 
 ## First activation
 
 ```bash
+nvm use
 npm ci --ignore-scripts --no-audit --no-fund
 npm run launch:audit
 npm run launch:plan
@@ -93,6 +94,7 @@ npm run launch:install -- --stage source --apply --confirm INSTALL:development:p
 export LAUNCH_BACKUP_KEY='<64 hex chars from your secret manager>'
 npm run launch:install -- --stage backup --apply --confirm INSTALL:development:proinspect-development
 npm run launch:install -- --stage schema --apply --confirm INSTALL:development:proinspect-development
+npm run launch:install -- --stage fixtures --apply --confirm INSTALL:development:proinspect-development
 npm run launch:install -- --stage data --apply --confirm INSTALL:development:proinspect-development
 npm run launch:install -- --stage files --apply --confirm INSTALL:development:proinspect-development
 npm run launch:install -- --stage terraform --apply --confirm INSTALL:development:proinspect-development
@@ -220,7 +222,7 @@ A successful final stage returns `PRODUCTION_PROMOTED_AWAITING_OBSERVATION`. It 
 
 The final release-candidate review closes several gaps that could otherwise produce misleading green evidence or incomplete deployment state. Permanent CI now validates all launch tests plus Development, Staging and Production Terraform roots. Backup and migration adapters support every currently configured Appwrite bucket up to a bounded 128 MiB. Migration rerun assertions now compare journals and live hashes instead of returning unconditional PASS.
 
-Google Cloud deployment replaces the complete runtime env/Secret Manager binding set so stale Firebase-era configuration cannot survive an Appwrite cutover. Cloudflare disables workers.dev exposure when a custom domain is configured. Production verification is bound to the recorded Google revision/image/traffic set and Cloudflare deployment/version, and re-audits Appwrite schema, runtime keys and the registered web domain.
+Google Cloud deployment updates only launch-owned runtime env/Secret Manager bindings while preserving Terraform-provisioned service defaults. The source-authority audit prevents stale Firebase-era application data paths from surviving an Appwrite cutover. Cloudflare disables workers.dev exposure when a custom domain is configured. Production verification is bound to the recorded Google revision/image/traffic set and Cloudflare deployment/version, and re-audits Appwrite schema, runtime keys and the registered web domain.
 
 Appwrite schema installation now reconciles the approved web hostname and performs stricter drift checks for existing database, table and bucket definitions. Shopify Production webhook inventory is cursor-paginated, duplicate canonical subscriptions block release, and reconciliation remains additive rather than silently deleting legacy subscriptions. Appwrite MFA acceptance now exercises both TOTP and a recovery-code challenge.
 
@@ -241,3 +243,29 @@ Cloud Build now runs under the Terraform-provisioned cloud-build service account
 V2.6 also aligns the operator toolchain with Node 22.23.2 as distributed in CI: npm 10.9.8 and Terraform 1.15.0 are now explicit live-doctor requirements. This prevents a clean Node selection from failing solely because the manifest pinned an older bundled npm.
 
 V2.6 includes a legacy Terraform state transition: any previously tracked ProInspect asset/report buckets are forgotten with `destroy = false`, preserving source data for migration/reconciliation, while only the specifically named obsolete Datastore/storage IAM grants may be revoked. All other Terraform deletions and replacements remain blocked. The checked-in tfvars examples contain no Firebase/Firestore target configuration and the Production example no longer references the prohibited legacy Google project.
+
+
+## V2.7 guided operator execution
+
+V2.7 adds a fail-closed operator layer for interactive VS Code installation. Run `npm run launch:preflight -- --all` before mutation to collect all safely detectable configuration, toolchain, provider, authority, migration, Terraform, credential and Shopify problems in one pass. Findings are persisted privately as BLOCKER, WARNING or ADVISORY issues under the repository Git metadata directory; each issue carries an explicit remediation and recheck command. BLOCKERs prevent the affected mutation stage. WARNINGs prevent release confidence where applicable but do not masquerade as installation failures. ADVISORYs are operator information. There is deliberately no ignore-blockers switch.
+
+Use `npm run launch:check -- --stage <stage>` immediately before each explicit installation stage. Successful mutation stages create candidate-bound checkpoint receipts. If source/configuration changes later, `npm run launch:reconcile -- --stage all` classifies checkpoints as CURRENT, INVALIDATED or RECHECK_REQUIRED. Durable Appwrite schema/data/file state is never discarded merely because source changed; it must be reconciled through the normal idempotent/drift-guarded stage. This makes fix-as-you-go execution safe without pretending that a stale receipt is current.
+
+`npm run launch:issues` displays the persistent open issue ledger. `npm run launch:repair -- --safe` is intentionally limited to deterministic local maintenance: configured private-directory creation, repository formatting and Appwrite generated-source refresh. It never commits, resets, discards operator changes, approves Terraform, changes provider resources or performs a cloud mutation. Any resulting diff must be reviewed, tested and explicitly committed before continuing.
+
+The Development/Staging fixture stage now bootstraps an isolated `dev_agency` Shopify connection and deterministic service mapping. Shopify replay configuration is validated during normal configuration checks, the webhook URL is constructed from the synthetic agency rather than accepted as an arbitrary path, the checked-in fixture contains no customer/contact/payment-secret data, invalid HMAC is denied, and the second identical delivery must prove idempotent short-circuiting. The replay never creates or changes a Shopify order.
+
+Every stateful launch command writes a private operator report at `$(git rev-parse --git-path proinspect-launch-v2)/<environment>/operator-report.md` where possible. The report includes open issues, remediation/recheck commands, checkpoint status and recorded action status; it contains no secret values and is not acceptance evidence.
+
+Recommended Development workflow:
+
+```bash
+npm run launch:preflight -- --all
+npm run launch:issues
+npm run launch:check -- --stage source
+# Run only the explicit stage after STAGE_READY. If it fails, fix the issue, then:
+npm run launch:reconcile -- --stage all
+npm run launch:check -- --stage <failed-stage>
+```
+
+The mutating `--stage all` path remains available for already-rehearsed environments, but guided first installation should use one explicit stage at a time. Production remains outside this workflow and continues to require the separate `launch:release` controller.

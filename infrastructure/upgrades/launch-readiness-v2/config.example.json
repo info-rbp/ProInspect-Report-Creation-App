@@ -90,7 +90,13 @@
       "shopify": {
         "domain": "proinspect-2.myshopify.com",
         "apiVersion": "2026-07",
-        "tokenEnv": "SHOPIFY_ADMIN_ACCESS_TOKEN"
+        "tokenEnv": "SHOPIFY_ADMIN_ACCESS_TOKEN",
+        "replay": {
+          "syntheticOnly": true,
+          "agencyId": "dev_agency",
+          "secretEnv": "SHOPIFY_WEBHOOK_SECRET",
+          "fixture": "infrastructure/upgrades/launch-readiness-v2/fixtures/shopify-order-paid.synthetic.json"
+        }
       },
       "web": {
         "origin": null,
@@ -212,7 +218,13 @@
       "shopify": {
         "domain": "proinspect-2.myshopify.com",
         "apiVersion": "2026-07",
-        "tokenEnv": "SHOPIFY_ADMIN_ACCESS_TOKEN"
+        "tokenEnv": "SHOPIFY_ADMIN_ACCESS_TOKEN",
+        "replay": {
+          "syntheticOnly": true,
+          "agencyId": "dev_agency",
+          "secretEnv": "SHOPIFY_WEBHOOK_SECRET",
+          "fixture": "infrastructure/upgrades/launch-readiness-v2/fixtures/shopify-order-paid.synthetic.json"
+        }
       },
       "web": {
         "origin": null,

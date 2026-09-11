@@ -17,7 +17,6 @@ export async function main(argv=process.argv.slice(2)){
   verifyIntegrity();validateManifest();
   const directory=stateRoot(root);const configPath=resolve(directory,'config.json');let config=null;let context=null;let release;
   const report=async(result,error=null)=>{
-    if(!existsSync(directory))return;
     try{await writeOperatorReport(directory,args.env,context,{command:args.command,result:result?.status ?? result?.decision ?? null,error:error?.message ?? null});}catch{/* Operator reporting must never hide the primary command result. */}
   };
   try{

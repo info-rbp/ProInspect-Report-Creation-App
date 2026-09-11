@@ -2,6 +2,41 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "ProInspect: Reconcile checkpoints",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:reconcile",
+        "--",
+        "--stage",
+        "all"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Open launch issues",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:issues"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "ProInspect: Full Development preflight",
+      "type": "process",
+      "command": "npm",
+      "args": [
+        "run",
+        "launch:preflight",
+        "--",
+        "--all"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "ProInspect: Audit launch package",
       "type": "process",
       "command": "npm",

@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { approvedConfig, privateDirectory, validateShopifyReplay } from './configuration.mjs';
+import { approvedConfig, privateDirectory, targetEnv, validateShopifyReplay } from './configuration.mjs';
 import { adapterCoverage } from './verification.mjs';
 import { auditProviders, toolchain } from './providers.mjs';
 import { inspectTargetAuthority } from './actions/runtime-authority.mjs';
@@ -42,6 +42,12 @@ function issueId(environment, stage, code) {
 function commandSuffix(environment) {
   return environment === 'development' ? '' : ` --env ${environment}`;
 }
+function recheckCommand(environment, stage) {
+  const suffix = commandSuffix(environment);
+  if (stage === 'preflight') return `npm run launch:preflight --${suffix} --all`;
+  if (stage === 'reconcile') return `npm run launch:reconcile --${suffix} --stage all`;
+  return `npm run launch:check --${suffix} --stage ${stage}`;
+}
 function defaultRemediation(code, stage, environment, target) {
   const suffix = commandSuffix(environment);
   const appwriteId = target?.appwrite?.projectId || 'APPWRITE_PROJECT_ID';
@@ -50,7 +56,7 @@ function defaultRemediation(code, stage, environment, target) {
   if (code === 'POLICY') return 'Complete and commit the tracked launch policy approvals, then repeat preflight.';
   if (code === 'TOOLCHAIN') return 'Run nvm use, npm ci --ignore-scripts --no-audit --no-fund, then repeat the command.';
   if (code === 'PROVIDERS') return 'Authenticate the Appwrite, gcloud, Wrangler and Shopify credentials in this VS Code terminal and verify the configured non-production target IDs.';
-  if (code === 'AUTHORITY') return `Run npm run launch:authority, repair the reported Appwrite-authority source paths, then repeat: npm run launch:check --${suffix} --stage ${stage}`;
+  if (code === 'AUTHORITY') return `Run npm run launch:authority, repair the reported Appwrite-authority source paths, then repeat: ${recheckCommand(environment, stage)}`;
   if (code === 'MIGRATION_BUNDLE') return 'Create the reviewed private migration bundle and SHA-256 pin it in config before retrying this stage.';
   if (code === 'TERRAFORM_INPUT') return 'Configure existing absolute private Terraform tfvars/backend files outside the repository.';
   if (code === 'CREDENTIAL_POLICY') return 'Configure minimum per-service Appwrite runtimeCredentialPolicies and matching Google Secret Manager bindings.';
@@ -64,11 +70,10 @@ function defaultRemediation(code, stage, environment, target) {
   if (code === 'CHECKPOINT_INVALIDATED') return `Re-run npm run launch:check --${suffix} --stage ${stage}, then re-run the explicit ${stage} installation stage after review.`;
   if (code === 'CHECKPOINT_RECHECK') return `Reconcile and explicitly re-run ${stage}; the installer will use its idempotent/drift guards rather than assuming prior remote state is current.`;
   if (code === 'BACKUP_NOT_CURRENT') return `Repeat the backup stage for this exact candidate: npm run launch:install --${suffix} --stage backup --apply --confirm INSTALL:${environment}:${appwriteId}`;
-  return `Re-run npm run launch:check --${suffix} --stage ${stage} after correcting the reported condition.`;
+  return `Correct the reported condition, then re-run: ${recheckCommand(environment, stage)}`;
 }
 export function makeIssue({ environment, stage = 'preflight', code, severity = 'BLOCKER', message, target, remediation, recheck }) {
   requireThat(ISSUE_SEVERITIES.includes(severity), 'Unknown issue severity');
-  const suffix = commandSuffix(environment);
   return {
     id: issueId(environment, stage, code),
     code,
@@ -76,7 +81,7 @@ export function makeIssue({ environment, stage = 'preflight', code, severity = '
     severity,
     message: redact(message),
     remediation: remediation || defaultRemediation(code, stage, environment, target),
-    recheck: recheck || `npm run launch:check --${suffix} --stage ${stage}`,
+    recheck: recheck || recheckCommand(environment, stage),
   };
 }
 function ledgerPath(directory, environment) {
@@ -185,6 +190,10 @@ export async function checkStage(config, context, directory, stage, { live = fal
   const issues = [];
   await collect(issues, { environment, stage, code: 'WORKTREE_DIRTY', target }, () => requireThat(!git(['status', '--porcelain', '--untracked-files=normal']), 'Repository working tree is not clean'));
   await collect(issues, { environment, stage, code: 'CONFIGURATION', target }, () => approvedConfig(config, environment));
+  await collect(issues, { environment, stage, code: 'TARGET_ENV', target }, () => targetEnv(target));
+  if (['backup','schema','fixtures','data','files','terraform','credentials','google','cloudflare','shopify'].includes(stage)) {
+    await collect(issues, { environment, stage, code: 'FREEZE_NOT_APPROVED', target }, () => requireThat(target?.backup?.freezeApproved === true, 'Application and worker write freeze is not approved'));
+  }
   if (stage === 'source' || stage === 'google') {
     await collect(issues, { environment, stage, code: 'AUTHORITY', target }, () => {
       const authority = inspectTargetAuthority(root);
@@ -225,6 +234,8 @@ export async function preflight(config, context, directory, { all = false } = {}
   const issues = [];
   await collect(issues, { environment, stage: 'preflight', code: 'WORKTREE_DIRTY', target }, () => requireThat(!git(['status', '--porcelain', '--untracked-files=normal']), 'Repository working tree is not clean'));
   await collect(issues, { environment, stage: 'preflight', code: 'CONFIGURATION', target }, () => approvedConfig(config, environment));
+  await collect(issues, { environment, stage: 'preflight', code: 'TARGET_ENV', target }, () => targetEnv(target));
+  await collect(issues, { environment, stage: 'preflight', code: 'FREEZE_NOT_APPROVED', target }, () => requireThat(target?.backup?.freezeApproved === true, 'Application and worker write freeze is not approved for installation'));
   await collect(issues, { environment, stage: 'preflight', code: 'TOOLCHAIN', target }, () => toolchain(all));
   await collect(issues, { environment, stage: 'preflight', code: 'AUTHORITY', target }, () => {
     const authority = inspectTargetAuthority(root);
@@ -253,7 +264,7 @@ export async function preflight(config, context, directory, { all = false } = {}
   }
   issues.push(makeIssue({ environment, stage: 'preflight', code: 'PHYSICAL_DEVICE_EVIDENCE', severity: 'WARNING', target, message: 'Physical-device/offline acceptance cannot be completed before deployment and remains required before release review.', remediation: 'Collect the controlled device evidence after Development deployment using npm run launch:evidence.', recheck: `npm run launch:status --${commandSuffix(environment)}` }));
   issues.push(makeIssue({ environment, stage: 'preflight', code: 'PRODUCTION_LOCKED', severity: 'ADVISORY', target, message: 'Production remains intentionally unavailable through launch:install; release uses the separate human-gated launch:release controller.', remediation: 'No action during Development installation.', recheck: 'npm run launch:release -- plan' }));
-  const ledger = syncIssueLedger(directory, environment, context, issues, ['*']);
+  const ledger = syncIssueLedger(directory, environment, context, issues, ['preflight']);
   const open = ledger.issues.filter((item) => item.status === 'OPEN');
   const blockers = open.filter((item) => item.severity === 'BLOCKER').length;
   return { status: blockers ? 'PREFLIGHT_BLOCKED' : open.some((item) => item.severity === 'WARNING') ? 'PREFLIGHT_PASS_WITH_WARNINGS' : 'PREFLIGHT_PASS', blocked: blockers > 0, environment, counts: issueSummary(directory, environment), issues: open, checkpoints: checkpointSummary(directory, context) };
@@ -264,6 +275,7 @@ export function reconcile(config, context, directory, stage = 'all') {
   requireThat(selected.every((id) => installationOrder.includes(id)), 'Unknown reconciliation stage');
   const target = config.environments[environment];
   const issues = [];
+  if (git(['status', '--porcelain', '--untracked-files=normal'])) issues.push(makeIssue({ environment, stage: 'reconcile', code: 'WORKTREE_DIRTY', target, message: 'Commit or move source changes before trusting checkpoint reconciliation.' }));
   const states = selected.map((id) => {
     const checkpoint = readCheckpoint(directory, environment, id);
     const evaluation = checkpointEvaluation(checkpoint, context);
@@ -272,12 +284,12 @@ export function reconcile(config, context, directory, stage = 'all') {
     return { stage: id, ...evaluation };
   });
   const scanned = selected;
-  syncIssueLedger(directory, environment, context, issues, scanned);
-  const blocked = states.some((item) => ['INVALIDATED', 'RECHECK_REQUIRED'].includes(item.status));
+  syncIssueLedger(directory, environment, context, issues, ['reconcile', ...scanned]);
+  const blocked = issues.some((item) => item.severity === 'BLOCKER') || states.some((item) => ['INVALIDATED', 'RECHECK_REQUIRED'].includes(item.status));
   atomicJson(resolve(directory, environment, 'reconciliation.json'), { schemaVersion: 1, environment, candidate: context, observedAt: new Date().toISOString(), states, safeToContinue: !blocked });
   return { status: blocked ? 'RECONCILIATION_REQUIRED' : 'SAFE_TO_CONTINUE', blocked, states, issues };
 }
-export async function safeRepair(config, environment, directory) {
+export async function safeRepair(config, environment) {
   requireThat(!git(['status', '--porcelain', '--untracked-files=normal']), 'Safe repair starts only from a clean worktree so operator changes cannot be overwritten');
   const target = config.environments[environment];
   const created = [];
@@ -337,14 +349,10 @@ export function writeOperatorReport(directory, environment, context, meta = {}) 
   const temp = `${path}.tmp`;
   const text = lines.join('\n');
   requireThat(!/(?:shpat_|Bearer\s+\S+)/u.test(text), 'Operator report unexpectedly resembles a credential-bearing document');
-  readFileSync;
-  // writeFileSync is intentionally loaded lazily so report generation stays private and simple.
-  return import('node:fs').then(({ writeFileSync, renameSync }) => {
-    writeFileSync(temp, text, { mode: 0o600 });
-    renameSync(temp, path);
-    atomicJson(resolve(directory, environment, 'operator-report.json'), { schemaVersion: 1, environment, generatedAt: new Date().toISOString(), candidate: context || null, command: meta.command || null, result: meta.result || null, error: meta.error ? redact(meta.error) : null, counts, reportSha256: hash(text) });
-    return path;
-  });
+  writeFileSync(temp, text, { mode: 0o600 });
+  renameSync(temp, path);
+  atomicJson(resolve(directory, environment, 'operator-report.json'), { schemaVersion: 1, environment, generatedAt: new Date().toISOString(), candidate: context || null, command: meta.command || null, result: meta.result || null, error: meta.error ? redact(meta.error) : null, counts, reportSha256: hash(text) });
+  return path;
 }
 
 export function operatorStateDigest(directory, context) {

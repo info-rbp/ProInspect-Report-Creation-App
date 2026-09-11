@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { appwriteCollectionReadData, appwriteCollectionWriteData } from './appwriteCollectionTransforms.js';
 import {
   Query,
   createAppwriteServerServices,
@@ -40,7 +41,7 @@ const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   agencyMemberships: 'agency_memberships', siteMemberships: 'site_memberships', clients: 'clients',
   clientContacts: 'client_contacts', clientApprovals: 'client_approvals', properties: 'properties', buildings: 'buildings',
   propertyLevels: 'property_levels', propertyAreas: 'property_areas', serviceDefinitions: 'service_definitions',
-  serviceRequests: 'service_requests', serviceRequestItems: 'service_request_items', shopifyServiceMappings: 'shopify_service_mappings',
+  serviceRequests: 'service_requests', serviceRequestItems: 'service_request_items', shopifyServiceMappings: 'shopify_service_mappings', inspectionServiceMappings: 'shopify_service_mappings',
   inspectionRequests: 'inspection_requests', inspectionJobs: 'inspection_jobs', inspectionTemplates: 'inspection_templates',
   inspectionTemplateVersions: 'inspection_template_versions', inspections: 'inspections', inspectionSections: 'inspection_sections',
   observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',
@@ -66,7 +67,7 @@ const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   reportDistributions: 'report_distributions', reportAcknowledgements: 'report_acknowledgements', reportRecipientResponses: 'report_recipient_responses',
   reportSupersessions: 'report_supersessions', tenantCommunications: 'tenant_communications', tenancyDocuments: 'tenancy_documents',
   tenantPortalGrants: 'tenant_portal_grants', auditEvents: 'audit_events', integrationConnections: 'integration_connections',
-  integrationEvents: 'integration_events', integrationDeliveries: 'integration_deliveries', integrationExceptions: 'integration_exceptions',
+  integrationEvents: 'integration_events', integrationDeliveries: 'integration_deliveries', integrationExceptions: 'integration_exceptions', integrationSyncExceptions: 'integration_exceptions',
   integrationOutbox: 'integration_outbox', evidenceFiles: 'evidence_files', portalEntitlements: 'portal_entitlements',
   contractorCompliance: 'contractor_compliance', offerPartners: 'offer_partners', offers: 'offers', offerRedemptions: 'offer_redemptions',
   conversations: 'conversations', conversationParticipants: 'conversation_participants', conversationMessages: 'conversation_messages',
@@ -121,11 +122,12 @@ function collectionWriteData(
   collection: string,
   input: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (collection !== 'clientApprovals') return input;
+  const mapped = appwriteCollectionWriteData(collection, input);
+  if (collection !== 'clientApprovals') return mapped;
   return {
-    ...input,
-    ...(Array.isArray(input.evidencePhotoIds)
-      ? { evidencePhotoIds: JSON.stringify(input.evidencePhotoIds) }
+    ...mapped,
+    ...(Array.isArray(mapped.evidencePhotoIds)
+      ? { evidencePhotoIds: JSON.stringify(mapped.evidencePhotoIds) }
       : {}),
   };
 }
@@ -134,7 +136,7 @@ function collectionReadRecord(
   collection: string,
   row: Record<string, unknown>,
 ): StoredRecord {
-  const value = publicRecord(row);
+  const value = appwriteCollectionReadData(collection, publicRecord(row));
   if (collection === 'clientApprovals' && typeof value.evidencePhotoIds === 'string') {
     try { value.evidencePhotoIds = JSON.parse(value.evidencePhotoIds) as unknown[]; }
     catch { value.evidencePhotoIds = []; }

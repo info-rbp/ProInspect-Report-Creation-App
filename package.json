@@ -77,7 +77,12 @@
     "launch:test": "node --test infrastructure/upgrades/launch-readiness-v2/tests/*.test.mjs",
     "launch:evidence": "node infrastructure/upgrades/launch-readiness-v2/external-evidence.mjs",
     "launch:release": "node infrastructure/upgrades/launch-readiness-v2/release.mjs",
-    "launch:authority": "node infrastructure/upgrades/launch-readiness-v2/actions/runtime-authority.mjs"
+    "launch:authority": "node infrastructure/upgrades/launch-readiness-v2/actions/runtime-authority.mjs",
+    "launch:preflight": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs preflight",
+    "launch:check": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs check",
+    "launch:issues": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs issues",
+    "launch:reconcile": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs reconcile",
+    "launch:repair": "node infrastructure/upgrades/launch-readiness-v2/cli.mjs repair"
   },
   "dependencies": {
     "@google/genai": "^1.32.0",
