@@ -4,7 +4,11 @@ export default {
   async fetch(request, env, context) {
     let response;
     if (new URL(request.url).pathname === '/__launch/revision') {
-      response = Response.json({ commit: env.RELEASE_SHA }, { headers: {'cache-control':'no-store'} });
+      response = Response.json({
+        commit: env.RELEASE_SHA,
+        versionId: env.CF_VERSION_METADATA?.id ?? null,
+        versionTag: env.CF_VERSION_METADATA?.tag ?? null,
+      }, { headers: {'cache-control':'no-store'} });
     } else response = await application.fetch(request,env,context);
     const secured = new Response(response.body,response);
     secured.headers.set('strict-transport-security','max-age=31536000');
