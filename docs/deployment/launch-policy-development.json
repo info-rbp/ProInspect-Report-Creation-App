@@ -1,0 +1,64 @@
+git add docs/deployment/launch-policy-development.json
+git commit -m "ops(launch): approve development installation policy"
+git push origin feat/launch-readiness-installation-v2{
+  "launchScope": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "dataAuthorityByDomain": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "unitPropertyMapping": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "rolesAndResidentVisibility": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "approvalThresholdsAndSeparation": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "controlledKeysDevicesMoves": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "contractorCompliance": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "retentionLegalHoldAndPrivacy": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "offlineEncryptionAndRecovery": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "rtoRpoAndSupportOwnership": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "shopifyCalendarProviderScope": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  },
+  "migrationSnapshotsAndRollback": {
+    "decision": null,
+    "approvedBy": null,
+    "approvedAt": null
+  }
+}
