@@ -41,13 +41,28 @@ jobs:
         run: |
           set -euo pipefail
           for env in development staging production; do
-            dir="infrastructure/terraform/environments/$env"
-            rm -f "$dir/.terraform.lock.hcl"
-            terraform -chdir="$dir" providers lock \
+            src="infrastructure/terraform/environments/$env"
+            tmp="infrastructure/terraform/environments/.lock-$env"
+            rm -rf "$tmp"
+            cp -R "$src" "$tmp"
+            rm -rf "$tmp/.terraform" "$tmp/.terraform.lock.hcl"
+            python3 - "$tmp/main.tf" <<'PY'
+          import re, sys
+          path=sys.argv[1]
+          text=open(path,encoding='utf-8').read()
+          text,count=re.subn(r'\n\s*backend\s+"gcs"\s*\{\s*\}\s*', '\n', text, count=1)
+          if count != 1:
+              raise SystemExit('expected exactly one empty gcs backend stanza')
+          open(path,'w',encoding='utf-8').write(text)
+          PY
+            terraform -chdir="$tmp" init -backend=false -input=false
+            terraform -chdir="$tmp" providers lock \
               -platform=linux_amd64 \
               -platform=darwin_arm64 \
               -platform=darwin_amd64 \
               -platform=windows_amd64
+            cp "$tmp/.terraform.lock.hcl" "$src/.terraform.lock.hcl"
+            rm -rf "$tmp"
           done
       - name: Regenerate exact package integrity after formatting
         shell: bash
