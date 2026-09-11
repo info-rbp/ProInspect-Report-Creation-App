@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "launch-readiness-v2",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "baselineCommit": "a27cf680a858961f141a6421278f89f95d38a162",
   "baselinePackage": "infrastructure/upgrades/platform-completion-v1",
   "targetSchemaTables": 120,

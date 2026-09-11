@@ -45,11 +45,17 @@ export async function edgeAcceptance(target,commit,fetcher=fetch) {
 }
 export async function toolchain(live=false) {
   requireThat(process.versions.node.split('.')[0]==='22','Node 22 is required');
+  const versions={node:process.versions.node};
   if(live) {
     const {manifest}=await import('./runtime.mjs');
     requireThat(process.versions.node===manifest.requiredToolchain.node,`Remote operations require Node ${manifest.requiredToolchain.node}`);
     for(const [exe,key] of [['npm','npm'],['appwrite','appwrite']]) {
-      const value=await run(exe,['--version'],{timeoutMs:30000});requireThat(value.match(/\d+\.\d+\.\d+/u)?.[0]===manifest.requiredToolchain[key],`Wrong ${exe} version`);
+      const value=await run(exe,['--version'],{timeoutMs:30000});const version=value.match(/\d+\.\d+\.\d+/u)?.[0];requireThat(version===manifest.requiredToolchain[key],`Wrong ${exe} version`);versions[key]=version;
     }
+    const wrangler=await run('npx',['--no-install','wrangler','--version'],{timeoutMs:30000});versions.wrangler=wrangler.match(/\d+\.\d+\.\d+/u)?.[0];requireThat(versions.wrangler===manifest.requiredToolchain.wrangler,`Wrong Wrangler version; require ${manifest.requiredToolchain.wrangler}`);
+    const terraform=JSON.parse(await run('terraform',['version','-json'],{timeoutMs:30000}));requireThat(/^\d+\.\d+\.\d+/u.test(terraform.terraform_version ?? ''),'Terraform CLI is unavailable or invalid');versions.terraform=terraform.terraform_version;
+    const gcloud=await run('gcloud',['--version'],{timeoutMs:30000});versions.gcloud=gcloud.match(/Google Cloud SDK\s+([0-9.]+)/u)?.[1];requireThat(versions.gcloud,'Google Cloud CLI is unavailable or invalid');
+    const gitVersion=await run('git',['--version'],{timeoutMs:30000});versions.git=gitVersion.match(/\d+\.\d+(?:\.\d+)?/u)?.[0];requireThat(versions.git,'Git CLI is unavailable or invalid');
   }
+  return versions;
 }

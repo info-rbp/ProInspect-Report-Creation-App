@@ -166,3 +166,10 @@ No cloud deployment or Production mutation is performed by CI. Live Appwrite, Cl
 ## Explicit rollback commands
 
 Rollback is never automatic. After inspecting the recorded deployment state, set the private `rollback.googleRecord` / `rollback.cloudflareRecord` paths and execute the single reviewed action using `launch:install -- --stage rollback-google` or `rollback-cloudflare` with the normal exact non-production INSTALL confirmation. Migration rollback additionally requires `migration.rollbackApproved=true` and removes only unchanged records/files created by that migration journal. Database/application rollback is a separately rehearsed operation, not implied by an edge rollback.
+
+
+## Deployment hardening review
+
+V2.2 binds evidence to the selected environment rather than unrelated environment configuration, includes an explicit Appwrite schema fingerprint in candidate identity, requires exact assertion-set equality, reports missing acceptance adapters/scenarios up front, and supports a reviewed scenario-module protocol through `adapters/scenario-cli.mjs`. Development evidence is therefore not invalidated merely by completing Staging configuration, while Staging still proves the identical source commit/tree/schema/manifest that passed Development.
+
+`launch:doctor` now reports acceptance implementation coverage. A full `launch:verify -- --stage all` is fail-closed until every required adapter or tracked scenario exists. This is intentional: missing business, device, migration or operational proof is never converted into synthetic PASS evidence. Live doctor checks also verify the pinned Wrangler version and the presence/parseable versions of Terraform, Google Cloud CLI and Git in addition to Node, npm and Appwrite CLI.

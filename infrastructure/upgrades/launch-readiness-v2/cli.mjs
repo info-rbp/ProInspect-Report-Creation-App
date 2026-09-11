@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { root,packageRoot,manifest,readJson,atomicJson,stateRoot,verifyIntegrity,assertRepository,assertClean,candidate,parseArgs,requireThat,acquireLock,unlock,redact,validateConfig } from './runtime.mjs';
 import { validateManifest,writeScorecard } from './evidence.mjs';
 import { toolchain,auditProviders } from './providers.mjs';
-import { verifyAll } from './verification.mjs';
+import { verifyAll,adapterCoverage } from './verification.mjs';
 import { install,actionPlan } from './installation.mjs';
 import { complete } from './completion.mjs';
 export async function main(argv=process.argv.slice(2)){
@@ -23,17 +23,18 @@ export async function main(argv=process.argv.slice(2)){
   requireThat(existsSync(configPath),'Run npm run launch:init first');
   const config=readJson(configPath);validateConfig(config,args.env,{complete:false});
   if(['install','deploy'].includes(args.command) && !args.apply)return {status:'PLAN_ONLY',actions:actionPlan(args),confirmation:`${args.command==='deploy'?'DEPLOY':'INSTALL'}:${args.env}:${config.environments[args.env].appwrite.projectId}`,mutations:false};
-  if(args.command==='doctor' && !args.live){await toolchain();return {status:'LOCAL_DOCTOR_PASS',liveProvidersVerified:false,configPath};}
+  if(args.command==='doctor' && !args.live){const tools=await toolchain();return {status:'LOCAL_DOCTOR_PASS',liveProvidersVerified:false,configPath,tools,acceptanceAdapters:adapterCoverage(config,args.env)};}
   assertRepository();assertClean();
   const context=candidate(config,args.env);let release;
   try{
     release=acquireLock(directory);
-    if(args.command==='doctor'){await toolchain(true);return await auditProviders(config,args.env,resolve(directory,args.env,'doctor'));}
+    if(args.command==='doctor'){const tools=await toolchain(true);const providers=await auditProviders(config,args.env,resolve(directory,args.env,'doctor'));return {status:'LIVE_DOCTOR_PASS',tools,providers,acceptanceAdapters:adapterCoverage(config,args.env)};}
     if(args.command==='complete')return await complete(config,context,directory,args);
     if(['install','deploy'].includes(args.command))return await install(config,args,directory);
     if(args.command==='local')await verifyAll(config,context,directory,{...args,stage:'source'}),await verifyAll(config,context,directory,{...args,stage:'build'});
     if(args.command==='verify')await verifyAll(config,context,directory,args);
-    const report=writeScorecard(directory,context);
+    const developmentContext=args.env==='staging'?candidate(config,'development'):context;
+    const report=writeScorecard(directory,context,developmentContext);
     if(args.command==='gate')requireThat(report.decision==='READY_FOR_RELEASE_REVIEW','NOT_LAUNCH_READY: see the generated scorecard for missing, failed or stale evidence');
     return report;
   }finally{if(release)release();}

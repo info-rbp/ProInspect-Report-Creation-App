@@ -6,10 +6,49 @@ import { dependenciesFor,saveReceipt,loadReceipt,receiptValid,validateResult,rec
 import { approvedConfig,targetEnv } from './configuration.mjs';
 import { validateSource } from './actions/source.mjs';
 import { edgeAcceptance } from './providers.mjs';
-export function resolveAdapter(config,id){
-  const path=config.adapters?.[id];requireThat(typeof path==='string','BLOCKED_ENGINEERING: implement and register a reviewed acceptance adapter');
-  requireThat((path.startsWith('infrastructure/launch-adapters/') || path.startsWith('infrastructure/upgrades/launch-readiness-v2/adapters/')) && path.endsWith('.mjs'),'Unapproved adapter path');
-  return safePath(root,path);
+
+const scenarioAdapter='infrastructure/upgrades/launch-readiness-v2/adapters/scenario-cli.mjs';
+function allowedAdapterPath(path) {
+  return typeof path==='string' && (path.startsWith('infrastructure/launch-adapters/') || path.startsWith('infrastructure/upgrades/launch-readiness-v2/adapters/')) && path.endsWith('.mjs');
+}
+function allowedScenarioPath(path) {
+  return typeof path==='string' && (path.startsWith('infrastructure/launch-scenarios/') || path.startsWith('infrastructure/upgrades/launch-readiness-v2/scenarios/')) && path.endsWith('.mjs');
+}
+export function adapterPath(config,id) {
+  const configured=config.adapters?.[id];
+  if(configured) return configured;
+  const fallback=`infrastructure/launch-adapters/${id}.mjs`;
+  if(existsSync(resolve(root,fallback))) return fallback;
+  if(config.scenarioFiles?.[id]) return scenarioAdapter;
+  return null;
+}
+export function resolveAdapter(config,id) {
+  const path=adapterPath(config,id);
+  requireThat(path,'BLOCKED_ENGINEERING: implement and register a reviewed acceptance adapter or scenario');
+  requireThat(allowedAdapterPath(path),'Unapproved adapter path');
+  return {path,file:safePath(root,path)};
+}
+export function adapterCoverage(config,environment) {
+  const gates=manifest.gates.filter((g)=>g.kind==='adapter' && (g.id!=='rehearsal' || environment==='staging'));
+  const implemented=[];const missing=[];const invalid=[];
+  for(const gate of gates) {
+    try {
+      const path=adapterPath(config,gate.id);
+      requireThat(path,'missing');
+      requireThat(allowedAdapterPath(path),'invalid adapter path');
+      safePath(root,path);
+      const scenario=config.scenarioFiles?.[gate.id];
+      if(path===scenarioAdapter) {
+        requireThat(allowedScenarioPath(scenario),'invalid scenario path');
+        safePath(root,scenario);
+      }
+      implemented.push({gate:gate.id,adapter:path,scenario:scenario ?? null});
+    } catch(error) {
+      if(error.message==='missing') missing.push(gate.id);
+      else invalid.push({gate:gate.id,detail:redact(error.message)});
+    }
+  }
+  return {complete:missing.length===0 && invalid.length===0,implemented,missing,invalid};
 }
 export async function verifyGate(gate,config,context,directory,args){
   if(args.resume && receiptValid(loadReceipt(directory,context.environment,gate.id),gate,context,directory))return;
@@ -23,7 +62,7 @@ export async function verifyGate(gate,config,context,directory,args){
     }
     if(gate.kind==='builtin'){
       let observations;
-      if(gate.id==='source'){assertRepository();verifyIntegrity();observations={commit:context.commit,integrity:true};}
+      if(gate.id==='source'){assertRepository();verifyIntegrity();observations={commit:context.commit,schemaHash:context.schemaHash,integrity:true};}
       else if(gate.id==='build')observations=await validateSource(context,folder);
       else if(gate.id==='edge')observations=await edgeAcceptance(config.environments[context.environment].web,context.commit);
       else throw new Error('Unknown built-in gate');
@@ -32,9 +71,15 @@ export async function verifyGate(gate,config,context,directory,args){
       if(gate.id==='build')result.artifacts.push(...Array.from({length:7},(_,i)=>`source-${i}.log`));
       atomicJson(resolve(folder,'result.json'),result);
     }else{
-      const file=resolveAdapter(config,gate.id);
-      await run('git',['ls-files','--error-unmatch','--',config.adapters[gate.id]],{cwd:root});
-      atomicJson(resolve(folder,'input.json'),{schemaVersion:1,runId,candidate:context,gate,target:config.environments[context.environment],policyDocument:config.policyDocument,productionMutationAllowed:false});
+      const {path,file}=resolveAdapter(config,gate.id);
+      await run('git',['ls-files','--error-unmatch','--',path],{cwd:root});
+      const scenarioFile=config.scenarioFiles?.[gate.id] ?? null;
+      if(scenarioFile){
+        requireThat(allowedScenarioPath(scenarioFile),'Unapproved scenario path');
+        safePath(root,scenarioFile);
+        await run('git',['ls-files','--error-unmatch','--',scenarioFile],{cwd:root});
+      }
+      atomicJson(resolve(folder,'input.json'),{schemaVersion:1,runId,candidate:context,gate,target:config.environments[context.environment],policyDocument:config.policyDocument,scenarioFile,productionMutationAllowed:false});
       await run(process.execPath,[file],{cwd:root,live:true,sensitive:true,timeoutMs:3600000,logFile:resolve(folder,'adapter.log'),env:{...targetEnv(config.environments[context.environment]),PROINSPECT_LAUNCH_INPUT:resolve(folder,'input.json'),PROINSPECT_LAUNCH_OUTPUT:resolve(folder,'result.json')}});
       requireThat(existsSync(resolve(folder,'result.json')),'Adapter exited without evidence');result=readJson(resolve(folder,'result.json'));
     }
@@ -44,6 +89,11 @@ export async function verifyGate(gate,config,context,directory,args){
 }
 export async function verifyAll(config,context,directory,args){
   const gates=args.stage && args.stage!=='all'?manifest.gates.filter((g)=>g.id===args.stage):manifest.gates.filter((g)=>g.id!=='rehearsal' || context.environment==='staging');
-  requireThat(gates.length,'Unknown verification stage');for(const gate of gates){await verifyGate(gate,config,context,directory,args);console.log(`PASS ${gate.id}`);}
+  requireThat(gates.length,'Unknown verification stage');
+  if(!args.stage || args.stage==='all'){
+    const coverage=adapterCoverage(config,context.environment);
+    requireThat(coverage.complete,`BLOCKED_ENGINEERING: acceptance implementation missing or invalid for ${[...coverage.missing,...coverage.invalid.map((x)=>x.gate)].join(', ')}`);
+  }
+  for(const gate of gates){await verifyGate(gate,config,context,directory,args);console.log(`PASS ${gate.id}`);}
   return {verified:gates.map((g)=>g.id),candidateHash:hash(context)};
 }

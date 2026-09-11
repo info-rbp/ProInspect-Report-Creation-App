@@ -62,9 +62,23 @@ export function assertRepository(cwd = root) {
   requireThat(git(['merge-base', manifest.baselineCommit, 'HEAD'], cwd) === manifest.baselineCommit, 'Required source baseline is absent');
 }
 export function assertClean(cwd = root) { requireThat(!git(['status', '--porcelain', '--untracked-files=normal'], cwd), 'Commit or move your changes first. No reset or discard is performed.'); }
+export function candidateConfiguration(config, environment) {
+  requireThat(config?.environments?.[environment], 'Candidate environment is missing');
+  const { environments, ...shared } = config;
+  return { ...shared, environments: { [environment]: environments[environment] } };
+}
+export function appwriteSchemaFingerprint(cwd = root) {
+  const paths = ['infrastructure/appwrite/appwrite.config.json','infrastructure/appwrite/databases','infrastructure/appwrite/tables','infrastructure/appwrite/buckets','infrastructure/appwrite/teams','infrastructure/appwrite/platforms','infrastructure/appwrite/functions'];
+  const tree = git(['ls-tree','-r','HEAD','--',...paths],cwd);
+  requireThat(tree.includes('infrastructure/appwrite/tables/'), 'Appwrite schema sources are missing');
+  return hash(tree);
+}
 export function candidate(config, environment) {
   assertClean();
-  return { commit: git(['rev-parse', 'HEAD']), tree: git(['rev-parse', 'HEAD^{tree}']), manifestHash: hash(manifest), configHash: hash(config), environment };
+  return { commit: git(['rev-parse', 'HEAD']), tree: git(['rev-parse', 'HEAD^{tree}']), manifestHash: hash(manifest), schemaHash: appwriteSchemaFingerprint(), configHash: hash(candidateConfiguration(config,environment)), environment };
+}
+export function sameSourceCandidate(left,right) {
+  return ['commit','tree','manifestHash','schemaHash'].every((key) => left?.[key] && left[key] === right?.[key]);
 }
 export function acquireLock(directory) {
   mkdirSync(directory, { recursive: true, mode: 0o700 }); const lock = resolve(directory, 'lock');

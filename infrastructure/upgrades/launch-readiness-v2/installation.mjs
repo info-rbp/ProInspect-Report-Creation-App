@@ -1,7 +1,7 @@
 import { existsSync,mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { atomicJson,readJson,requireThat,candidate,assertClean,git,redact,root } from './runtime.mjs';
+import { atomicJson,readJson,requireThat,candidate,assertClean,git,redact,root,sameSourceCandidate } from './runtime.mjs';
 import { approvedConfig,targetEnv,privateDirectory } from './configuration.mjs';
 import { auditProviders,toolchain } from './providers.mjs';
 import { action,installationOrder,requireBackup } from './actions/index.mjs';
@@ -31,8 +31,10 @@ export async function install(config,args,directory){
   requireThat(args.apply && args.confirm===`${kind}:${args.env}:${target.appwrite.projectId}`,'Incorrect exact installation confirmation');
   let current=config;let context=candidate(current,args.env);
   if(args.env==='staging' && selected.some((id)=>!id.startsWith('rollback-'))){
-    const dev=scorecard(directory,{...context,environment:'development'}).filter((g)=>g.id!=='rehearsal');
-    requireThat(dev.every((g)=>g.status==='PASS'),'The same candidate must pass Development before Staging mutation');
+    const developmentContext=candidate(current,'development');
+    requireThat(sameSourceCandidate(context,developmentContext),'Staging and Development must use the same immutable source candidate');
+    const dev=scorecard(directory,developmentContext).filter((g)=>g.id!=='rehearsal');
+    requireThat(dev.every((g)=>g.status==='PASS'),'The same source candidate must pass Development before Staging mutation');
   }
   requireThat(!args.resume,'Use --resume for verification only. Retry an explicit installation --stage after inspecting remote state');
   const session=resolve(directory,args.env,'installations',randomUUID());mkdirSync(session,{recursive:true,mode:0o700});
