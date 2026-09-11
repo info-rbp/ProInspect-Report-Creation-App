@@ -1,32 +1,15 @@
-project_id            = "business-plan-applicatio-17047"
-firestore_database_id = "ai-studio-propertyconditio-8ed7569c-35bc-4e82-ac6c-2b34380b5b60"
-firestore_location_id = "asia-southeast1"
+# Deliberately not the prohibited legacy Google/Firebase project. Replace this with
+# the dedicated, environment-labelled ProInspect Production Google Cloud project.
+project_id         = "proinspect-production-gcp"
 billing_account_id = "000000-000000-000000"
 monthly_budget_aud = 2000
-
-identity_authorized_domains = [
-  "app.example.com",
-  "pcr-production-example.web.app",
-]
 
 notification_emails = [
   "platform-alerts@example.com",
   "finance-alerts@example.com",
 ]
 
-report_retention_days = 365
-
-# Existing Hosting site already linked to the ProInspect Firebase web app.
-firebase_hosting_site_id = "business-plan-applicatio-17047-255b2"
-
-# Do not change to ENFORCED until staging App Check metrics and authentication,
-# Firestore and Storage acceptance pass. The public site key must also be supplied
-# to the web build as VITE_FIREBASE_APP_CHECK_SITE_KEY.
-app_check_recaptcha_enterprise_site_key = null
-app_check_enforcement_mode              = "UNENFORCED"
-require_api_app_check                   = false
-
-# Must exactly match appwrite.runtimeCredentialPolicies service/secretId pairs in the private launch configuration.
+# Must exactly match appwrite.runtimeCredentialPolicies service/secretId pairs in the private Production release configuration.
 appwrite_runtime_secret_ids = {
   api                   = "proinspect-api-appwrite"
   "pdf-worker"          = "proinspect-pdf-worker-appwrite"

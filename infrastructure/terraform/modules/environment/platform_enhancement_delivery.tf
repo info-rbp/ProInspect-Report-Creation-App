@@ -41,12 +41,6 @@ resource "google_project_iam_member" "integration_worker_secrets" {
   member  = "serviceAccount:${google_service_account.enhancement_worker["integration-worker"].email}"
 }
 
-resource "google_storage_bucket_iam_member" "document_worker_reports" {
-  bucket = google_storage_bucket.reports.name
-  role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.enhancement_worker["document-worker"].email}"
-}
-
 resource "google_service_account_iam_member" "build_enhancement_worker_act_as" {
   for_each           = local.enhancement_workers
   service_account_id = google_service_account.enhancement_worker[each.key].name
@@ -104,11 +98,6 @@ resource "google_cloud_run_v2_service" "enhancement_worker" {
         name  = "GOOGLE_CLOUD_PROJECT"
         value = var.project_id
       }
-      env {
-        name  = "DOCUMENT_BUCKET"
-        value = google_storage_bucket.reports.name
-      }
-
       resources {
         limits = {
           cpu    = "1"
@@ -119,7 +108,7 @@ resource "google_cloud_run_v2_service" "enhancement_worker" {
   }
 
   lifecycle {
-    ignore_changes = [template[0].containers[0].image]
+    ignore_changes = [template[0].containers[0].image, template[0].containers[0].env]
   }
 
   depends_on = [google_project_service.required]

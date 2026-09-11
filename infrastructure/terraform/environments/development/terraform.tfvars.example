@@ -1,21 +1,8 @@
-project_id         = "pcr-development-example"
-firestore_database_id = "proinspect-development"
+project_id         = "proinspect-development-gcp"
 billing_account_id = "000000-000000-000000"
 monthly_budget_aud = 250
 
-identity_authorized_domains = [
-  "localhost",
-  "pcr-development-example.web.app",
-]
-
 notification_emails = ["platform-alerts@example.com"]
-
-# Create a score-based reCAPTCHA Enterprise key for the Firebase web app before
-# switching enforcement to ENFORCED. The site key is public frontend config and
-# must also be supplied as VITE_FIREBASE_APP_CHECK_SITE_KEY when building web.
-app_check_recaptcha_enterprise_site_key = null
-app_check_enforcement_mode              = "UNENFORCED"
-require_api_app_check                   = false
 
 # Must exactly match appwrite.runtimeCredentialPolicies service/secretId pairs in the private launch configuration.
 appwrite_runtime_secret_ids = {

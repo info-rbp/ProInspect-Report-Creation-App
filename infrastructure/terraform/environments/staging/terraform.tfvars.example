@@ -1,19 +1,8 @@
-project_id         = "pcr-staging-example"
-firestore_database_id = "proinspect-staging"
+project_id         = "proinspect-staging-gcp"
 billing_account_id = "000000-000000-000000"
 monthly_budget_aud = 500
 
-identity_authorized_domains = [
-  "pcr-staging-example.web.app",
-]
-
 notification_emails = ["platform-alerts@example.com"]
-
-# Configure and observe App Check in staging before enforcement. Supply the same
-# public site key to the web build as VITE_FIREBASE_APP_CHECK_SITE_KEY.
-app_check_recaptcha_enterprise_site_key = null
-app_check_enforcement_mode              = "UNENFORCED"
-require_api_app_check                   = false
 
 # Must exactly match appwrite.runtimeCredentialPolicies service/secretId pairs in the private launch configuration.
 appwrite_runtime_secret_ids = {

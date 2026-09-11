@@ -3,10 +3,16 @@ import { readFileSync } from 'node:fs';
 import { root, run, readJson, hash, requireThat, atomicJson, canonical } from '../runtime.mjs';
 import { googleIdentity } from './google.mjs';
 
+const approvedLegacyIamRevocations=[
+  /^module\.environment\.google_project_iam_member\.runtime_roles\["(?:api_datastore|pdf_datastore)"\]$/u,
+  /^module\.environment\.google_storage_bucket_iam_member\.document_worker_reports$/u,
+  /^module\.environment\.google_service_account_iam_member\.api_self_token_creator$/u,
+];
+function approvedLegacyRevocation(item){return item.change.actions.length===1&&item.change.actions[0]==='delete'&&approvedLegacyIamRevocations.some((pattern)=>pattern.test(item.address));}
 export function validateTerraformPlan(plan,projectId) {
   requireThat(plan.errored !== true,'Terraform plan contains an error');
   for(const item of plan.resource_changes ?? []) {
-    requireThat(!item.change.actions.includes('delete'),'Destructive Terraform deletion/replacement is blocked');
+    requireThat(!item.change.actions.includes('delete')||approvedLegacyRevocation(item),'Destructive Terraform deletion/replacement is blocked');
     const after=item.change.after;
     if(after?.project) requireThat(after.project===projectId,`Foreign project in ${item.address}`);
     if(after?.project_id) requireThat(after.project_id===projectId,`Foreign project ID in ${item.address}`);

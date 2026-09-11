@@ -1,8 +1,8 @@
 # Scheduled dashboard history aggregation.
 #
 # Live Dashboard reads remain server-authoritative. Historical daily metrics are
-# captured separately with Firestore count aggregations so trend history does
-# not depend on an administrator manually invoking a snapshot endpoint.
+# captured separately by the Appwrite-authoritative dashboard worker so trend
+# history does not depend on an administrator manually invoking a snapshot endpoint.
 
 resource "google_service_account" "dashboard_worker" {
   project      = var.project_id
@@ -64,7 +64,7 @@ resource "google_cloud_run_v2_service" "dashboard_worker" {
   }
 
   lifecycle {
-    ignore_changes = [template[0].containers[0].image]
+    ignore_changes = [template[0].containers[0].image, template[0].containers[0].env]
   }
 
   depends_on = [google_project_service.required]

@@ -64,7 +64,7 @@ export async function toolchain(live=false) {
       const value=await run(exe,['--version'],{timeoutMs:30000});const version=value.match(/\d+\.\d+\.\d+/u)?.[0];requireThat(version===manifest.requiredToolchain[key],`Wrong ${exe} version`);versions[key]=version;
     }
     const wrangler=await run('npx',['--no-install','wrangler','--version'],{timeoutMs:30000});versions.wrangler=wrangler.match(/\d+\.\d+\.\d+/u)?.[0];requireThat(versions.wrangler===manifest.requiredToolchain.wrangler,`Wrong Wrangler version; require ${manifest.requiredToolchain.wrangler}`);
-    const terraform=JSON.parse(await run('terraform',['version','-json'],{timeoutMs:30000}));requireThat(/^\d+\.\d+\.\d+/u.test(terraform.terraform_version ?? ''),'Terraform CLI is unavailable or invalid');versions.terraform=terraform.terraform_version;
+    const terraform=JSON.parse(await run('terraform',['version','-json'],{timeoutMs:30000}));versions.terraform=terraform.terraform_version;requireThat(versions.terraform===manifest.requiredToolchain.terraform,`Wrong Terraform version; require ${manifest.requiredToolchain.terraform}`);
     const gcloud=await run('gcloud',['--version'],{timeoutMs:30000});versions.gcloud=gcloud.match(/Google Cloud SDK\s+([0-9.]+)/u)?.[1];requireThat(versions.gcloud,'Google Cloud CLI is unavailable or invalid');
     const gitVersion=await run('git',['--version'],{timeoutMs:30000});versions.git=gitVersion.match(/\d+\.\d+(?:\.\d+)?/u)?.[0];requireThat(versions.git,'Git CLI is unavailable or invalid');
   }

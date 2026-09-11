@@ -43,3 +43,5 @@ test('candidate configuration isolates Development from Staging-only edits',()=>
 test('adapter coverage reports missing acceptance engineering instead of silently passing',()=>{const coverage=adapterCoverage(configured(),'development');assert.equal(coverage.complete,true);assert.deepEqual(coverage.missing,[]);assert(coverage.implemented.some((v)=>v.gate==='appwrite'));});
 
 test('provider stack is explicit and limited to launch authorities',()=>{assert.deepEqual([...manifest.providerStack].sort(),['appwrite','cloudflare','google-cloud','shopify'].sort());assert(manifest.requiredGoogleApis.includes('calendar-json.googleapis.com'));});
+
+test('Terraform allows only named legacy authority revocations',()=>{const allowed={resource_changes:[{address:'module.environment.google_project_iam_member.runtime_roles["api_datastore"]',change:{actions:['delete'],after:null,after_unknown:{}}}]};assert.doesNotThrow(()=>validateTerraformPlan(allowed,'p'));const denied={resource_changes:[{address:'module.environment.google_storage_bucket.reports',change:{actions:['delete'],after:null,after_unknown:{}}}]};assert.throws(()=>validateTerraformPlan(denied,'p'),/Destructive/);});

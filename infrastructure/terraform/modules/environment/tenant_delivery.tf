@@ -101,7 +101,7 @@ resource "google_cloud_run_v2_service" "notification_worker" {
   }
 
   lifecycle {
-    ignore_changes = [template[0].containers[0].image]
+    ignore_changes = [template[0].containers[0].image, template[0].containers[0].env]
   }
 
   depends_on = [
@@ -198,14 +198,6 @@ resource "google_cloud_scheduler_job" "tenant_automation" {
     google_cloud_run_v2_service_iam_member.notification_worker_invoker,
     google_service_account_iam_member.scheduler_notification_token_creator,
   ]
-}
-
-# The API creates immutable tenancy-document PDFs in the report bucket and signs
-# short-lived download URLs using its own service account identity.
-resource "google_service_account_iam_member" "api_self_token_creator" {
-  service_account_id = google_service_account.runtime["api"].name
-  role               = "roles/iam.serviceAccountTokenCreator"
-  member             = "serviceAccount:${google_service_account.runtime["api"].email}"
 }
 
 output "notification_worker_uri" {

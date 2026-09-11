@@ -4,8 +4,8 @@
 # authenticated payload to the private pdf-worker Cloud Run service. This keeps
 # retries outside the browser/API process while preserving IAM-only access.
 #
-# The API also creates immutable archive manifests after finalisation, so it has
-# create-only access to the report bucket in addition to its existing viewer role.
+# Final report files and archive manifests remain in Appwrite Storage. Google Cloud
+# provides compute and delivery only; it is not an application-file authority.
 
 resource "google_cloud_run_v2_service_iam_member" "pdf_worker_pubsub_invoker" {
   project  = var.project_id

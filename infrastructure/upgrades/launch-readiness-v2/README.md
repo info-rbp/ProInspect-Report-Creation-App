@@ -229,3 +229,15 @@ These controls still do not convert legacy worker business logic. The workers ga
 ### Appwrite console CLI surface correction
 
 V2.6 uses the authenticated Appwrite CLI `projects` service for project identity, platform and API-key administration. The singular `project` service is not used for these console-level operations. The installer still refuses a standing `APPWRITE_API_KEY` and creates only bounded temporary/runtime credentials after verifying the exact target project.
+
+
+## Final deployment hardening v2.6
+
+V2.6 closes the final deployment-ownership gaps found during the pre-release review. The exact Node runtime is pinned in .nvmrc. Google Cloud remains the compute, queue, build, secret, monitoring and Calendar platform, while Appwrite is the application database and file authority. Terraform no longer provisions ProInspect application asset/report buckets or Datastore runtime grants. Launch-managed Cloud Run environment and secret bindings are ignored consistently by Terraform across all six deployable services, preventing a later Terraform apply from erasing Appwrite runtime configuration.
+
+Cloud Build now runs under the Terraform-provisioned cloud-build service account. Cloud Run revision deployment uses update semantics for env/secrets so Terraform-provisioned service defaults are preserved rather than cleared. A new `npm run launch:authority` audit reports forbidden Firebase/Firestore/Google-Storage dependencies in the five standalone worker runtimes and forbidden target-side Terraform data-plane resources. Both source acceptance and Google deployment independently enforce this check against the exact candidate source. A candidate with a legacy worker data path is therefore blocked before cloud mutation rather than merely failing a later acceptance assertion.
+
+
+V2.6 also aligns the operator toolchain with Node 22.23.2 as distributed in CI: npm 10.9.8 and Terraform 1.15.0 are now explicit live-doctor requirements. This prevents a clean Node selection from failing solely because the manifest pinned an older bundled npm.
+
+V2.6 includes a legacy Terraform state transition: any previously tracked ProInspect asset/report buckets are forgotten with `destroy = false`, preserving source data for migration/reconciliation, while only the specifically named obsolete Datastore/storage IAM grants may be revoked. All other Terraform deletions and replacements remain blocked. The checked-in tfvars examples contain no Firebase/Firestore target configuration and the Production example no longer references the prohibited legacy Google project.

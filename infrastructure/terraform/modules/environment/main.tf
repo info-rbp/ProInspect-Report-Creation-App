@@ -7,19 +7,6 @@ terraform {
 }
 
 variable "project_id" { type = string }
-variable "firestore_database_id" {
-  type = string
-  validation {
-    condition     = trimspace(var.firestore_database_id) != "" && var.firestore_database_id != "(default)"
-    error_message = "firestore_database_id must name the ProInspect database and cannot be (default)."
-  }
-}
-variable "firestore_location_id" {
-  description = "Firestore database location. Existing databases can differ from the primary compute region."
-  type        = string
-  default     = null
-  nullable    = true
-}
 variable "environment" {
   type = string
   validation {
@@ -36,14 +23,6 @@ variable "region" {
   default = "australia-southeast1"
 }
 variable "monthly_budget_aud" { type = number }
-variable "identity_authorized_domains" {
-  type    = list(string)
-  default = ["localhost"]
-}
-variable "firebase_hosting_site_id" {
-  type    = string
-  default = null
-}
 variable "notification_emails" {
   type    = set(string)
   default = []
@@ -51,10 +30,6 @@ variable "notification_emails" {
 variable "api_allow_unauthenticated" {
   type    = bool
   default = true
-}
-variable "report_retention_days" {
-  type    = number
-  default = null
 }
 variable "appwrite_runtime_secret_ids" {
   description = "Per-service Secret Manager containers for short-lived Appwrite runtime credentials. Keys are canonical Cloud Run service names."
@@ -145,12 +120,10 @@ resource "google_service_account" "runtime" {
 
 resource "google_project_iam_member" "runtime_roles" {
   for_each = {
-    api_datastore   = { account = "api", role = "roles/datastore.user" }
     api_pubsub      = { account = "api", role = "roles/pubsub.publisher" }
     ai_vertex       = { account = "ai_worker", role = "roles/aiplatform.user" }
     ai_pubsub       = { account = "ai_worker", role = "roles/pubsub.subscriber" }
     ai_secrets      = { account = "ai_worker", role = "roles/secretmanager.secretAccessor" }
-    pdf_datastore   = { account = "pdf_worker", role = "roles/datastore.user" }
     pdf_pubsub      = { account = "pdf_worker", role = "roles/pubsub.subscriber" }
     build_artifacts = { account = "cloud_build", role = "roles/artifactregistry.writer" }
     build_run       = { account = "cloud_build", role = "roles/run.developer" }
@@ -192,35 +165,6 @@ resource "google_pubsub_topic" "pdf" {
   message_storage_policy {
     allowed_persistence_regions = [var.region]
     enforce_in_transit          = true
-  }
-}
-
-resource "google_storage_bucket" "assets" {
-  name                        = "${var.project_id}-pcr-assets"
-  location                    = var.region
-  uniform_bucket_level_access = true
-  public_access_prevention    = "enforced"
-  labels                      = local.labels
-  versioning { enabled = true }
-  lifecycle_rule {
-    condition { age = 30 }
-    action { type = "Delete" }
-  }
-}
-
-resource "google_storage_bucket" "reports" {
-  name                        = "${var.project_id}-pcr-reports"
-  location                    = var.region
-  uniform_bucket_level_access = true
-  public_access_prevention    = "enforced"
-  labels                      = local.labels
-  versioning { enabled = true }
-  dynamic "lifecycle_rule" {
-    for_each = var.report_retention_days == null ? [] : [var.report_retention_days]
-    content {
-      condition { age = lifecycle_rule.value }
-      action { type = "Delete" }
-    }
   }
 }
 
@@ -325,8 +269,6 @@ resource "google_billing_budget" "monthly" {
 
 output "project_id" { value = data.google_project.current.project_id }
 output "container_repository" { value = google_artifact_registry_repository.containers.name }
-output "asset_bucket" { value = google_storage_bucket.assets.name }
-output "report_bucket" { value = google_storage_bucket.reports.name }
 output "api_url" { value = google_cloud_run_v2_service.service["api"].uri }
 output "pdf_worker_url" { value = google_cloud_run_v2_service.service["pdf-worker"].uri }
 output "appwrite_runtime_secret_ids" { value = var.appwrite_runtime_secret_ids }
