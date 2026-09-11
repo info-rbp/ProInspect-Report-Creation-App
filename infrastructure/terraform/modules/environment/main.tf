@@ -72,6 +72,7 @@ locals {
     "aiplatform.googleapis.com",
     "artifactregistry.googleapis.com",
     "billingbudgets.googleapis.com",
+    "calendar-json.googleapis.com",
     "cloudbilling.googleapis.com",
     "cloudbuild.googleapis.com",
     "clouddeploy.googleapis.com",
@@ -150,351 +151,95 @@ resource "google_service_account_iam_member" "deploy_act_as" {
   member             = "serviceAccount:${google_service_account.runtime["cloud_deploy"].email}"
 }
 
-resource "google_storage_bucket" "uploads" {
-  name                        = "${var.project_id}-uploads"
-  project                     = var.project_id
-  location                    = upper(var.region)
+resource "google_artifact_registry_repository" "containers" {
+  location      = var.region
+  repository_id = "pcr-containers"
+  description   = "Property Condition Report service containers"
+  format        = "DOCKER"
+  labels        = local.labels
+  depends_on    = [google_project_service.required]
+}
+
+resource "google_storage_bucket" "assets" {
+  name                        = "${var.project_id}-pcr-assets"
+  location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
-  force_destroy               = !local.production
   labels                      = local.labels
   versioning { enabled = true }
   lifecycle_rule {
-    condition { age = local.production ? 90 : 30 }
+    condition { age = 30 }
     action { type = "Delete" }
   }
-  depends_on = [google_project_service.required]
 }
 
 resource "google_storage_bucket" "reports" {
-  name                        = "${var.project_id}-reports"
-  project                     = var.project_id
-  location                    = upper(var.region)
+  name                        = "${var.project_id}-pcr-reports"
+  location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
-  force_destroy               = false
   labels                      = local.labels
   versioning { enabled = true }
-  dynamic "retention_policy" {
+  dynamic "lifecycle_rule" {
     for_each = var.report_retention_days == null ? [] : [var.report_retention_days]
-    content { retention_period = retention_policy.value * 86400 }
-  }
-  depends_on = [google_project_service.required]
-}
-
-resource "google_storage_bucket_iam_member" "upload_access" {
-  for_each = {
-    api = "roles/storage.objectAdmin"
-    ai  = "roles/storage.objectViewer"
-  }
-  bucket = google_storage_bucket.uploads.name
-  role   = each.value
-  member = each.key == "api" ? "serviceAccount:${google_service_account.runtime["api"].email}" : "serviceAccount:${google_service_account.runtime["ai_worker"].email}"
-}
-
-resource "google_storage_bucket_iam_member" "report_access" {
-  for_each = {
-    api = "roles/storage.objectAdmin"
-    pdf = "roles/storage.objectAdmin"
-  }
-  bucket = google_storage_bucket.reports.name
-  role   = each.value
-  member = each.key == "api" ? "serviceAccount:${google_service_account.runtime["api"].email}" : "serviceAccount:${google_service_account.runtime["pdf_worker"].email}"
-}
-
-resource "google_artifact_registry_repository" "containers" {
-  project       = var.project_id
-  location      = var.region
-  repository_id = "pcr-containers"
-  format        = "DOCKER"
-  description   = "Property Condition Report containers"
-  labels        = local.labels
-  docker_config { immutable_tags = local.production }
-  depends_on = [google_project_service.required]
-}
-
-resource "google_pubsub_topic" "analysis" {
-  name    = "analysis-requests"
-  project = var.project_id
-  labels  = local.labels
-  message_storage_policy {
-    allowed_persistence_regions = [var.region]
-    enforce_in_transit          = true
-  }
-}
-
-resource "google_pubsub_topic" "pdf" {
-  name    = "pdf-generation-requests"
-  project = var.project_id
-  labels  = local.labels
-  message_storage_policy {
-    allowed_persistence_regions = [var.region]
-    enforce_in_transit          = true
-  }
-}
-
-resource "google_pubsub_topic" "billing" {
-  name    = "billing-alerts"
-  project = var.project_id
-  labels  = local.labels
-}
-
-resource "google_cloud_tasks_queue" "analysis" {
-  project  = var.project_id
-  location = var.region
-  name     = "analysis-requests"
-  rate_limits {
-    max_concurrent_dispatches = 20
-    max_dispatches_per_second = 10
-  }
-  retry_config {
-    max_attempts  = 5
-    min_backoff   = "5s"
-    max_backoff   = "300s"
-    max_doublings = 5
-  }
-  depends_on = [google_project_service.required]
-}
-
-resource "google_secret_manager_secret" "runtime" {
-  for_each  = toset(["external-api-config", "shopify-webhook-secret", "email-provider-config", "cloudflare-origin-secret"])
-  project   = var.project_id
-  secret_id = each.value
-  labels    = local.labels
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
+    content {
+      condition { age = lifecycle_rule.value }
+      action { type = "Delete" }
     }
   }
-
-  # Replication policy is immutable. Preserve the policy of imported production
-  # secrets so state adoption can never replace a container (and its versions)
-  # merely to normalize its replication mode.
-  lifecycle {
-    ignore_changes = [replication]
-  }
-
-  depends_on = [google_project_service.required]
 }
 
-resource "google_secret_manager_secret_iam_member" "api_runtime_secret_access" {
-  for_each  = toset(["email-provider-config", "cloudflare-origin-secret"])
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.runtime[each.value].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.runtime["api"].email}"
-}
-
-resource "google_firestore_database" "default" {
-  project                           = var.project_id
-  name                              = var.firestore_database_id
-  location_id                       = coalesce(var.firestore_location_id, var.region)
-  type                              = "FIRESTORE_NATIVE"
-  concurrency_mode                  = "OPTIMISTIC"
-  app_engine_integration_mode       = "DISABLED"
-  point_in_time_recovery_enablement = local.production ? "POINT_IN_TIME_RECOVERY_ENABLED" : "POINT_IN_TIME_RECOVERY_DISABLED"
-  delete_protection_state           = local.production ? "DELETE_PROTECTION_ENABLED" : "DELETE_PROTECTION_DISABLED"
-  deletion_policy                   = local.production ? "ABANDON" : "DELETE"
-  depends_on                        = [google_project_service.required]
-}
-
-resource "google_firebase_project" "this" {
-  provider   = google-beta
-  project    = var.project_id
-  depends_on = [google_project_service.required]
-}
-
-resource "google_firebase_web_app" "web" {
-  provider     = google-beta
+resource "google_service_account" "notification_worker" {
   project      = var.project_id
-  display_name = "PCR ${title(var.environment)} web"
-  depends_on   = [google_firebase_project.this]
+  account_id   = "notification-worker"
+  display_name = "PCR Notification worker"
 }
 
-resource "google_firebase_hosting_site" "web" {
-  provider   = google-beta
-  project    = var.project_id
-  site_id    = coalesce(var.firebase_hosting_site_id, var.project_id)
-  app_id     = google_firebase_web_app.web.app_id
-  depends_on = [google_firebase_project.this]
-}
-
-resource "google_identity_platform_config" "this" {
-  provider                   = google-beta
-  project                    = var.project_id
-  authorized_domains         = var.identity_authorized_domains
-  autodelete_anonymous_users = true
-
-  sign_in {
-    allow_duplicate_emails = false
-    email {
-      enabled           = true
-      password_required = true
-    }
-    anonymous { enabled = false }
-    phone_number { enabled = false }
-  }
-
-  client {
-    permissions {
-      disabled_user_signup   = true
-      disabled_user_deletion = true
-    }
-  }
-
-  mfa {
-    state = "ENABLED"
-    provider_configs {
-      state = "ENABLED"
-      totp_provider_config {
-        adjacent_intervals = 1
-      }
-    }
-  }
-
-  multi_tenant {
-    allow_tenants = true
-  }
-
-  depends_on = [google_project_service.required]
-}
-
-resource "google_cloud_run_v2_service" "service" {
-  for_each = {
-    api        = { account = "api", public = var.api_allow_unauthenticated }
-    ai-worker  = { account = "ai_worker", public = false }
-    pdf-worker = { account = "pdf_worker", public = false }
-  }
-  project             = var.project_id
-  location            = var.region
-  name                = each.key
-  ingress             = each.value.public ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"
-  deletion_protection = local.production
-  labels              = local.labels
-  template {
-    service_account = google_service_account.runtime[each.value.account].email
-    scaling {
-      min_instance_count = 0
-      max_instance_count = local.production ? 20 : 5
-    }
-    containers {
-      image = "us-docker.pkg.dev/cloudrun/container/hello"
-      env {
-        name  = "APP_ENV"
-        value = var.environment
-      }
-      env {
-        name  = "NODE_ENV"
-        value = local.production ? "production" : "development"
-      }
-      env {
-        name  = "GOOGLE_CLOUD_PROJECT"
-        value = var.project_id
-      }
-      env {
-        name  = "FIREBASE_PROJECT_ID"
-        value = var.project_id
-      }
-      env {
-        name  = "FIRESTORE_DATABASE_ID"
-        value = var.firestore_database_id
-      }
-      dynamic "env" {
-        for_each = each.key == "api" ? [1] : []
-        content {
-          name  = "PROINSPECT_PROVIDER_ID"
-          value = "proinspect"
-        }
-      }
-      dynamic "env" {
-        for_each = each.key == "api" ? [1] : []
-        content {
-          name  = "REQUIRE_APP_CHECK"
-          value = tostring(var.require_api_app_check)
-        }
-      }
-      dynamic "env" {
-        for_each = each.key == "api" ? [1] : []
-        content {
-          name = "CLOUDFLARE_ORIGIN_SECRET"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.runtime["cloudflare-origin-secret"].secret_id
-              version = "latest"
-            }
-          }
-        }
-      }
-      env {
-        name  = "VERTEX_AI_LOCATION"
-        value = var.region
-      }
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "512Mi"
-        }
-      }
-    }
-  }
-  lifecycle { ignore_changes = [template[0].containers[0].image] }
-  depends_on = [google_project_service.required]
-}
-
-resource "google_cloud_run_v2_service_iam_member" "api_public" {
-  count    = var.api_allow_unauthenticated ? 1 : 0
-  project  = var.project_id
-  location = var.region
-  name     = google_cloud_run_v2_service.service["api"].name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
-
-resource "google_logging_project_bucket_config" "regional" {
-  project        = var.project_id
-  location       = var.region
-  retention_days = local.production ? 365 : 30
-  bucket_id      = "pcr-regional"
-  description    = "Regional PCR application logs"
-  depends_on     = [google_project_service.required]
-}
-
-resource "google_monitoring_notification_channel" "email" {
-  for_each     = var.notification_emails
+resource "google_service_account" "dashboard_worker" {
   project      = var.project_id
-  display_name = "PCR ${title(var.environment)} ${each.value}"
-  type         = "email"
-  labels       = { email_address = each.value }
+  account_id   = "dashboard-worker"
+  display_name = "PCR Dashboard worker"
 }
 
-resource "google_monitoring_alert_policy" "cloud_run_errors" {
-  project               = var.project_id
-  display_name          = "PCR ${title(var.environment)} Cloud Run server errors"
-  combiner              = "OR"
-  notification_channels = [for channel in google_monitoring_notification_channel.email : channel.name]
-  conditions {
-    display_name = "Cloud Run 5xx responses"
-    condition_threshold {
-      filter          = "resource.type = \"cloud_run_revision\" AND metric.type = \"run.googleapis.com/request_count\" AND metric.label.response_code_class = \"5xx\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 5
-      aggregations {
-        alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_RATE"
-        cross_series_reducer = "REDUCE_SUM"
-      }
-    }
+resource "google_service_account" "document_worker" {
+  project      = var.project_id
+  account_id   = "document-worker"
+  display_name = "PCR Document worker"
+}
+
+resource "google_service_account" "integration_worker" {
+  project      = var.project_id
+  account_id   = "integration-worker"
+  display_name = "PCR Integration worker"
+}
+
+resource "google_project_iam_member" "worker_secret_access" {
+  for_each = {
+    notification = google_service_account.notification_worker.email
+    dashboard    = google_service_account.dashboard_worker.email
+    document     = google_service_account.document_worker.email
+    integration  = google_service_account.integration_worker.email
   }
-  depends_on = [google_project_service.required]
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${each.value}"
 }
 
-resource "google_billing_budget" "project" {
+resource "google_project_iam_member" "worker_logging" {
+  for_each = {
+    notification = google_service_account.notification_worker.email
+    dashboard    = google_service_account.dashboard_worker.email
+    document     = google_service_account.document_worker.email
+    integration  = google_service_account.integration_worker.email
+  }
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${each.value}"
+}
+
+resource "google_billing_budget" "monthly" {
   billing_account = var.billing_account_id
-  display_name    = "PCR ${title(var.environment)} monthly budget"
-  budget_filter { projects = ["projects/${data.google_project.current.number}"] }
+  display_name    = "${var.project_id}-${var.environment}-monthly"
   amount {
     specified_amount {
       currency_code = "AUD"
@@ -502,24 +247,26 @@ resource "google_billing_budget" "project" {
     }
   }
   threshold_rules { threshold_percent = 0.5 }
-  threshold_rules { threshold_percent = 0.8 }
+  threshold_rules { threshold_percent = 0.9 }
   threshold_rules { threshold_percent = 1.0 }
   all_updates_rule {
-    pubsub_topic   = google_pubsub_topic.billing.id
-    schema_version = "1.0"
+    monitoring_notification_channels = []
+    disable_default_iam_recipients    = false
   }
 }
 
-output "project_id" { value = var.project_id }
-output "region" { value = var.region }
-output "firebase_hosting_site" { value = google_firebase_hosting_site.web.site_id }
-output "cloud_run_services" { value = { for name, service in google_cloud_run_v2_service.service : name => service.uri } }
-output "runtime_service_accounts" { value = { for name, account in google_service_account.runtime : name => account.email } }
-output "cloud_deploy_service_account" { value = google_service_account.runtime["cloud_deploy"].email }
-output "artifact_repository" { value = google_artifact_registry_repository.containers.name }
-output "storage_buckets" {
-  value = {
-    uploads = google_storage_bucket.uploads.name
-    reports = google_storage_bucket.reports.name
-  }
+output "project_id" { value = data.google_project.current.project_id }
+output "container_repository" { value = google_artifact_registry_repository.containers.name }
+output "asset_bucket" { value = google_storage_bucket.assets.name }
+output "report_bucket" { value = google_storage_bucket.reports.name }
+output "service_accounts" {
+  value = merge(
+    { for k, v in google_service_account.runtime : k => v.email },
+    {
+      notification_worker = google_service_account.notification_worker.email
+      dashboard_worker    = google_service_account.dashboard_worker.email
+      document_worker     = google_service_account.document_worker.email
+      integration_worker  = google_service_account.integration_worker.email
+    }
+  )
 }
