@@ -73,9 +73,10 @@ export function appwriteSchemaFingerprint(cwd = root) {
   requireThat(tree.includes('infrastructure/appwrite/tables/'), 'Appwrite schema sources are missing');
   return hash(tree);
 }
-export function candidate(config, environment) {
-  assertClean();
-  return { commit: git(['rev-parse', 'HEAD']), tree: git(['rev-parse', 'HEAD^{tree}']), manifestHash: hash(manifest), schemaHash: appwriteSchemaFingerprint(), configHash: hash(candidateConfiguration(config,environment)), environment };
+export function candidate(config, environment, { allowDirty = false } = {}) {
+  if (!allowDirty) assertClean();
+  const dirty = Boolean(git(['status', '--porcelain', '--untracked-files=normal']));
+  return { commit: git(['rev-parse', 'HEAD']), tree: git(['rev-parse', 'HEAD^{tree}']), manifestHash: hash(manifest), schemaHash: appwriteSchemaFingerprint(), configHash: hash(candidateConfiguration(config,environment)), environment, dirty };
 }
 export function sameSourceCandidate(left,right) {
   return ['commit','tree','manifestHash','schemaHash'].every((key) => left?.[key] && left[key] === right?.[key]);
@@ -98,7 +99,7 @@ export function parseArgs(argv) {
   for (let i = 1; i < argv.length; i++) {
     const key = argv[i].slice(2);
     requireThat(argv[i].startsWith('--') && !seen.has(key), 'Invalid or duplicate option'); seen.add(key);
-    if (['apply', 'live', 'resume', 'execute'].includes(key)) result[key] = true;
+    if (['apply', 'live', 'resume', 'execute', 'all', 'safe'].includes(key)) result[key] = true;
     else { requireThat(['env', 'stage', 'confirm'].includes(key) && argv[i + 1] && !argv[i + 1].startsWith('--'), 'Unknown or missing option'); result[key] = argv[++i]; }
   }
   requireThat(['development', 'staging'].includes(result.env), 'Production is locked; only Development and Staging are allowed');
