@@ -24,5 +24,8 @@ replaceOne(release,
 replaceOne(release,
 "  const {target,context}=await preflight(config,{forMutation:true});",
 "  const {target,context}=await preflight(config,{forMutation:true,requireGoogleApis:id!=='terraform'});");
+replaceOne(release,
+"    let result;if(args.provider==='google')result=await rollbackGoogle(target,resolve(releaseDirectory(),'google','google-deployment.json'));else result=await rollbackCloudflare(target,resolve(releaseDirectory(),'cloudflare','cloudflare-deployment.json'));atomicJson(resolve(releaseDirectory(),`rollback-${args.provider}.json`),{candidate:context,completedAt:new Date().toISOString(),result,databaseRolledBack:false});return {status:'PRODUCTION_TRAFFIC_ROLLBACK_COMPLETE',provider:args.provider,databaseRolledBack:false,result};",
+"    const releaseLock=acquireLock(resolve(releaseDirectory(),'lock-root'));\n    try{let result;if(args.provider==='google')result=await rollbackGoogle(target,resolve(releaseDirectory(),'google','google-deployment.json'));else result=await rollbackCloudflare(target,resolve(releaseDirectory(),'cloudflare','cloudflare-deployment.json'));atomicJson(resolve(releaseDirectory(),`rollback-${args.provider}.json`),{candidate:context,completedAt:new Date().toISOString(),result,databaseRolledBack:false});return {status:'PRODUCTION_TRAFFIC_ROLLBACK_COMPLETE',provider:args.provider,databaseRolledBack:false,result};}finally{releaseLock();}");
 
-console.log('Hardened Production preflight bootstrap and Cloudflare CLI capability checks.');
+console.log('Hardened Production preflight bootstrap, serialized rollback, and Cloudflare CLI capability checks.');
