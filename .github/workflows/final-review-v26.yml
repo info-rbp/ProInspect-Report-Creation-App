@@ -30,6 +30,7 @@ jobs:
           node .github/final-review-toolchain-v26.mjs
           node .github/final-review-prod-normalize-v26.mjs
           node .github/final-review-terraform-retirement-v26.mjs
+          node .github/final-review-regression-v26.mjs
       - name: Normalize formatting
         run: |
           npm run format
@@ -51,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm .github/final-review-v26.mjs .github/final-review-toolchain-v26.mjs .github/final-review-prod-normalize-v26.mjs .github/final-review-terraform-retirement-v26.mjs .github/workflows/final-review-v26.yml
+          rm .github/final-review-v26.mjs .github/final-review-toolchain-v26.mjs .github/final-review-prod-normalize-v26.mjs .github/final-review-terraform-retirement-v26.mjs .github/final-review-regression-v26.mjs .github/workflows/final-review-v26.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
