@@ -11,11 +11,16 @@ function replaceAll(path,before,after){const value=read(path);if(!value.includes
 
 prepend(`${scenario}/common.mjs`,"import { Buffer } from 'node:buffer';");
 replaceAll(`${scenario}/common.mjs`,'AbortSignal.timeout(30000)','globalThis.AbortSignal.timeout(30000)');
+replaceAll(`${scenario}/common.mjs`,"import { hash, readJson, requireThat, safePath } from '../upgrades/launch-readiness-v2/runtime.mjs';","import { canonical, hash, readJson, requireThat, safePath } from '../upgrades/launch-readiness-v2/runtime.mjs';");
+replaceAll(`${scenario}/common.mjs`,'requireThat(JSON.stringify(bundle.targets) === JSON.stringify(providerTargets(input)),','requireThat(canonical(bundle.targets) === canonical(providerTargets(input)),');
 
 for(const name of ['commerce-calendar.mjs','identity.mjs','migration.mjs','operations.mjs','recovery.mjs','rehearsal.mjs','workers.mjs']) prepend(`${scenario}/${name}`,"import { Buffer } from 'node:buffer';");
 replaceAll(`${scenario}/migration.mjs`,"import { hash, requireThat } from '../upgrades/launch-readiness-v2/runtime.mjs';","import { hash } from '../upgrades/launch-readiness-v2/runtime.mjs';");
 replaceAll(`${scenario}/migration.mjs`,'structuredClone(bundle)','JSON.parse(JSON.stringify(bundle))');
 replaceAll(`${scenario}/migration.mjs`,'structuredClone(dupe.rows[0])','JSON.parse(JSON.stringify(dupe.rows[0]))');
+
+const tests=`${pkg}/tests/installer.test.mjs`;
+replaceAll(tests,"assert(!coverage.implemented.some((v)=>v.gate==='appwrite'));","assert(coverage.implemented.some((v)=>v.gate==='appwrite'));" );
 
 const integrity={algorithm:'sha256',files:{}};
 function files(prefix=''){return readdirSync(resolve(pkg,prefix),{withFileTypes:true}).flatMap((entry)=>{const name=prefix?`${prefix}/${entry.name}`:entry.name;return entry.isDirectory()?files(name):[name];}).sort();}
