@@ -6,7 +6,7 @@ permissions:
   contents: write
 concurrency:
   group: finalize-launch-readiness-v24
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   finalize:
     if: github.actor != 'github-actions[bot]'
