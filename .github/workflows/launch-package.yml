@@ -1,4 +1,5 @@
 name: Launch package validation
+# v2.3 final validation trigger
 on:
   workflow_dispatch:
   push:
