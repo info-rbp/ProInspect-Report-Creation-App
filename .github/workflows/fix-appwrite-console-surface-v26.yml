@@ -1,0 +1,57 @@
+name: Finalize Appwrite CLI surface v2.6
+on:
+  push:
+    branches: [feat/launch-readiness-installation-v2]
+permissions:
+  contents: write
+concurrency:
+  group: finalize-appwrite-cli-v26
+  cancel-in-progress: true
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.2
+      - name: Apply Appwrite console CLI correction
+        run: node .github/fix-appwrite-console-surface-v26.mjs
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Normalize and regenerate integrity
+        run: |
+          npm run format
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          const base='infrastructure/upgrades/launch-readiness-v2';
+          function files(prefix=''){return readdirSync(resolve(base,prefix),{withFileTypes:true}).flatMap((entry)=>{const name=prefix?`${prefix}/${entry.name}`:entry.name;return entry.isDirectory()?files(name):[name];}).sort();}
+          const index={algorithm:'sha256',files:{}};
+          for(const name of files().filter((name)=>name!=='integrity.json'))index.files[name]=createHash('sha256').update(readFileSync(resolve(base,name))).digest('hex');
+          writeFileSync(resolve(base,'integrity.json'),JSON.stringify(index,null,2)+'\n');
+          NODE
+          rm .github/fix-appwrite-console-surface-v26.mjs
+      - name: Verify candidate
+        run: |
+          npm run security:scan
+          npm run format:check
+          npm run launch:test
+          npm run launch:audit
+          npm run launch:plan
+          npm run launch:release -- plan
+      - name: Commit corrected candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix(launch): use Appwrite projects console CLI surface'
+      - name: Push corrected candidate
+        run: git push origin HEAD:feat/launch-readiness-installation-v2
