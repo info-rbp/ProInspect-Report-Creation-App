@@ -31,20 +31,46 @@ jobs:
       - name: Materialize v2.7 safeguards
         run: node scripts/launch-v27-materialize.mjs
 
-      - name: Normalize operator signature
+      - name: Finalize operator safeguards
         shell: bash
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync,writeFileSync } from 'node:fs';
-          const path='infrastructure/upgrades/launch-readiness-v2/operator.mjs';
-          const source=readFileSync(path,'utf8');
-          const before='export async function safeRepair(config, environment, directory) {';
-          if(!source.includes(before)) throw new Error('safeRepair signature not found');
-          writeFileSync(path,source.replace(before,'export async function safeRepair(config, environment) {'));
+
+          const operatorPath='infrastructure/upgrades/launch-readiness-v2/operator.mjs';
+          let operator=readFileSync(operatorPath,'utf8');
+          const signature='export async function safeRepair(config, environment, directory) {';
+          if(operator.includes(signature)) operator=operator.replace(signature,'export async function safeRepair(config, environment) {');
+          if(!operator.includes('function recheckCommand(environment, stage)')) {
+            const anchor="function commandSuffix(environment) {\n  return environment === 'development' ? '' : ` --env ${environment}`;\n}\n";
+            if(!operator.includes(anchor)) throw new Error('commandSuffix anchor not found');
+            operator=operator.replace(anchor,`${anchor}function recheckCommand(environment, stage) {\n  const suffix = commandSuffix(environment);\n  if (stage === 'preflight') return \`npm run launch:preflight --\${suffix} --all\`;\n  if (stage === 'reconcile') return \`npm run launch:reconcile --\${suffix} --stage all\`;\n  return \`npm run launch:check --\${suffix} --stage \${stage}\`;\n}\n`);
+          }
+          operator=operator.replace("if (code === 'AUTHORITY') return `Run npm run launch:authority, repair the reported Appwrite-authority source paths, then repeat: npm run launch:check --${suffix} --stage ${stage}`;","if (code === 'AUTHORITY') return `Run npm run launch:authority, repair the reported Appwrite-authority source paths, then repeat: ${recheckCommand(environment, stage)}`;");
+          operator=operator.replace("return `Re-run npm run launch:check --${suffix} --stage ${stage} after correcting the reported condition.`;","return `Correct the reported condition, then re-run: ${recheckCommand(environment, stage)}`;");
+          operator=operator.replace("recheck: recheck || `npm run launch:check --${suffix} --stage ${stage}`,","recheck: recheck || recheckCommand(environment, stage),");
+          operator=operator.replace("  const suffix = commandSuffix(environment);\n  return {\n    id: issueId(environment, stage, code),","  return {\n    id: issueId(environment, stage, code),");
+          operator=operator.replace("  const blocked = states.some((item) => ['INVALIDATED', 'RECHECK_REQUIRED'].includes(item.status));","  const blocked = issues.some((item) => item.severity === 'BLOCKER') || states.some((item) => ['INVALIDATED', 'RECHECK_REQUIRED'].includes(item.status));");
+          writeFileSync(operatorPath,operator);
+
+          const cliPath='infrastructure/upgrades/launch-readiness-v2/cli.mjs';
+          let cli=readFileSync(cliPath,'utf8');
+          cli=cli.replace("    if(!existsSync(directory))return;\n",'');
+          writeFileSync(cliPath,cli);
+
+          const testPath='infrastructure/upgrades/launch-readiness-v2/tests/operator.test.mjs';
+          let tests=readFileSync(testPath,'utf8');
+          if(!tests.includes('diagnostic issues use executable diagnostic recheck commands')) {
+            tests += `\n\ntest('diagnostic issues use executable diagnostic recheck commands',()=>{\n  const preflight=makeIssue({environment:'development',stage:'preflight',code:'CONFIGURATION',message:'missing'});\n  const reconciliation=makeIssue({environment:'staging',stage:'reconcile',code:'WORKTREE_DIRTY',message:'dirty'});\n  assert.equal(preflight.recheck,'npm run launch:preflight -- --all');\n  assert.equal(reconciliation.recheck,'npm run launch:reconcile -- --env staging --stage all');\n});\n\ntest('reconciliation treats ledger blockers as blocking',()=>{\n  const source=readFileSync(resolve(packageRoot,'operator.mjs'),'utf8');\n  assert.match(source,/issues\.some\(\(item\) => item\.severity === 'BLOCKER'\)/u);\n});\n`;
+          }
+          writeFileSync(testPath,tests);
           NODE
 
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Generate Appwrite resources before candidate
+        run: npm run appwrite:generate
 
       - name: Format candidate
         run: npm run format
@@ -99,7 +125,15 @@ jobs:
         run: npm run test:run
 
       - name: Appwrite schema generation and validation
-        run: npm run appwrite:validate
+        shell: bash
+        run: |
+          npm run appwrite:validate
+          status="$(git status --porcelain --untracked-files=normal)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status"
+            echo 'Appwrite validation changed the exact candidate.' >&2
+            exit 1
+          fi
 
       - name: Build all packages and applications
         run: npm run build
@@ -111,7 +145,10 @@ jobs:
         run: npm run launch:test
 
       - name: Exact package integrity audit
-        run: npm run launch:audit
+        shell: bash
+        run: |
+          npm run launch:audit
+          test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/operator-report.md"
 
       - name: Non-production plan remains non-mutating
         run: npm run launch:plan
@@ -130,8 +167,13 @@ jobs:
           npm run launch:issues > /tmp/issues.log
           cat /tmp/issues.log
           grep -q 'OPEN_BLOCKERS' /tmp/issues.log
-          npm run launch:reconcile -- --stage all > /tmp/reconcile.log
+          set +e
+          npm run launch:reconcile -- --stage all > /tmp/reconcile.log 2>&1
+          reconcile_code=$?
+          set -e
           cat /tmp/reconcile.log
+          test "$reconcile_code" -eq 0
+          grep -q 'SAFE_TO_CONTINUE' /tmp/reconcile.log
           test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/operator-report.md"
           test -f "$(git rev-parse --git-path proinspect-launch-v2)/development/issues.json"
 
@@ -150,7 +192,12 @@ jobs:
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          test -z "$(git status --porcelain --untracked-files=normal)"
+          status="$(git status --porcelain --untracked-files=normal)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status"
+            git diff --stat
+            exit 1
+          fi
 
       - name: Publish verified candidate
         run: git push origin HEAD:feat/launch-readiness-v27-operator-safeguards
