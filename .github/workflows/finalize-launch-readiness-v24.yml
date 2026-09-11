@@ -31,7 +31,8 @@ jobs:
           writeFileSync(path,source);
           NODE
           node .github/apply-launch-acceptance-v24.mjs
-          rm .github/apply-launch-acceptance-v24.mjs .github/workflows/finalize-launch-readiness-v24.yml
+          node .github/fix-launch-acceptance-v24.mjs
+          rm .github/apply-launch-acceptance-v24.mjs .github/fix-launch-acceptance-v24.mjs .github/workflows/finalize-launch-readiness-v24.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
