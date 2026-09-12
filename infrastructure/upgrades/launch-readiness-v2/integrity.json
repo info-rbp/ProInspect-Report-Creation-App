@@ -1,7 +1,7 @@
 {
   "algorithm": "sha256",
   "files": {
-    "README.md": "c795206931a432c3387d37e58013d4909b4f9dcbcea843b9ff02f2e99229702c",
+    "README.md": "32a92fd23bda1465b206d2d24a25f1eb562a309e024e48348ca58d6813e88017",
     "actions/backup.mjs": "ef7aff099ddae260ef10fab48aeae71f6d6a2e1b304176e802ddda23f9f05472",
     "actions/cloudflare.mjs": "d35307c1ea9427fdb2dedfa58cb8314e3264af282611cedc2ee681013efba768",
     "actions/credentials.mjs": "bca8f66bf3e8b43ca41ad2a76f1c063cb384de395e0168c226a3f4f596ad072d",
@@ -19,7 +19,7 @@
     "adapters/appwrite-cli.mjs": "f7d5b990cd390b3d645a3e38f6faf281d7e307d3bbf127c6de9792936f6a6ef0",
     "adapters/scenario-cli.mjs": "5760ca0265345e659559d611ddc36badfd4ad69a75e8ba82f6e1f2bda1ebd2b3",
     "appwrite-contract.mjs": "7a306cb54ece391265f00359d6578c92c579b5db2fd5449d54a6626bcc83a678",
-    "appwrite-session.mjs": "5bc6d96e5995c2d19aada8acecf3a6805d35f830e91f64367bd71ba79a7d2f92",
+    "appwrite-session.mjs": "26b4372700ed17e457b7d0a5fa64c662689d6a95880d4c80e2472ae4cea65564",
     "cli.mjs": "c86b4b6d979a7a5a4b35eb42188dc93e9a77026b2c8ae7591db31ed6f3aa1657",
     "completion.mjs": "4eea63f8feb60dec7c06e9f5f164e7e1cfc7eb9fb5a94da040d35ecbbd108ba9",
     "config.example.json": "dc9244a89dfc216489b0cc573621ab7f7b23498029bbc7fb4abf323869521df5",
@@ -38,7 +38,7 @@
     "release.example.json": "00cf0fd6dadf8e9e0e4b75a42db3b142ac964eb37ab138950465b229cf81bf06",
     "release.mjs": "81df404423f03ebeba8d2bc66f10e45a04ba4576d6c52afebce82b99e1036a7f",
     "runtime.mjs": "33b27bf91d489facf742e281ceab55d902215cae1dadef1740d28ee62a3a385f",
-    "tests/appwrite-session.test.mjs": "682894c6553fd9730cf3836663f3cfc960ac046441da899f2f5f1c58957b485d",
+    "tests/appwrite-session.test.mjs": "e38a3c2e84a038dbec1edbedeaec856bed7b8b983aba9910358f054e693aff31",
     "tests/authority.test.mjs": "5776d1a61d8094e7d899940267e18a65e0bab7e8ee6c1e5ad46321cb447fb531",
     "tests/final-review.test.mjs": "411c8831e19c632dafcda784aee435566b97f48013d815746416ba6b434fa257",
     "tests/installer.test.mjs": "6848c57a8216ce5aa25c5ea7345cc24ccf4e56a7d042225ff35d8b4c9b1fc0b0",

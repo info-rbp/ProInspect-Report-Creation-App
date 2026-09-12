@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { atomicJson, run, requireThat, manifest, canonical } from './runtime.mjs';
-import { requireCommand, scopeArguments } from './appwrite-contract.mjs';
+import { requireCommand, requireRuntimeKeyCreation, scopeArguments } from './appwrite-contract.mjs';
 
 export async function appwriteContext(target, directory, execute = run) {
   requireThat(target.endpoint === 'https://syd.cloud.appwrite.io/v1' && !manifest.prohibited.appwriteProjects.includes(target.projectId), 'Unapproved Appwrite target');
@@ -15,10 +15,14 @@ export async function appwriteContext(target, directory, execute = run) {
 }
 export async function withAppwrite(target, directory, scopes, operation, execute = run) {
   const { cwd, cli } = await appwriteContext(target, directory, execute);
-  await requireCommand(['project','create-ephemeral-key'], ['--project-id','--scopes','--duration'], cwd, execute);
+  // Ephemeral keys are stateless JWTs, not stored revocable keys. Expiration
+  // alone cannot satisfy the installer's mandatory immediate cleanup contract.
+  await requireRuntimeKeyCreation(cwd, execute);
+  const name = `launch-${randomUUID()}`;
+  const expire = new Date(Date.now() + 3600000).toISOString();
   let key;
   try {
-    key = await cli(['project','create-ephemeral-key','--project-id',target.projectId,...scopeArguments(scopes),'--duration','3600'], { secret: true });
+    key = await cli(['project','create-key','--project-id',target.projectId,'--name',name,...scopeArguments(scopes),'--expire',expire], { secret: true });
     requireThat(key.$id && key.secret && key.secret !== '[REDACTED]', 'CLI returned no usable temporary credential');
     requireThat(Date.parse(key.expire) > Date.now() && Date.parse(key.expire) <= Date.now() + 3600000, 'Temporary key expiry exceeds the one-hour bound');
     requireThat(Array.isArray(key.scopes) && canonical([...key.scopes].sort()) === canonical([...scopes].sort()), 'Temporary key scopes differ from requested scopes');
