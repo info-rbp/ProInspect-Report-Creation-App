@@ -1,38 +1,39 @@
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { atomicJson, run, requireThat, manifest } from './runtime.mjs';
+import { atomicJson, run, requireThat, manifest, canonical } from './runtime.mjs';
+import { requireCommand, scopeArguments } from './appwrite-contract.mjs';
 
-export async function appwriteContext(target, directory) {
+export async function appwriteContext(target, directory, execute = run) {
   requireThat(target.endpoint === 'https://syd.cloud.appwrite.io/v1' && !manifest.prohibited.appwriteProjects.includes(target.projectId), 'Unapproved Appwrite target');
   requireThat(!process.env.APPWRITE_API_KEY, 'Unset APPWRITE_API_KEY; installer uses short-lived console-created credentials');
   const cwd = resolve(directory, 'appwrite-context');
   atomicJson(resolve(cwd, 'appwrite.config.json'), { projectId: target.projectId, projectName: target.projectName, endpoint: target.endpoint });
-  const cli = async (args) => JSON.parse(await run('appwrite', ['--json', ...args], { cwd, live: true, sensitive: true, timeoutMs: 90000 }));
-  const project = await cli(['projects','get','--project-id',target.projectId]);
+  const cli = async (args, { secret = false } = {}) => JSON.parse(await execute('appwrite', ['--raw', ...(secret ? ['--show-secrets'] : []), ...args], { cwd, live: true, sensitive: true, timeoutMs: 90000 }));
+  const project = await cli(['project','get','--project-id',target.projectId]);
   requireThat(project.$id === target.projectId && project.name === target.projectName && project.status === 'active' && project.region === 'syd', 'Appwrite identity mismatch');
   return { cwd, cli, project };
 }
-export async function withAppwrite(target, directory, scopes, operation) {
-  const { cwd, cli } = await appwriteContext(target, directory);
-  const help = await run('appwrite', ['projects','create-key','--help'], { cwd, timeoutMs: 30000 });
-  for (const option of ['--project-id','--name','--scopes','--expire']) requireThat(help.includes(option), `Pinned CLI is missing ${option}; no mutation performed`);
-  const name = `launch-${randomUUID()}`;
-  const expire = new Date(Date.now() + 3600000).toISOString();
+export async function withAppwrite(target, directory, scopes, operation, execute = run) {
+  const { cwd, cli } = await appwriteContext(target, directory, execute);
+  await requireCommand(['project','create-ephemeral-key'], ['--project-id','--scopes','--duration'], cwd, execute);
   let key;
   try {
-    key = await cli(['projects','create-key','--project-id',target.projectId,'--name',name,'--scopes',...scopes,'--expire',expire]);
-    requireThat(key.$id && key.secret, 'CLI returned no usable temporary credential');
-    atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, id: key.$id, expire, revoked: false });
+    key = await cli(['project','create-ephemeral-key','--project-id',target.projectId,...scopeArguments(scopes),'--duration','3600'], { secret: true });
+    requireThat(key.$id && key.secret && key.secret !== '[REDACTED]', 'CLI returned no usable temporary credential');
+    requireThat(Date.parse(key.expire) > Date.now() && Date.parse(key.expire) <= Date.now() + 3600000, 'Temporary key expiry exceeds the one-hour bound');
+    requireThat(Array.isArray(key.scopes) && canonical([...key.scopes].sort()) === canonical([...scopes].sort()), 'Temporary key scopes differ from requested scopes');
+    atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, id: key.$id, expire: key.expire, revoked: false });
     const sdk = await import('node-appwrite');
     const { InputFile } = await import('node-appwrite/file');
     const client = new sdk.Client().setEndpoint(target.endpoint).setProject(target.projectId).setKey(key.secret);
     return await operation({ db: new sdk.TablesDB(client), storage: new sdk.Storage(client), teams: new sdk.Teams(client), users: new sdk.Users(client), Query: sdk.Query, InputFile });
   } finally {
-    if (key?.$id) {
-      await cli(['projects','delete-key','--project-id',target.projectId,'--key-id',key.$id]);
-      atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, id: key.$id, expire, revoked: true });
-      key.secret = undefined;
-    }
+    try {
+      if (key?.$id) {
+        await cli(['project','delete-key','--project-id',target.projectId,'--key-id',key.$id]);
+        atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, id: key.$id, expire: key.expire, revoked: true });
+      }
+    } finally { if (key) key.secret = undefined; }
   }
 }
 export async function paged(call, collection, Query) {
@@ -59,7 +60,7 @@ export async function ensureWebPlatform(target, web, directory) {
   const { cli, cwd } = await appwriteContext(target, directory);
   const hostname = new URL(web.origin).hostname;
   const list = async () => {
-    const result = await cli(['projects','list-platforms','--project-id',target.projectId,'--limit','100']);
+    const result = await cli(['project','list-platforms','--project-id',target.projectId,'--limit','100']);
     requireThat(Array.isArray(result.platforms) && result.total === result.platforms.length, 'Appwrite platform inventory is truncated');
     return result.platforms;
   };
@@ -68,9 +69,8 @@ export async function ensureWebPlatform(target, web, directory) {
   let created = false;
   requireThat(matches.length <= 1, 'Duplicate Appwrite platform hostname requires manual review');
   if (matches.length === 0) {
-    const help = await run('appwrite',['projects','create-platform','--help'],{cwd,timeoutMs:30000});
-    for (const flag of ['--project-id','--type','--name','--hostname']) requireThat(help.includes(flag), 'Pinned Appwrite CLI cannot create the required web platform: ' + flag);
-    await cli(['projects','create-platform','--project-id',target.projectId,'--type','web','--name','ProInspect '+hostname,'--hostname',hostname]);
+    await requireCommand(['project','create-web-platform'], ['--project-id','--platform-id','--name','--hostname'], cwd);
+    await cli(['project','create-web-platform','--project-id',target.projectId,'--platform-id',randomUUID(),'--name','ProInspect '+hostname,'--hostname',hostname]);
     created = true; platforms = await list(); matches = platforms.filter((item) => item.hostname === hostname);
   }
   requireThat(matches.length === 1 && matches[0].type === 'web', 'Required Appwrite web platform was not reconciled');

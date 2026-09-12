@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { resolve } from 'node:path';
 import { atomicJson, requireThat, run, validateConfig, redact, hash, canonical, manifest } from './runtime.mjs';
 import { appwriteContext } from './appwrite-session.mjs';
+import { requireRuntimeKeyCreation } from './appwrite-contract.mjs';
 import { googleIdentity } from './actions/google.mjs';
 import { cfRequest } from './actions/cloudflare.mjs';
 
@@ -20,7 +21,7 @@ export async function shopifyAudit(target,{env=process.env,fetcher=fetch}={}) {
   requireThat(response.headers.get('x-shopify-api-version')===target.apiVersion,'Shopify API version fallback');
   return {shopId:result.data.shop.id,domain:target.domain,readOnly:true};
 }
-export async function appwriteAudit(target,directory) { const {project}=await appwriteContext(target,directory); return {projectId:project.$id,name:project.name}; }
+export async function appwriteAudit(target,directory) { const {project,cwd}=await appwriteContext(target,directory); await requireRuntimeKeyCreation(cwd); return {projectId:project.$id,name:project.name}; }
 export async function googleAudit(target) {
   await googleIdentity(target);
   const services=JSON.parse(await run('gcloud',['services','list','--enabled','--project',target.projectId,'--format=json'],{live:true,sensitive:true}));

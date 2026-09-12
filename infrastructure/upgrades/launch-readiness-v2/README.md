@@ -230,7 +230,9 @@ These controls still do not convert legacy worker business logic. The workers ga
 
 ### Appwrite console CLI surface correction
 
-V2.6 uses the authenticated Appwrite CLI `projects` service for project identity, platform and API-key administration. The singular `project` service is not used for these console-level operations. The installer still refuses a standing `APPWRITE_API_KEY` and creates only bounded temporary/runtime credentials after verifying the exact target project.
+CLI 27.2.1 uses `project` for project identity, platform and key inventory. Read responses use `--raw` to preserve empty arrays and null values. Temporary credentials use `project create-ephemeral-key --duration 3600` with repeated `--scopes` flags, exact scope/expiry validation and mandatory revocation. Web platforms use `project create-web-platform` with an explicit platform ID. The installer still refuses a standing `APPWRITE_API_KEY` and verifies the exact target before requesting temporary credentials.
+
+CLI 27.2.1 does not expose `project create-key`. Appwrite deprecated programmatic creation of long-lived keys on 17 August 2026 (https://appwrite.io/changelog/entry/2026-08-17). Provider checks and the credential stage fail closed on this missing capability before any credential mutation. Ephemeral keys are not substituted for reviewed runtime lifetimes, and no CLI version change is authorized by this compatibility correction. Runtime credential provisioning requires a separately reviewed supported workflow.
 
 
 ## Final deployment hardening v2.6
