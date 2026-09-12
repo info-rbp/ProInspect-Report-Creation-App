@@ -1,64 +1,62 @@
-git add docs/deployment/launch-policy-development.json
-git commit -m "ops(launch): approve development installation policy"
-git push origin feat/launch-readiness-installation-v2{
+{
   "launchScope": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Install and assess Launch Readiness V2.7 only in ProInspect Development, project proinspect-development in Sydney, using the canonical repository and all seven portals over shared services. Installation receipts do not constitute acceptance. Use synthetic acceptance data and reviewed non-production migration sources. Do not deploy Staging or Production, switch Production traffic, change live Shopify webhooks, or retire legacy systems under this approval.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "dataAuthorityByDomain": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Appwrite is the target Development authority for identity, memberships, application data, evidence metadata and files; the ProInspect API enforces business rules, tenancy, lifecycle transitions, immutable releases and audit. Google Cloud provides compute, queues, builds, secrets, monitoring and Calendar; Cloudflare provides web and edge delivery; Shopify retains catalogue, pricing, checkout, payment, refund and financial order authority. The five standalone workers must use Appwrite-backed operations with no Firebase, Firestore or Google Storage application-data authority or write-back. Preserve legacy sources and their existing authority outside the explicitly installed Development target; permanent bidirectional synchronization is prohibited.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "unitPropertyMapping": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Map Strata D1 properties to managed_sites and preserve units, buildings, levels and their explicit parent relationships. Keep people, portal identities, tenants, tenancies and occupancies distinct. Create or link an inspectable ProInspect property only through a reviewed explicit unit-to-property mapping; do not infer that every unit is an inspectable property. Preserve standalone properties and client-property relationships. Unresolved required parents or ambiguous unit mappings block the affected migration records until the owner supplies an approved mapping.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "rolesAndResidentVisibility": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Authorize on the server using active Appwrite identity, verified privileged MFA, active agency and site/client/occupancy/contractor/inspection relationships, capability, lifecycle and separation of duties. Teams provide coarse grouping, not business authorization. Residents require their own current verified occupancy or an explicit portal grant and the record's permitted audience; site membership alone never exposes another resident's records. Contractors require assignment or their own attendance/upload; inspectors require assignment. Relief access expires. Strata/council governance and Building Management operations remain separate. Legacy administrator labels and owner/tenant labels never imply expanded permissions; role mappings require explicit review and cross-scope denial evidence.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "approvalThresholdsAndSeparation": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Keep operational quote recommendation, approval and work-order issuance distinct, with server-enforced role, scope and separation-of-duties checks. Preserve the approved policy version and monetary limits used by each decision; no numerical spending threshold or self-approval exception is inferred from a role or this installation policy. Agency/site owners must supply the actual delegated, second-approval and emergency rules before affected workflows are accepted. Material approval, work-order, audit and outbox changes must commit atomically, reject unauthorized transitions, and survive duplicate delivery and rollback tests. ProInspect records commercial facts while external systems retain financial authority.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "controlledKeysDevicesMoves": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Keep a site-scoped controlled-key register with atomic custody issue/return and append-only transaction history. Contractor sign-out blocks outstanding keys unless an authorized, reasoned override is audited. Access-device requests require the recorded applicant/unit authority and applicable externally confirmed payment policy before approval or issue; preserve loss, replacement, activation and deactivation history. Move closure requires return of access items and the required post-move inspection. Site operating instructions govern logistics and exceptions; do not invent inventory, payment rules or override authority.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "contractorCompliance": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Keep contractor-company records distinct from authenticated contractor users and require explicit site and work assignment. Enforce the applicable recorded licence, insurance, induction and other compliance requirements and their expiry rules before the controlled assignment or attendance action. Missing or expired required compliance must block that action and be visible to authorized operations staff. Completion must preserve assigned-work evidence, verification, controlled-key return and audit. Required document types, expiry rules and any exception authority must come from approved site/agency policy and are not invented by the installer.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "retentionLegalHoldAndPrivacy": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Retain legacy source records and files throughout this Development installation. Preserve immutable final reports, superseded versions and append-only audit history; corrections create new versions. Keep rows and files deny-by-default with explicit entity, tenant and audience permissions, and keep migration, backup and acceptance artifacts private outside the checkout. Do not import passwords, sessions, tokens, secrets or public grants. Do not enable destructive retention cleanup or lock a retention policy without approved periods, legal-hold handling, deletion/export rules and evidence size limits. Those business/privacy decisions remain required from their accountable owner; this policy does not invent statutory periods or authorize personal-data disclosure.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "offlineEncryptionAndRecovery": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Treat IndexedDB drafts and evidence queues as a controlled temporary workspace; Appwrite remains the system of record. Persist inspection and Building Management drafts, upload progress and operation identities across refresh/restart; reconnect idempotently and surface version conflicts instead of overwriting cloud changes. Submission requires synchronized mutations/evidence and explicit user confirmation. Local encryption, key handling, session-expiry behavior and recovery must have an explicit owner-approved policy and be exercised on real controlled iPhone Safari, Android Chrome, tablet and desktop devices. Browser emulation and missing encryption or recovery evidence cannot satisfy physical-device acceptance.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "rtoRpoAndSupportOwnership": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Require a current encrypted database-and-file backup and a verified isolated restore probe for the exact candidate/configuration before installation mutations that depend on backup. Record measured recovery duration, recoverable snapshot age, counts, hashes and permissions; do not claim an RTO or RPO from an unmeasured rehearsal. Operations must name support, incident escalation and retry/dead-letter owners, approve numerical RTO/RPO targets and prove alert delivery and restore procedures before operational acceptance. During an incident preserve evidence, identify the exact release, and distinguish recorded code/traffic rollback from application-data recovery. No on-call identity, contact, recovery objective or freeze approval is implied by this policy draft.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "shopifyCalendarProviderScope": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Use only the configured proinspect-2.myshopify.com identity with the pinned 2026-07 API for the launch provider check and synthetic Development replay. Replay only the tracked test fixture through dev_agency using the controlled non-production HMAC secret; validate HMAC rejection and duplicate-delivery idempotency without creating orders or changing Shopify subscriptions. Shopify retains financial authority and approved product/variant mappings route operational ServiceRequests. Keep Google Calendar OAuth, callbacks, watches, scheduling and reconciliation server-side on isolated Development resources with Australia/Perth scheduling semantics; actual provider identifiers and callbacks must be discovered and verified. Do not change Production Shopify behavior or use legacy runtime data stores for integration state.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   },
   "migrationSnapshotsAndRollback": {
-    "decision": null,
-    "approvedBy": null,
-    "approvedAt": null
+    "decision": "Import only actual approved synthetic or Development exports under a private SHA-256-pinned V2.7 manifest naming the approver, approval time and exact proinspect-development target. Account for all 49 D1 tables and applicable Firestore, R2 and Firebase Storage sources, including explicitly omitted credentials and transient history. Preserve deterministic source-to-target IDs, explicit parent references, canonical row/file hashes and private permissions. Validate relationships, counts, checksums and access denials; reject conflicting existing targets and reconcile interrupted journals before retry. Record and verify the Development application/worker write freeze separately. Rollback may remove only unchanged target objects proven created by that migration run; source data, live routing and legacy systems are preserved. No Production migration, final delta or source retirement is authorized.",
+    "approvedBy": "Gianpaulo Coletti",
+    "approvedAt": "2026-09-12T11:10:00+08:00"
   }
 }
