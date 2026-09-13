@@ -11,7 +11,7 @@ describe('Appwrite schema', () => {
     for (const table of allTables) {
       expect(table.$permissions).toEqual([]);
       expect(table.rowSecurity).toBe(true);
-      const columns = new Set(table.columns.map((column) => [column.key, column]).map(([key]) => key));
+      const columns = new Set(table.columns.map((column) => column.key));
       for (const index of table.indexes) for (const column of index.columns) expect(columns.has(column), `${table.$id}.${index.key}.${column}`).toBe(true);
     }
   });
