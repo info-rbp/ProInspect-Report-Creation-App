@@ -4,7 +4,7 @@
   "version": "2.7.0",
   "baselineCommit": "a27cf680a858961f141a6421278f89f95d38a162",
   "baselinePackage": "infrastructure/upgrades/platform-completion-v1",
-  "targetSchemaTables": 120,
+  "targetSchemaTables": 123,
   "requiredToolchain": {
     "node": "22.23.2",
     "npm": "10.9.8",
