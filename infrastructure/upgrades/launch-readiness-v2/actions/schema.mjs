@@ -8,7 +8,8 @@ export async function sourceSchema() {
   const directory = resolve(root, 'infrastructure/appwrite');
   const a = await import(pathToFileURL(resolve(directory,'tables/schema.mjs')).href);
   const b = await import(pathToFileURL(resolve(directory,'tables/unified-platform-extensions.mjs')).href);
-  return { databases: readJson(resolve(directory,'databases/databases.json')), tables: [...a.tables,...b.unifiedPlatformExtensionTables], buckets: readJson(resolve(directory,'buckets/buckets.json')), teams: readJson(resolve(directory,'teams/teams.json')) };
+  const c = await import(pathToFileURL(resolve(directory,'tables/worker-extensions.mjs')).href);
+  return { databases: readJson(resolve(directory,'databases/databases.json')), tables: [...a.tables,...b.unifiedPlatformExtensionTables,...c.workerExtensionTables], buckets: readJson(resolve(directory,'buckets/buckets.json')), teams: readJson(resolve(directory,'teams/teams.json')) };
 }
 const columnFields = ['type','required','array','format','size','elements','default','min','max'];
 export function columnChanges(expected, actual) {

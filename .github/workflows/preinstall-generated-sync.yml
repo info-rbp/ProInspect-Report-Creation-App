@@ -1,0 +1,45 @@
+name: Preinstall generated sync
+
+on:
+  push:
+    branches:
+      - feat/genspark-preinstall-readiness
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/genspark-preinstall-readiness
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - name: Pin npm
+        run: npm install --global npm@10.9.8
+      - name: Regenerate lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Regenerate Appwrite resources
+        run: npm run appwrite:generate
+      - name: Commit generated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json infrastructure/appwrite/tables/tables.json
+          if git diff --cached --quiet; then
+            echo "Generated artifacts already synchronized."
+          else
+            git commit -m "chore(appwrite): synchronize generated preinstall artifacts"
+            git push origin HEAD:feat/genspark-preinstall-readiness
+          fi
+      - name: Validate repository
+        run: npm run check
+      - name: Validate launch package
+        run: npm run launch:test && npm run launch:audit
