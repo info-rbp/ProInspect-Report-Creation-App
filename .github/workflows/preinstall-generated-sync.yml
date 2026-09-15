@@ -39,7 +39,25 @@ jobs:
             git commit -m "chore(appwrite): synchronize generated preinstall artifacts"
             git push origin HEAD:feat/genspark-preinstall-readiness
           fi
-      - name: Validate repository
-        run: npm run check
+      - name: Formatting
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Appwrite schema unit tests
+        run: npx vitest run infrastructure/appwrite/tables/schema.test.mjs
+      - name: Worker unit tests
+        run: npx vitest run apps/dashboard-worker apps/document-worker apps/notification-worker apps/integration-worker --passWithNoTests
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Rules tests
+        run: npm run test:rules
+      - name: Validate Appwrite resources
+        run: npm run appwrite:validate
+      - name: Build applications
+        run: npm run build
+      - name: Verify built artifacts
+        run: npm run verify:dist
       - name: Validate launch package
         run: npm run launch:test && npm run launch:audit
