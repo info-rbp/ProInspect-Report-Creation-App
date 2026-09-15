@@ -17135,5 +17135,332 @@
         ]
       }
     ]
+  },
+  {
+    "$id": "pdf_jobs",
+    "databaseId": "proinspect_core",
+    "name": "Pdf Jobs",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "taskId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "reportId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "reportVersionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "currentVersionId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "renderId",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "canonicalInputHash",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "pdfFileId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "pdfSha256",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "manifestId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "manifestSha256",
+        "type": "string",
+        "size": 64,
+        "required": false
+      },
+      {
+        "key": "errorCode",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "errorMessage",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "retryable",
+        "type": "boolean",
+        "required": false
+      },
+      {
+        "key": "startedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "completedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "failedAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_task",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "taskId"
+        ]
+      },
+      {
+        "key": "report_status",
+        "type": "key",
+        "columns": [
+          "reportId",
+          "status"
+        ]
+      },
+      {
+        "key": "version_status",
+        "type": "key",
+        "columns": [
+          "reportVersionId",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "report_render_manifests",
+    "databaseId": "proinspect_core",
+    "name": "Report Render Manifests",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "reportId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "reportVersionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "renderId",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "canonicalInputHash",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "pdfFileId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "pdfSha256",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "manifest",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "manifestSha256",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "generatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "generatedBy",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "report_version_render",
+        "type": "unique",
+        "columns": [
+          "reportId",
+          "reportVersionId",
+          "renderId"
+        ]
+      },
+      {
+        "key": "version_generated",
+        "type": "key",
+        "columns": [
+          "reportVersionId",
+          "generatedAt"
+        ]
+      }
+    ]
   }
 ]
