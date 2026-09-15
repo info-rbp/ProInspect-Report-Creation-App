@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tables } from '../tables/schema.mjs';
 import { unifiedPlatformExtensionTables } from '../tables/unified-platform-extensions.mjs';
+import { workerExtensionTables } from '../tables/worker-extensions.mjs';
 import { validatePlatformDefinitions } from '../platforms/platforms.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,7 +13,7 @@ const config = await readJson('appwrite.config.json');
 const generatedTables = await readJson('tables/tables.json');
 const buckets = await readJson('buckets/buckets.json');
 const platforms = await readJson('platforms/platforms.json');
-const allTables = [...tables, ...unifiedPlatformExtensionTables];
+const allTables = [...tables, ...unifiedPlatformExtensionTables, ...workerExtensionTables];
 
 if (config.projectId !== 'DEVELOPMENT_PROJECT_ID_REQUIRED') errors.push('Version-controlled config must retain the non-deployable Development project placeholder.');
 if (!/Development/i.test(config.projectName)) errors.push('Project name must identify Development.');
@@ -51,7 +52,9 @@ const requiredTables = [
   'service_definitions','service_requests','inspection_jobs','maintenance_items','audit_events',
   'evidence_files','migration_id_map','portal_entitlements','contractor_compliance','conversations',
   'conversation_messages','offer_partners','offers','offer_redemptions','appointment_bookings',
-  'route_plans','offline_sync_receipts',
+  'route_plans','offline_sync_receipts','dashboard_metric_snapshots','document_template_versions',
+  'pdf_jobs','report_render_manifests','report_presentation_template_versions',
+  'report_branding_profile_versions','report_presentation_pins',
 ];
 for (const id of requiredTables) if (!ids.has(id)) errors.push(`Required table missing: ${id}`);
 
