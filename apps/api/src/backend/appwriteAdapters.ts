@@ -45,6 +45,8 @@ const COLLECTION_TABLES: Readonly<Record<string, string>> = {
   inspectionRequests: 'inspection_requests', inspectionJobs: 'inspection_jobs', inspectionTemplates: 'inspection_templates',
   inspectionTemplateVersions: 'inspection_template_versions', inspections: 'inspections', inspectionSections: 'inspection_sections',
   observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',
+  dashboardMetricSnapshots: 'dashboard_metric_snapshots', pdfJobs: 'pdf_jobs',
+  reportPresentationTemplateVersions: 'report_presentation_templates', reportBrandingProfileVersions: 'report_branding_profile_versions',
   maintenanceCandidates: 'maintenance_candidates', maintenanceItems: 'maintenance_items', maintenanceQuotes: 'maintenance_quotes',
   maintenanceEstimates: 'maintenance_estimates', maintenanceApprovals: 'maintenance_approvals', maintenanceWorkOrders: 'maintenance_work_orders',
   maintenanceVariations: 'maintenance_variations', preventiveMaintenance: 'preventive_maintenance', warrantyClaims: 'warranty_claims',
@@ -78,6 +80,7 @@ const COLLECTION_TABLES: Readonly<Record<string, string>> = {
 const VERSIONED_TABLES = new Set([
   'inspection_jobs', 'inspection_template_versions', 'inspections', 'reports', 'report_versions',
   'maintenance_items', 'maintenance_work_orders', 'operational_report_drafts', 'documents', 'tenancy_documents',
+  'dashboard_metric_snapshots', 'report_presentation_templates', 'report_branding_profile_versions',
 ]);
 const FILTERABLE_COLUMNS = new Set([
   'managedSiteId', 'buildingId', 'locationId', 'unitId', 'propertyId', 'clientAccountId',
@@ -121,8 +124,9 @@ function writeData(input: Record<string, unknown>, actorId: string, existing?: R
 function collectionWriteData(
   collection: string,
   input: Record<string, unknown>,
+  existing?: StoredRecord,
 ): Record<string, unknown> {
-  const mapped = appwriteCollectionWriteData(collection, input);
+  const mapped = appwriteCollectionWriteData(collection, input, existing);
   if (collection !== 'clientApprovals') return mapped;
   return {
     ...mapped,
@@ -182,7 +186,7 @@ export class AppwriteOperationalRepository implements OperationalRepository {
   async create(collection: string, agencyId: string, id: string, data: Record<string, unknown>, actorId: string): Promise<StoredRecord> {
     const row = await this.services.tables.createRow({
       databaseId: this.services.databaseId, tableId: tableId(collection), rowId: id,
-      data: writeData(collectionWriteData(collection, { ...data, agencyId }), actorId), permissions: [],
+      data: writeData(collectionWriteData(collection, { ...data, agencyId, id }), actorId), permissions: [],
     });
     return collectionReadRecord(collection, row as unknown as Record<string, unknown>);
   }
@@ -192,7 +196,7 @@ export class AppwriteOperationalRepository implements OperationalRepository {
     if (!current) throw Object.assign(new Error('Record not found.'), { code: 'NOT_FOUND', status: 404 });
     if (current.version !== expectedVersion) throw Object.assign(new Error('Record changed. Reload and retry.'), { code: 'VERSION_CONFLICT', status: 409 });
     const mappedTable = tableId(collection);
-    const patch = writeData(collectionWriteData(collection, data), actorId, current);
+    const patch = writeData(collectionWriteData(collection, data, current), actorId, current);
     if (VERSIONED_TABLES.has(mappedTable)) patch.version = (typeof current.version === 'number' && current.version < 10_000_000_000 ? current.version : 0) + 1;
     const row = await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: mappedTable, rowId: id, data: patch });
     return collectionReadRecord(collection, row as unknown as Record<string, unknown>);

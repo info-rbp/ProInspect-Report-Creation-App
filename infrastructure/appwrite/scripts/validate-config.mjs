@@ -53,7 +53,7 @@ const requiredTables = [
   'evidence_files','migration_id_map','portal_entitlements','contractor_compliance','conversations',
   'conversation_messages','offer_partners','offers','offer_redemptions','appointment_bookings',
   'route_plans','offline_sync_receipts','dashboard_metric_snapshots','document_template_versions',
-  'pdf_jobs','report_render_manifests','report_presentation_template_versions',
+  'pdf_jobs','report_render_manifests','report_presentation_templates',
   'report_branding_profile_versions','report_presentation_pins',
 ];
 for (const id of requiredTables) if (!ids.has(id)) errors.push(`Required table missing: ${id}`);

@@ -37,7 +37,7 @@ export const workerExtensionTables = [
     str('pdfFileId', 36, true), str('pdfSha256', 64, true), text('manifest', true), str('manifestSha256', 64, true),
     datetime('generatedAt', true), str('generatedBy', 36, true), boolean('immutable', true),
   ], [unique('report_version_render', ['reportId', 'reportVersionId', 'renderId']), index('version_generated', ['reportVersionId', 'generatedAt'])]),
-  agencyEntity('report_presentation_template_versions', [
+  agencyEntity('report_presentation_templates', [
     integer('version', true), text('payload', true), boolean('immutable', true), datetime('publishedAt'), datetime('retiredAt'),
   ], [index('status_published', ['status', 'publishedAt'])]),
   agencyEntity('report_branding_profile_versions', [

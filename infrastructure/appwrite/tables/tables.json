@@ -17215,6 +17215,23 @@
         "required": false
       },
       {
+        "key": "priority",
+        "type": "string",
+        "size": 16,
+        "required": false
+      },
+      {
+        "key": "requestedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "queuedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
         "key": "renderId",
         "type": "string",
         "size": 64,
@@ -17459,6 +17476,370 @@
         "columns": [
           "reportVersionId",
           "generatedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "report_presentation_templates",
+    "databaseId": "proinspect_core",
+    "name": "Report Presentation Templates",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "publishedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "retiredAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "status_published",
+        "type": "key",
+        "columns": [
+          "status",
+          "publishedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "report_branding_profile_versions",
+    "databaseId": "proinspect_core",
+    "name": "Report Branding Profile Versions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "publishedAt",
+        "type": "datetime",
+        "required": false
+      },
+      {
+        "key": "retiredAt",
+        "type": "datetime",
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "status_published",
+        "type": "key",
+        "columns": [
+          "status",
+          "publishedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "report_presentation_pins",
+    "databaseId": "proinspect_core",
+    "name": "Report Presentation Pins",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "reportId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "reportVersionId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "presentationTemplateRecordId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "presentationTemplateId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "presentationTemplateVersion",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "presentationTemplateSnapshot",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "brandingProfileRecordId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "brandingProfileId",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "brandingProfileVersion",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "brandingSnapshot",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "brandingSnapshotHash",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "rendererVersion",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "fontBundleVersion",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "capturedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_report_version",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "reportVersionId"
+        ]
+      },
+      {
+        "key": "report_version",
+        "type": "key",
+        "columns": [
+          "reportId",
+          "reportVersionId"
         ]
       }
     ]

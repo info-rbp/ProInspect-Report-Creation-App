@@ -344,6 +344,12 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
         'New report presentation templates must be created as drafts and published through the lifecycle command.',
       );
     }
+    if (collection === 'reportBrandingProfileVersions' && text(next.status) !== 'draft') {
+      throw repositoryConflict(
+        'REPORT_BRANDING_PROFILE_DRAFT_REQUIRED',
+        'New report branding profile versions must be created as drafts and published through the lifecycle command.',
+      );
+    }
     return this.delegate.create(collection, agencyId, id, next, actorId);
   }
 
@@ -401,6 +407,16 @@ export class SettingsAwareOperationalRepository implements OperationalRepository
           'Report presentation lifecycle changes must use draft to published or published to retired transitions.',
         );
       }
+    }
+    if (collection === 'reportBrandingProfileVersions') {
+      const current = await this.delegate.get(collection, agencyId, id);
+      if (!current) throw Object.assign(new Error('Report branding profile was not found.'), { status: 404, code: 'REPORT_BRANDING_PROFILE_NOT_FOUND' });
+      const currentStatus = text(current.status);
+      const nextStatus = text(next.status) || currentStatus;
+      const publishing = currentStatus === 'draft' && nextStatus === 'published';
+      const retiring = currentStatus === 'published' && nextStatus === 'retired';
+      if (currentStatus === 'retired' || (currentStatus === 'published' && !retiring)) throw repositoryConflict('REPORT_BRANDING_PROFILE_IMMUTABLE', 'Published or retired report branding profile versions are immutable. Create a new draft version instead.');
+      if (nextStatus !== currentStatus && !publishing && !retiring) throw repositoryConflict('REPORT_BRANDING_PROFILE_LIFECYCLE_INVALID', 'Report branding lifecycle changes must use draft to published or published to retired transitions.');
     }
     return this.delegate.update(collection, agencyId, id, next, expectedVersion, actorId);
   }
