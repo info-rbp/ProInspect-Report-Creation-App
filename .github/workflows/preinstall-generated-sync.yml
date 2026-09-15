@@ -84,6 +84,14 @@ jobs:
         run: npm run launch:test
       - name: Launch package audit
         run: npm run launch:audit
+      - name: Diagnose validation worktree
+        run: |
+          echo "--- git status --porcelain ---"
+          git status --porcelain
+          echo "--- tracked changed paths ---"
+          git diff --name-only
+          echo "--- diff stat ---"
+          git diff --stat
       - name: Require clean validated commit
         run: test -z "$(git status --porcelain)"
       - name: Push validated remediation
