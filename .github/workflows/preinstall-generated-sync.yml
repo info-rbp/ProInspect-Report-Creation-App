@@ -45,14 +45,22 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
+      - name: Runtime authority
+        run: npm run launch:authority
       - name: Appwrite schema unit tests
         run: npx vitest run infrastructure/appwrite/tables/schema.test.mjs
       - name: Worker unit tests
-        run: npx vitest run apps/dashboard-worker apps/document-worker apps/notification-worker apps/integration-worker --passWithNoTests
+        run: npx vitest run apps/pdf-worker apps/dashboard-worker apps/document-worker apps/notification-worker apps/integration-worker --passWithNoTests
       - name: Web unit tests
         run: npx vitest run --config vitest.config.ts --project web
-      - name: Node unit tests
-        run: npx vitest run --config vitest.config.ts --project node
+      - name: API unit tests
+        run: npx vitest run apps/api/tests
+      - name: Package unit tests
+        run: npx vitest run packages/*/tests
+      - name: Script unit tests
+        run: npx vitest run scripts --passWithNoTests
+      - name: Appwrite infrastructure unit tests
+        run: npx vitest run infrastructure/appwrite --passWithNoTests
       - name: Rules tests
         run: npm run test:rules
       - name: Validate Appwrite resources
