@@ -26,6 +26,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Apply surgical compatibility patch
         run: node scripts/preinstall-finalize.mjs
+      - name: Apply lint-safe transform patch
+        run: node scripts/preinstall-lint-fix.mjs
       - name: Format repository changes
         run: npm run format
       - name: Regenerate Appwrite resources
