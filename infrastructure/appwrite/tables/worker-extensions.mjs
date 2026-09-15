@@ -24,10 +24,17 @@ export const workerExtensionTables = [
     ...timestamps, ...auditActors, ...legacy,
   ], [unique('template_version', ['agencyId', 'templateKey', 'version']), index('agency_status', ['agencyId', 'status']), index('status_published', ['status', 'publishedAt'])]),
   agencyEntity('dashboard_metric_snapshots', [
-    datetime('capturedAt', true),
-    str('timezone', 64, true),
-    str('source', 128, true),
-    text('metrics', true),
-    integer('version', true),
+    datetime('capturedAt', true), str('timezone', 64, true), str('source', 128, true), text('metrics', true), integer('version', true),
   ], [index('agency_captured', ['agencyId', 'capturedAt'], ['ASC', 'DESC'])]),
+  agencyEntity('pdf_jobs', [
+    str('taskId', 36, true), str('reportId', 36, true), str('reportVersionId', 36), str('currentVersionId', 36),
+    str('renderId', 64), str('canonicalInputHash', 64), str('pdfFileId', 36), str('pdfSha256', 64),
+    str('manifestId', 36), str('manifestSha256', 64), str('errorCode', 128), text('errorMessage'), boolean('retryable'),
+    datetime('startedAt'), datetime('completedAt'), datetime('failedAt'),
+  ], [unique('agency_task', ['agencyId', 'taskId']), index('report_status', ['reportId', 'status']), index('version_status', ['reportVersionId', 'status'])]),
+  agencyEntity('report_render_manifests', [
+    str('reportId', 36, true), str('reportVersionId', 36, true), str('renderId', 64, true), str('canonicalInputHash', 64, true),
+    str('pdfFileId', 36, true), str('pdfSha256', 64, true), text('manifest', true), str('manifestSha256', 64, true),
+    datetime('generatedAt', true), str('generatedBy', 36, true), boolean('immutable', true),
+  ], [unique('report_version_render', ['reportId', 'reportVersionId', 'renderId']), index('version_generated', ['reportVersionId', 'generatedAt'])]),
 ];

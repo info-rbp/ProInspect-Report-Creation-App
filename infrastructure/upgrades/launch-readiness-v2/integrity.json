@@ -30,7 +30,7 @@
     "fixtures/shopify-order-paid.synthetic.json": "5e6edbce6f32e33bb95953b135865243a1eb9a5e0fa053aaf8034db00e6630f8",
     "gates.json": "9602b33b448166928cfb501fa91f2bfd16a965781b2a9c406e2b45d97fd746f8",
     "installation.mjs": "d1659aa01bb0a764256cb12c50969197858c4b2f96c088a793caf0efd35d606c",
-    "manifest.json": "465f16b5ce22dd7e5ab884a53baf06cb03422cd6397fbe30cef0b35c0d3ea942",
+    "manifest.json": "08af2b27c07d5dd1c1181081ae406dd02e8a0fe227b50674717a5a8626e3a687",
     "operator.mjs": "08186945a866e7307d574175b961f53801368cd17d324562680148dba193fb60",
     "policy.example.json": "318d8fbc9a6ce98b60bf33dae9b76cbea1beb0adb604774f88f54f6326690b4b",
     "process.mjs": "142db519e620e3a4219026fb86706f5a11b95eb53c5e2c890ebf9cb0a59581db",

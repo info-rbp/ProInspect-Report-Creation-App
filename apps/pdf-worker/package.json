@@ -12,11 +12,11 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@pcr/appwrite-server": "*",
     "@pcr/config": "*",
     "@pcr/domain": "*",
     "@pcr/report-presentation": "*",
     "@pcr/validation": "*",
-    "firebase-admin": "^14.2.0",
     "pdf-lib": "^1.17.1"
   }
 }
