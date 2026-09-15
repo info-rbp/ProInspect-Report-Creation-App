@@ -16899,6 +16899,139 @@
     ]
   },
   {
+    "$id": "document_template_versions",
+    "databaseId": "proinspect_core",
+    "name": "Document Template Versions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "templateKey",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "purpose",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "sourceBucketId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "sourceFileId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "sourceSha256",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "fieldSchema",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "publishedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "immutable",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "template_version",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "templateKey",
+          "version"
+        ]
+      },
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "status_published",
+        "type": "key",
+        "columns": [
+          "status",
+          "publishedAt"
+        ]
+      }
+    ]
+  },
+  {
     "$id": "dashboard_metric_snapshots",
     "databaseId": "proinspect_core",
     "name": "Dashboard Metric Snapshots",
