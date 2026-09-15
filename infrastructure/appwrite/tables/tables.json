@@ -16897,5 +16897,110 @@
         ]
       }
     ]
+  },
+  {
+    "$id": "dashboard_metric_snapshots",
+    "databaseId": "proinspect_core",
+    "name": "Dashboard Metric Snapshots",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "legacySystem",
+        "type": "string",
+        "size": 32,
+        "required": false
+      },
+      {
+        "key": "legacyId",
+        "type": "string",
+        "size": 128,
+        "required": false
+      },
+      {
+        "key": "capturedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "timezone",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "source",
+        "type": "string",
+        "size": 128,
+        "required": true
+      },
+      {
+        "key": "metrics",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_captured",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "capturedAt"
+        ],
+        "orders": [
+          "ASC",
+          "DESC"
+        ]
+      }
+    ]
   }
 ]
