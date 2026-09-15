@@ -8,15 +8,26 @@ function replaceOnce(path, before, after) {
   if (source.indexOf(before, first + before.length) >= 0) throw new Error('Source fragment is not unique in ' + path);
   write(path, source.slice(0, first) + after + source.slice(first + before.length));
 }
+function replaceAllRequired(path, before, after) {
+  const source = read(path);
+  if (!source.includes(before)) throw new Error('Expected source fragment not found in ' + path + ': ' + before.slice(0, 120));
+  write(path, source.split(before).join(after));
+}
 function replaceBetween(path, startMarker, endMarker, replacement) {
   const source = read(path); const start = source.indexOf(startMarker); if (start < 0) throw new Error('Start marker not found in ' + path);
   const end = source.indexOf(endMarker, start); if (end < 0) throw new Error('End marker not found in ' + path);
   write(path, source.slice(0, start) + replacement + source.slice(end));
 }
 
+const presentationTable = 'report_presentation_templates';
+replaceAllRequired('infrastructure/appwrite/tables/worker-extensions.mjs', 'report_presentation_template_versions', presentationTable);
+replaceAllRequired('infrastructure/appwrite/tables/schema.test.mjs', 'report_presentation_template_versions', presentationTable);
+replaceAllRequired('infrastructure/appwrite/scripts/validate-config.mjs', 'report_presentation_template_versions', presentationTable);
+replaceAllRequired('apps/pdf-worker/src/reportPresentationPreflight.ts', 'report_presentation_template_versions', presentationTable);
+
 replaceOnce('infrastructure/upgrades/launch-readiness-v2/integrity.json', '"manifest.json": "08af2b27c07d5dd1c1181081ae406dd02e8a0fe227b50674717a5a8626e3a687"', '"manifest.json": "356c7467257fd6bc0e23d144170c6827a05ba9d41451a6519ee6eb4cc9689c3f"');
-replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "  observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',", "  observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',\n  dashboardMetricSnapshots: 'dashboard_metric_snapshots', pdfJobs: 'pdf_jobs',\n  reportPresentationTemplateVersions: 'report_presentation_template_versions', reportBrandingProfileVersions: 'report_branding_profile_versions',");
-replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "  'maintenance_items', 'maintenance_work_orders', 'operational_report_drafts', 'documents', 'tenancy_documents',", "  'maintenance_items', 'maintenance_work_orders', 'operational_report_drafts', 'documents', 'tenancy_documents',\n  'dashboard_metric_snapshots', 'report_presentation_template_versions', 'report_branding_profile_versions',");
+replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "  observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',", "  observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',\n  dashboardMetricSnapshots: 'dashboard_metric_snapshots', pdfJobs: 'pdf_jobs',\n  reportPresentationTemplateVersions: 'report_presentation_templates', reportBrandingProfileVersions: 'report_branding_profile_versions',");
+replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "  'maintenance_items', 'maintenance_work_orders', 'operational_report_drafts', 'documents', 'tenancy_documents',", "  'maintenance_items', 'maintenance_work_orders', 'operational_report_drafts', 'documents', 'tenancy_documents',\n  'dashboard_metric_snapshots', 'report_presentation_templates', 'report_branding_profile_versions',");
 replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "function collectionWriteData(\n  collection: string,\n  input: Record<string, unknown>,\n): Record<string, unknown> {\n  const mapped = appwriteCollectionWriteData(collection, input);", "function collectionWriteData(\n  collection: string,\n  input: Record<string, unknown>,\n  existing?: StoredRecord,\n): Record<string, unknown> {\n  const mapped = appwriteCollectionWriteData(collection, input, existing);");
 replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "data: writeData(collectionWriteData(collection, { ...data, agencyId }), actorId), permissions: [],", "data: writeData(collectionWriteData(collection, { ...data, agencyId, id }), actorId), permissions: [],");
 replaceOnce('apps/api/src/backend/appwriteAdapters.ts', "const patch = writeData(collectionWriteData(collection, data), actorId, current);", "const patch = writeData(collectionWriteData(collection, data, current), actorId, current);");
