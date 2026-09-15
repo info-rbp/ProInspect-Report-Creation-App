@@ -84,15 +84,21 @@ jobs:
         run: npm run launch:test
       - name: Launch package audit
         run: npm run launch:audit
-      - name: Diagnose validation worktree
+      - name: Restore tracked TypeScript build caches
         run: |
-          echo "--- git status --porcelain ---"
-          git status --porcelain
-          echo "--- tracked changed paths ---"
-          git diff --name-only
-          echo "--- diff stat ---"
-          git diff --stat
+          git restore \
+            apps/ai-worker/tsconfig.tsbuildinfo \
+            apps/api/tsconfig.tsbuildinfo \
+            apps/pdf-worker/tsconfig.tsbuildinfo \
+            packages/config/tsconfig.tsbuildinfo \
+            packages/domain/tsconfig.tsbuildinfo \
+            packages/templates/tsconfig.tsbuildinfo \
+            packages/testing/tsconfig.tsbuildinfo \
+            packages/ui/tsconfig.tsbuildinfo \
+            packages/validation/tsconfig.tsbuildinfo
       - name: Require clean validated commit
-        run: test -z "$(git status --porcelain)"
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
       - name: Push validated remediation
         run: git push origin HEAD:feat/genspark-preinstall-readiness
