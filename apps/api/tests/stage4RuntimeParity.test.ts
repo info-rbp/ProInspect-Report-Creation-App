@@ -23,12 +23,15 @@ describe('Stage 4 runtime parity boundary', () => {
     expect(portal).toContain('automationGrant');
     expect(portal).toContain('requireExternalGrantStore');
 
-    for (const worker of ['../notification-worker/src/index.ts', '../notification-worker/src/runtime.ts']) {
-      const value = read(worker);
-      expect(value).toContain('PROINSPECT_API_BASE_URL');
-      expect(value).toContain('/api/v1/internal/tenant-portal-grants/automation');
-      expect(value).toContain('x-proinspect-automation-secret');
-      expect(value).not.toContain('tenantPortalGrants');
-    }
+    const implementation = read('../notification-worker/src/index.ts');
+    expect(implementation).toContain('PROINSPECT_API_BASE_URL');
+    expect(implementation).toContain('/api/v1/internal/tenant-portal-grants/automation');
+    expect(implementation).toContain('x-proinspect-automation-secret');
+    expect(implementation).not.toContain('tenantPortalGrants');
+
+    const runtime = read('../notification-worker/src/runtime.ts');
+    expect(runtime).toContain("from './index.js'");
+    expect(runtime).not.toContain('firebase-admin');
+    expect(runtime).not.toContain('tenantPortalGrants');
   });
 });

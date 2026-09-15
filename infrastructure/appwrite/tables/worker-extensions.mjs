@@ -28,13 +28,26 @@ export const workerExtensionTables = [
   ], [index('agency_captured', ['agencyId', 'capturedAt'], ['ASC', 'DESC'])]),
   agencyEntity('pdf_jobs', [
     str('taskId', 36, true), str('reportId', 36, true), str('reportVersionId', 36), str('currentVersionId', 36),
-    str('renderId', 64), str('canonicalInputHash', 64), str('pdfFileId', 36), str('pdfSha256', 64),
-    str('manifestId', 36), str('manifestSha256', 64), str('errorCode', 128), text('errorMessage'), boolean('retryable'),
-    datetime('startedAt'), datetime('completedAt'), datetime('failedAt'),
+    str('priority', 16), str('requestedBy', 36), datetime('queuedAt'), str('renderId', 64), str('canonicalInputHash', 64),
+    str('pdfFileId', 36), str('pdfSha256', 64), str('manifestId', 36), str('manifestSha256', 64),
+    str('errorCode', 128), text('errorMessage'), boolean('retryable'), datetime('startedAt'), datetime('completedAt'), datetime('failedAt'),
   ], [unique('agency_task', ['agencyId', 'taskId']), index('report_status', ['reportId', 'status']), index('version_status', ['reportVersionId', 'status'])]),
   agencyEntity('report_render_manifests', [
     str('reportId', 36, true), str('reportVersionId', 36, true), str('renderId', 64, true), str('canonicalInputHash', 64, true),
     str('pdfFileId', 36, true), str('pdfSha256', 64, true), text('manifest', true), str('manifestSha256', 64, true),
     datetime('generatedAt', true), str('generatedBy', 36, true), boolean('immutable', true),
   ], [unique('report_version_render', ['reportId', 'reportVersionId', 'renderId']), index('version_generated', ['reportVersionId', 'generatedAt'])]),
+  agencyEntity('report_presentation_template_versions', [
+    integer('version', true), text('payload', true), boolean('immutable', true), datetime('publishedAt'), datetime('retiredAt'),
+  ], [index('status_published', ['status', 'publishedAt'])]),
+  agencyEntity('report_branding_profile_versions', [
+    integer('version', true), text('payload', true), boolean('immutable', true), datetime('publishedAt'), datetime('retiredAt'),
+  ], [index('status_published', ['status', 'publishedAt'])]),
+  agencyEntity('report_presentation_pins', [
+    str('reportId', 36, true), str('reportVersionId', 36, true), str('presentationTemplateRecordId', 36, true),
+    str('presentationTemplateId', 128, true), integer('presentationTemplateVersion', true), text('presentationTemplateSnapshot', true),
+    str('brandingProfileRecordId', 36, true), str('brandingProfileId', 128, true), integer('brandingProfileVersion', true),
+    text('brandingSnapshot', true), str('brandingSnapshotHash', 64, true), str('rendererVersion', 128, true),
+    str('fontBundleVersion', 128, true), datetime('capturedAt', true), boolean('immutable', true),
+  ], [unique('agency_report_version', ['agencyId', 'reportVersionId']), index('report_version', ['reportId', 'reportVersionId'])]),
 ];
