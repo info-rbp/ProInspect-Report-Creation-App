@@ -2,7 +2,9 @@ const str = (key, size = 255, required = false) => ({ key, type: 'string', size,
 const text = (key, required = false) => ({ key, type: 'longtext', required });
 const datetime = (key, required = false) => ({ key, type: 'datetime', required });
 const integer = (key, required = false) => ({ key, type: 'integer', required });
+const boolean = (key, required = false) => ({ key, type: 'boolean', required });
 const index = (key, columns, orders) => ({ key, type: 'key', columns, ...(orders ? { orders } : {}) });
+const unique = (key, columns) => ({ key, type: 'unique', columns });
 const timestamps = [datetime('createdAt', true), datetime('updatedAt', true)];
 const auditActors = [str('createdBy', 36), str('updatedBy', 36)];
 const legacy = [str('legacySystem', 32), str('legacyId', 128)];
@@ -15,6 +17,12 @@ function agencyEntity(id, columns = [], indexes = []) {
 }
 
 export const workerExtensionTables = [
+  table('document_template_versions', [
+    str('agencyId', 36), str('templateKey', 128, true), integer('version', true), str('purpose', 64, true),
+    str('sourceBucketId', 36, true), str('sourceFileId', 36, true), str('sourceSha256', 64, true),
+    text('fieldSchema', true), datetime('publishedAt', true), boolean('immutable', true), str('status', 64, true),
+    ...timestamps, ...auditActors, ...legacy,
+  ], [unique('template_version', ['agencyId', 'templateKey', 'version']), index('agency_status', ['agencyId', 'status']), index('status_published', ['status', 'publishedAt'])]),
   agencyEntity('dashboard_metric_snapshots', [
     datetime('capturedAt', true),
     str('timezone', 64, true),
