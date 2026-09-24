@@ -1,10 +1,13 @@
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { atomicJson, run, requireThat, manifest, canonical } from './runtime.mjs';
-import { requireCommand, requireRuntimeKeyCreation, scopeArguments } from './appwrite-contract.mjs';
+import { atomicJson, run, requireThat, manifest } from './runtime.mjs';
+import { requireCommand } from './appwrite-contract.mjs';
+import { requireStoredKeyControl, verifyStoredCredential } from './stored-credential.mjs';
 
 export async function appwriteContext(target, directory, execute = run) {
   requireThat(target.endpoint === 'https://syd.cloud.appwrite.io/v1' && !manifest.prohibited.appwriteProjects.includes(target.projectId), 'Unapproved Appwrite target');
+  requireThat(target.projectId !== 'proinspect-development' || target.projectName === 'ProInspect Development', 'Unexpected Development target');
+  requireThat(!/development/iu.test(target.projectName) || target.projectId === 'proinspect-development', 'Unexpected Development target');
   requireThat(!process.env.APPWRITE_API_KEY, 'Unset APPWRITE_API_KEY; installer uses short-lived console-created credentials');
   const cwd = resolve(directory, 'appwrite-context');
   atomicJson(resolve(cwd, 'appwrite.config.json'), { projectId: target.projectId, projectName: target.projectName, endpoint: target.endpoint });
@@ -13,31 +16,27 @@ export async function appwriteContext(target, directory, execute = run) {
   requireThat(project.$id === target.projectId && project.name === target.projectName && project.status === 'active' && project.region === 'syd', 'Appwrite identity mismatch');
   return { cwd, cli, project };
 }
-export async function withAppwrite(target, directory, scopes, operation, execute = run) {
+export async function withAppwrite(target, directory, scopes, operation, execute = run, env = process.env) {
   const { cwd, cli } = await appwriteContext(target, directory, execute);
-  // Ephemeral keys are stateless JWTs, not stored revocable keys. Expiration
-  // alone cannot satisfy the installer's mandatory immediate cleanup contract.
-  await requireRuntimeKeyCreation(cwd, execute);
-  const name = `launch-${randomUUID()}`;
-  const expire = new Date(Date.now() + 3600000).toISOString();
-  let key;
+  await requireStoredKeyControl(cwd, execute);
+  const id = env.LAUNCH_APPWRITE_OPERATION_KEY_ID;
+  let secret = env.LAUNCH_APPWRITE_OPERATION_SECRET;
+  let metadata;
   try {
-    key = await cli(['project','create-key','--project-id',target.projectId,'--name',name,...scopeArguments(scopes),'--expire',expire], { secret: true });
-    requireThat(key.$id && key.secret && key.secret !== '[REDACTED]', 'CLI returned no usable temporary credential');
-    requireThat(Date.parse(key.expire) > Date.now() && Date.parse(key.expire) <= Date.now() + 3600000, 'Temporary key expiry exceeds the one-hour bound');
-    requireThat(Array.isArray(key.scopes) && canonical([...key.scopes].sort()) === canonical([...scopes].sort()), 'Temporary key scopes differ from requested scopes');
-    atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, id: key.$id, expire: key.expire, revoked: false });
+    metadata = await verifyStoredCredential(cli, target, { id, secret, scopes, maxHours: 1 });
+    atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, ...metadata, revoked: false });
     const sdk = await import('node-appwrite');
     const { InputFile } = await import('node-appwrite/file');
-    const client = new sdk.Client().setEndpoint(target.endpoint).setProject(target.projectId).setKey(key.secret);
+    const client = new sdk.Client().setEndpoint(target.endpoint).setProject(target.projectId).setKey(secret);
     return await operation({ db: new sdk.TablesDB(client), storage: new sdk.Storage(client), teams: new sdk.Teams(client), users: new sdk.Users(client), Query: sdk.Query, InputFile });
   } finally {
-    try {
-      if (key?.$id) {
-        await cli(['project','delete-key','--project-id',target.projectId,'--key-id',key.$id]);
-        atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, id: key.$id, expire: key.expire, revoked: true });
-      }
-    } finally { if (key) key.secret = undefined; }
+    secret = undefined;
+    if (metadata) {
+      await cli(['project','delete-key','--project-id',target.projectId,'--key-id',id]);
+      const inventory = await cli(['project','list-keys','--project-id',target.projectId,'--limit','100']);
+      requireThat(Array.isArray(inventory.keys) && inventory.total === inventory.keys.length && !inventory.keys.some((key) => key.$id === id), 'Temporary key revocation could not be verified');
+      atomicJson(resolve(directory, 'temporary-key.json'), { projectId: target.projectId, ...metadata, revoked: true });
+    }
   }
 }
 export async function paged(call, collection, Query) {

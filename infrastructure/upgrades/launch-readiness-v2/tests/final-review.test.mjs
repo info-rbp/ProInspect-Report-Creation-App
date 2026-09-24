@@ -31,5 +31,6 @@ test('Appwrite retains target validation, raw inventory and guarded credential m
   const session=readFileSync(resolve(packageDir,'appwrite-session.mjs'),'utf8');
   assert(session.includes("['--raw'"));assert(session.includes("project.status === 'active' && project.region === 'syd'"));
   const credentials=readFileSync(resolve(packageDir,'actions/credentials.mjs'),'utf8');
-  assert(credentials.indexOf('await requireRuntimeKeyCreation(cwd)')<credentials.indexOf("await cli(['project','delete-key'"));
+  assert(credentials.includes('await requireStoredKeyControl(cwd, execute)'));
+  assert(!credentials.includes("'create-key'") && !credentials.includes("'create-ephemeral-key'"));
 });

@@ -15,6 +15,7 @@ export function redact(text, env = process.env) {
 }
 export function commandEnv(live = false, extra = {}, inherited = process.env) {
   const result = { ...inherited };
+  for (const name of Object.keys(result)) if (/^LAUNCH_.*APPWRITE.*SECRET$/u.test(name)) delete result[name];
   if (!live) for (const name of Object.keys(result)) if (/(password|secret|token|key|credential)/iu.test(name)) delete result[name];
   return { ...result, ...extra, NO_COLOR: '1', CI: '1' };
 }
@@ -47,7 +48,7 @@ export function run(command, args = [], options = {}) {
     child.once('close', (code) => {
       clean(); if (killTimer) clearTimeout(killTimer);
       const log = redact(`${stdout}\n${stderr}`, env);
-      if (options.logFile) { mkdirSync(dirname(options.logFile), { recursive: true, mode: 0o700 }); writeFileSync(options.logFile, log, { mode: 0o600 }); }
+      if (options.logFile && !options.sensitive) { mkdirSync(dirname(options.logFile), { recursive: true, mode: 0o700 }); writeFileSync(options.logFile, log, { mode: 0o600 }); }
       if (stopped || code !== 0) reject(new Error(`${command}: ${stopped ?? `exit ${code}`}. ${options.sensitive ? 'Output suppressed.' : log.slice(-2000)}`));
       else resolve(stdout.trim());
     });

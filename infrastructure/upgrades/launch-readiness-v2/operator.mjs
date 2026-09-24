@@ -6,7 +6,7 @@ import { auditProviders, toolchain } from './providers.mjs';
 import { inspectTargetAuthority } from './actions/runtime-authority.mjs';
 import { installationOrder, requireBackup } from './actions/index.mjs';
 import { loadBundle } from './actions/migrate.mjs';
-import { validateCredentialPolicy } from './actions/credentials.mjs';
+import { checkCredentialInputs } from './actions/credentials.mjs';
 import {
   atomicJson,
   canonical,
@@ -59,7 +59,7 @@ function defaultRemediation(code, stage, environment, target) {
   if (code === 'AUTHORITY') return `Run npm run launch:authority, repair the reported Appwrite-authority source paths, then repeat: ${recheckCommand(environment, stage)}`;
   if (code === 'MIGRATION_BUNDLE') return 'Create the reviewed private migration bundle and SHA-256 pin it in config before retrying this stage.';
   if (code === 'TERRAFORM_INPUT') return 'Configure existing absolute private Terraform tfvars/backend files outside the repository.';
-  if (code === 'CREDENTIAL_POLICY') return 'Configure minimum per-service Appwrite runtimeCredentialPolicies and matching Google Secret Manager bindings.';
+  if (code === 'CREDENTIAL_POLICY' || code === 'CREDENTIAL_IMPORT') return 'Configure per-service Appwrite runtimeCredentialPolicies, create stored keys in Console, and supply the environment-specific key ID/secret process inputs. See README controlled credential import; ephemeral JWTs are prohibited.';
   if (code === 'BACKUP_KEY') return 'Export LAUNCH_BACKUP_KEY as exactly 64 hexadecimal characters from the approved secret source.';
   if (code === 'SEED_PASSWORD') return `Export ${target?.acceptance?.seedPasswordEnv || 'APPWRITE_SEED_PASSWORD'} with the synthetic acceptance password.`;
   if (code === 'EDGE_SECRET') return `Export ${target?.cloudflare?.trustedEdgeSecretEnv || 'PROINSPECT_EDGE_SECRET'} in this terminal before Cloudflare deployment.`;
@@ -215,7 +215,7 @@ export async function checkStage(config, context, directory, stage, { live = fal
     });
     if (!process.env.LAUNCH_TERRAFORM_PLAN_SHA256) issues.push(makeIssue({ environment, stage, code: 'TERRAFORM_REVIEW', severity: 'ADVISORY', target, message: 'The first Terraform apply intentionally stops with TERRAFORM_REVIEW_REQUIRED so the exact plan digest can be approved.', remediation: 'Run the Terraform stage once, review terraform-plan-review.json, export LAUNCH_TERRAFORM_PLAN_SHA256 to the exact digest, then repeat the stage.', recheck: `npm run launch:check --${commandSuffix(environment)} --stage terraform` }));
   }
-  if (stage === 'credentials') await collect(issues, { environment, stage, code: 'CREDENTIAL_POLICY', target }, () => validateCredentialPolicy(target.appwrite.runtimeCredentialPolicies, target.google.services));
+  if (stage === 'credentials') await collect(issues, { environment, stage, code: 'CREDENTIAL_IMPORT', target }, () => checkCredentialInputs(target, environment));
   if (stage === 'cloudflare') await collect(issues, { environment, stage, code: 'EDGE_SECRET', target }, () => requiredEnvironmentVariable(target.cloudflare.trustedEdgeSecretEnv));
   if (stage === 'shopify') {
     await collect(issues, { environment, stage, code: 'SHOPIFY_REPLAY', target }, () => validateShopifyReplay(target));
@@ -250,7 +250,7 @@ export async function preflight(config, context, directory, { all = false } = {}
   await collect(issues, { environment, stage: 'preflight', code: 'TERRAFORM_INPUT', target }, () => {
     for (const path of [target.terraform.variablesFile, target.terraform.backendFile]) requireThat(typeof path === 'string' && existsSync(path), `Private Terraform input missing: ${path || '(unset)'}`);
   });
-  await collect(issues, { environment, stage: 'preflight', code: 'CREDENTIAL_POLICY', target }, () => validateCredentialPolicy(target.appwrite.runtimeCredentialPolicies, target.google.services));
+  await collect(issues, { environment, stage: 'preflight', code: 'CREDENTIAL_IMPORT', target }, () => checkCredentialInputs(target, environment));
   await collect(issues, { environment, stage: 'preflight', code: 'SHOPIFY_REPLAY', target }, () => validateShopifyReplay(target));
   for (const [code, name] of [['SEED_PASSWORD', target?.acceptance?.seedPasswordEnv], ['EDGE_SECRET', target?.cloudflare?.trustedEdgeSecretEnv], ['SHOPIFY_TOKEN', target?.shopify?.tokenEnv], ['SHOPIFY_HMAC', target?.acceptance?.shopifyWebhookSecretEnv]]) {
     await collect(issues, { environment, stage: 'preflight', code, target }, () => requiredEnvironmentVariable(name));

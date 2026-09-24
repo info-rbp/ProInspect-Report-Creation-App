@@ -7,7 +7,7 @@ import { sourceSchema, columnChanges } from '../actions/schema.mjs';
 export function approvedKeys(actual,approved,now=Date.now()) {
   return actual.length===approved.length && actual.every((key)=>{
     const wanted=approved.find((v)=>v.id===key.$id);
-    return wanted && key.name===wanted.name && canonical([...key.scopes].sort())===canonical([...wanted.scopes].sort()) && Date.parse(key.expire)===Date.parse(wanted.expire) && Date.parse(key.expire)>now;
+    return wanted && (wanted.status !== 'retiring' || (Date.parse(wanted.retireAfter) > now && Date.parse(wanted.retireAfter) <= Date.parse(wanted.expire))) && key.name===wanted.name && canonical([...key.scopes].sort())===canonical([...wanted.scopes].sort()) && Date.parse(key.expire)===Date.parse(wanted.expire) && Date.parse(key.expire)>now;
   });
 }
 export async function appwriteSchemaAudit(target,directory){

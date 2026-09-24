@@ -16,7 +16,7 @@ The acceptance contract contains 19 dependency-ordered gates and 159 named asser
 
 The package rejects `--env production` and specifically prohibits the known Production-like Appwrite project `6a911f1e0031e90015b2`, Google project `business-plan-applicatio-17047`, and root Cloudflare Worker `proinspect`. Development is pinned to `proinspect-development` / `ProInspect Development` in Sydney. Staging must use separate Appwrite, Google, Cloudflare and public-origin identifiers.
 
-Remote writes require an exact confirmation string, a clean repository, an approved tracked policy document, explicit non-production target IDs, an exclusive lock and a current tested backup. Appwrite mutation uses short-lived console-created keys that are deleted in `finally`; application runtime keys are per-service, expiring, scope-bounded and stored as immutable Google Secret Manager versions. Secrets are process inputs, never command arguments or committed values.
+Remote writes require an exact confirmation string, a clean repository, an approved tracked policy document, explicit non-production target IDs, an exclusive lock and a current tested backup. Appwrite mutation uses operator-created, stored Console keys, verified against the control plane and deleted in `finally`; application runtime keys are per-service, expiring, scope-bounded and stored as immutable Google Secret Manager versions. Secrets are process inputs, never command arguments or committed values.
 
 Schema changes are additive only. Unexpected live columns/indexes/buckets or incompatible in-place changes block execution instead of being deleted. Migration never overwrites conflicting rows/files and rollback removes only objects recorded as created by that exact migration run. Source data is never deleted.
 
@@ -29,7 +29,7 @@ The backup action encrypts database rows and files with AES-256-GCM using `LAUNC
 - back up and restore-probe Appwrite database/files;
 - create missing additive Appwrite schema resources from source-controlled definitions;
 - import a reviewed normalized migration bundle with checksums, parent references and resumable journals;
-- provision bounded per-service Appwrite runtime credentials into Google Secret Manager;
+- verify/import bounded per-service Appwrite runtime credentials into Google Secret Manager;
 - run Terraform plans with foreign-project/destructive-action guards;
 - build immutable Google container images from the exact Git commit and deploy Cloud Run revisions;
 - build and deploy the Cloudflare web/edge candidate with security headers and exact release identity;
@@ -271,3 +271,53 @@ npm run launch:check -- --stage <failed-stage>
 ```
 
 The mutating `--stage all` path remains available for already-rehearsed environments, but guided first installation should use one explicit stage at a time. Production remains outside this workflow and continues to require the separate `launch:release` controller.
+
+## Controlled stored credential import
+
+Appwrite deprecated Project API key creation on 17 August 2026. The pinned CLI
+27.2.1 supports `project get-key`, `list-keys` and `delete-key`, but cannot create
+stored keys. See [Appwrite API keys](https://appwrite.io/docs/partners/project/api-keys)
+and the [provider change](https://appwrite.io/changelog/entry/2026-08-17).
+The installer never substitutes an ephemeral JWT. Console login must be able to
+retrieve the stored key metadata and secret; a redacted/unavailable secret blocks
+import because it cannot prove that the supplied plaintext belongs to that key.
+
+For each service, review `runtimeCredentialPolicies` with a unique `secretId`,
+minimum exact `scopes`, `expiryHours` (1–720), and `rollbackHours` (1–168; default
+24). Workers cannot receive user/team administration scopes. Create a separate
+stored key in the exact environment's Appwrite Console with those scopes and an
+expiry within the policy. Keep a rotation margin of at least two hours for
+credentials with a lifetime of eight hours or more. Create the corresponding
+Google secret through reviewed Terraform first.
+
+Supply key IDs and plaintext through protected process environment injection.
+Names are `LAUNCH_<ENV>_<SERVICE>_APPWRITE_KEY_ID` and
+`LAUNCH_<ENV>_<SERVICE>_APPWRITE_SECRET`, uppercased with hyphens replaced by
+underscores; for example `LAUNCH_DEVELOPMENT_PDF_WORKER_APPWRITE_SECRET`.
+Do not paste values into shell history, command arguments, config, or evidence.
+The importer verifies the exact live project, stored key ID/name/scopes/expiry
+and plaintext, publishes via stdin, then reads back the ENABLED numeric Secret
+Manager version and checks its bytes before atomically saving the binding.
+Run `launch:check -- --stage credentials` first, then use the exact INSTALL
+confirmation emitted by `launch:install -- --stage credentials`.
+
+Rotation leaves the old binding untouched until verification and config save
+succeed. A still-valid old key/version is marked retiring only for controlled
+rollback, with `retireAfter` bounded by its expiry and rollback policy. Before
+that deadline, retire every revision that uses it, revoke the old stored key in
+Console, disable its numeric secret version, and remove its approved metadata.
+Acceptance rejects overdue retiring credentials. Never delete an old key while
+an approved rollback revision still needs it. Every changed binding invalidates
+candidate configuration evidence and requires fresh deployment/acceptance.
+On publication/readback/save failure the prior binding remains; a known new
+version is disabled. A `PUBLICATION_PENDING` receipt requires provider
+reconciliation if the response was lost. Operator-owned unbound keys are never
+silently revoked: delete them in Console after reconciliation.
+
+Installer data operations similarly import `LAUNCH_APPWRITE_OPERATION_KEY_ID`
+and `LAUNCH_APPWRITE_OPERATION_SECRET`, scoped exactly to the requested action
+and expiring within one hour (with at least 15 minutes remaining). Each invocation
+needs a fresh key: successful verification transfers cleanup responsibility to
+the installer, which revokes it in `finally` and checks the inventory afterwards.
+Missing credentials, wrong metadata and unverifiable keys prevent all data
+operations. An unverified key is never revoked by the installer.
