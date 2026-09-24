@@ -36,44 +36,7 @@ import type {
   UploadSessionIssuer,
 } from './types.js';
 
-const COLLECTION_TABLES: Readonly<Record<string, string>> = {
-  agencies: 'agencies', managedSites: 'managed_sites', userProfiles: 'user_profiles',
-  agencyMemberships: 'agency_memberships', siteMemberships: 'site_memberships', clients: 'clients',
-  clientContacts: 'client_contacts', clientApprovals: 'client_approvals', properties: 'properties', buildings: 'buildings',
-  propertyLevels: 'property_levels', propertyAreas: 'property_areas', serviceDefinitions: 'service_definitions',
-  serviceRequests: 'service_requests', serviceRequestItems: 'service_request_items', shopifyServiceMappings: 'shopify_service_mappings', inspectionServiceMappings: 'shopify_service_mappings',
-  inspectionRequests: 'inspection_requests', inspectionJobs: 'inspection_jobs', inspectionTemplates: 'inspection_templates',
-  inspectionTemplateVersions: 'inspection_template_versions', inspections: 'inspections', inspectionSections: 'inspection_sections',
-  observations: 'observations', inspectionEvidence: 'inspection_evidence', reports: 'reports', reportVersions: 'report_versions',
-  maintenanceCandidates: 'maintenance_candidates', maintenanceItems: 'maintenance_items', maintenanceQuotes: 'maintenance_quotes',
-  maintenanceEstimates: 'maintenance_estimates', maintenanceApprovals: 'maintenance_approvals', maintenanceWorkOrders: 'maintenance_work_orders',
-  maintenanceVariations: 'maintenance_variations', preventiveMaintenance: 'preventive_maintenance', warrantyClaims: 'warranty_claims',
-  contractorQuoteRequests: 'contractor_quote_requests', contractorQuotes: 'contractor_quotes', workRequests: 'work_requests',
-  tenantInstructions: 'tenant_instructions', externalContacts: 'external_contacts', dailyActivityLogs: 'daily_activity_logs',
-  residentRequests: 'resident_requests', contractorAttendance: 'contractor_attendance', keyTransactions: 'key_transactions',
-  accessDevices: 'access_devices', accessDeviceHistory: 'access_device_history', moveBookings: 'move_bookings',
-  residentOnboarding: 'resident_onboarding', operationalInspections: 'operational_inspections', assets: 'assets',
-  maintenancePlans: 'maintenance_plans', wasteEvents: 'waste_events', incidents: 'incidents',
-  bylawObservations: 'bylaw_observations', notices: 'notices', communications: 'communications', handovers: 'handovers',
-  handoverChecklistItems: 'handover_checklist_items', operationalReportDrafts: 'operational_report_drafts', operationalReports: 'operational_reports',
-  people: 'people', peopleInvitations: 'people_invitations', workforceProfiles: 'workforce_profiles', tenants: 'tenants', tenancies: 'tenancies', tenancyParticipants: 'tenancy_participants', occupancies: 'occupancies',
-  units: 'units', contractors: 'contractors', propertyClientRelationships: 'property_client_relationships', keyRegister: 'key_register',
-  accessDeviceRequests: 'access_device_requests', defects: 'defects', operationalInspectionCheckpoints: 'operational_inspection_checkpoints',
-  operationalInspectionResults: 'operational_inspection_results', serviceEvents: 'service_events', wasteServices: 'waste_services',
-  tasks: 'tasks', calendarEvents: 'calendar_events', documents: 'documents', inventoryItems: 'inventory_items', notifications: 'notifications',
-  formSubmissions: 'form_submissions', idempotencyKeys: 'idempotency_keys', uploadSessions: 'upload_sessions',
-  propertyOperatingSettings: 'property_operating_settings', operationalQuotes: 'operational_quotes',
-  operationalApprovals: 'operational_approvals', operationalWorkOrders: 'operational_work_orders', reportReviewComments: 'report_review_comments',
-  reportDistributions: 'report_distributions', reportAcknowledgements: 'report_acknowledgements', reportRecipientResponses: 'report_recipient_responses',
-  reportSupersessions: 'report_supersessions', tenantCommunications: 'tenant_communications', tenancyDocuments: 'tenancy_documents',
-  tenantPortalGrants: 'tenant_portal_grants', auditEvents: 'audit_events', integrationConnections: 'integration_connections',
-  integrationEvents: 'integration_events', integrationDeliveries: 'integration_deliveries', integrationExceptions: 'integration_exceptions', integrationSyncExceptions: 'integration_exceptions',
-  integrationOutbox: 'integration_outbox', evidenceFiles: 'evidence_files', portalEntitlements: 'portal_entitlements',
-  contractorCompliance: 'contractor_compliance', offerPartners: 'offer_partners', offers: 'offers', offerRedemptions: 'offer_redemptions',
-  conversations: 'conversations', conversationParticipants: 'conversation_participants', conversationMessages: 'conversation_messages',
-  notificationPreferences: 'notification_preferences', appointmentAvailability: 'appointment_availability', appointmentBookings: 'appointment_bookings',
-  routePlans: 'route_plans', routePlanStops: 'route_plan_stops', offlineSyncReceipts: 'offline_sync_receipts',
-};
+import { COLLECTION_TABLES, inAppwriteTransaction, transactionalAppwriteServices, decodeWorkerRow, encodeWorkerRow, workerEnvelope, workerRowId } from '@pcr/appwrite-server';
 
 const VERSIONED_TABLES = new Set([
   'inspection_jobs', 'inspection_template_versions', 'inspections', 'reports', 'report_versions',
@@ -93,7 +56,7 @@ function tableId(collection: string): string {
 }
 
 function publicRecord(row: Record<string, unknown>): StoredRecord {
-  const id = String(row.$id ?? row.id ?? '');
+  const id = String(row.id ?? row.$id ?? '');
   const createdAt = String(row.createdAt ?? row.$createdAt ?? new Date(0).toISOString());
   const updatedAt = String(row.updatedAt ?? row.$updatedAt ?? createdAt);
   const explicitVersion = typeof row.version === 'number' ? row.version : undefined;
@@ -136,7 +99,7 @@ function collectionReadRecord(
   collection: string,
   row: Record<string, unknown>,
 ): StoredRecord {
-  const value = appwriteCollectionReadData(collection, publicRecord(row));
+  const value = appwriteCollectionReadData(collection, publicRecord(decodeWorkerRow(tableId(collection), row)));
   if (collection === 'clientApprovals' && typeof value.evidencePhotoIds === 'string') {
     try { value.evidencePhotoIds = JSON.parse(value.evidencePhotoIds) as unknown[]; }
     catch { value.evidencePhotoIds = []; }
@@ -145,11 +108,11 @@ function collectionReadRecord(
 }
 
 export function createAppwriteApiServices(env: NodeJS.ProcessEnv = process.env): AppwriteServerServices {
-  return createAppwriteServerServices(loadAppwriteServerConfig(env));
+  return transactionalAppwriteServices(createAppwriteServerServices(loadAppwriteServerConfig(env)));
 }
 
 export class AppwriteOperationalRepository implements OperationalRepository {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
   async list(
     collection: string,
@@ -170,7 +133,7 @@ export class AppwriteOperationalRepository implements OperationalRepository {
 
   async get(collection: string, agencyId: string, id: string): Promise<StoredRecord | undefined> {
     try {
-      const row = await this.services.tables.getRow({ databaseId: this.services.databaseId, tableId: tableId(collection), rowId: id });
+      const row = await this.services.tables.getRow({ databaseId: this.services.databaseId, tableId: tableId(collection), rowId: workerRowId(tableId(collection), agencyId, id) });
       const record = collectionReadRecord(collection, row as unknown as Record<string, unknown>);
       return record.agencyId === agencyId ? record : undefined;
     } catch (error) {
@@ -181,21 +144,23 @@ export class AppwriteOperationalRepository implements OperationalRepository {
 
   async create(collection: string, agencyId: string, id: string, data: Record<string, unknown>, actorId: string): Promise<StoredRecord> {
     const row = await this.services.tables.createRow({
-      databaseId: this.services.databaseId, tableId: tableId(collection), rowId: id,
-      data: writeData(collectionWriteData(collection, { ...data, agencyId }), actorId), permissions: [],
+      databaseId: this.services.databaseId, tableId: tableId(collection), rowId: workerRowId(tableId(collection), agencyId, id),
+      data: workerEnvelope(tableId(collection)) ? encodeWorkerRow(tableId(collection), { ...data, agencyId }, agencyId, id, actorId) : writeData(collectionWriteData(collection, { ...data, agencyId }), actorId), permissions: [],
     });
     return collectionReadRecord(collection, row as unknown as Record<string, unknown>);
   }
 
   async update(collection: string, agencyId: string, id: string, data: Record<string, unknown>, expectedVersion: number, actorId: string): Promise<StoredRecord> {
+    return inAppwriteTransaction(this.services, async () => {
     const current = await this.get(collection, agencyId, id);
     if (!current) throw Object.assign(new Error('Record not found.'), { code: 'NOT_FOUND', status: 404 });
     if (current.version !== expectedVersion) throw Object.assign(new Error('Record changed. Reload and retry.'), { code: 'VERSION_CONFLICT', status: 409 });
     const mappedTable = tableId(collection);
-    const patch = writeData(collectionWriteData(collection, data), actorId, current);
+    const patch = workerEnvelope(mappedTable) ? encodeWorkerRow(mappedTable, { ...current, ...data, agencyId }, agencyId, id, actorId) : writeData(collectionWriteData(collection, data), actorId, current);
     if (VERSIONED_TABLES.has(mappedTable)) patch.version = (typeof current.version === 'number' && current.version < 10_000_000_000 ? current.version : 0) + 1;
-    const row = await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: mappedTable, rowId: id, data: patch });
+    const row = await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: mappedTable, rowId: workerRowId(mappedTable, agencyId, id), data: patch });
     return collectionReadRecord(collection, row as unknown as Record<string, unknown>);
+    });
   }
 }
 
@@ -276,7 +241,7 @@ function reportVersionFromRow(
 }
 
 export class AppwriteReportVersionReader implements ReportVersionReader {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
   async get(
     agencyId: string,
@@ -344,7 +309,7 @@ export class AppwriteReportVersionReader implements ReportVersionReader {
 
 export class AppwriteNotificationDeliveryStore
 implements NotificationDeliveryStore {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
   private async row(
     tableId: string,
@@ -493,7 +458,7 @@ implements NotificationDeliveryStore {
 
 
 export class AppwriteReportAggregateStore implements ReportAggregateStore {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
   private async row(reportId: string, transactionId?: string): Promise<Record<string, unknown> | undefined> {
     try {
@@ -518,11 +483,15 @@ export class AppwriteReportAggregateStore implements ReportAggregateStore {
       rowId: versionId,
       transactionId,
     }) as unknown as Record<string, unknown>;
+    if (version.agencyId !== row.agencyId || version.reportId !== row.$id) throw reportError('REPORT_VERSION_SCOPE_MISMATCH', 403, 'Report version scope mismatch.');
+    if (reportContentHash(String(version.snapshot)) !== version.contentHash) throw reportError('REPORT_SNAPSHOT_HASH_MISMATCH', 409, 'Report snapshot hash mismatch.');
     const aggregate = parseReportSnapshot(version.snapshot);
+    const runtime = typeof row.workerState === 'string' ? JSON.parse(row.workerState) as Record<string, unknown> : {};
     return {
       ...aggregate,
       report: {
         ...aggregate.report,
+        ...Object.fromEntries(Object.entries(runtime).filter(([key]) => /^(?:finalPdf|renderManifest|pdfGenerated|presentation|branding)/u.test(key))),
         lifecycleStatus: String(row.lifecycleStatus) as ReportAggregate['report']['lifecycleStatus'],
         currentVersionId: versionId,
         version: Number(row.version),
@@ -648,7 +617,7 @@ export class AppwriteReportAggregateStore implements ReportAggregateStore {
         transactionId, permissions: [], data: {
           agencyId, reportId: command.reportId, version: event.resultingVersion,
           contentHash: reportContentHash(snapshot), snapshot,
-          immutable: IMMUTABLE_REPORT_STATUSES.has(event.to), status: event.to,
+          immutable: event.to === 'finalisation_ready' || IMMUTABLE_REPORT_STATUSES.has(event.to), status: event.to,
           createdAt: timestamp, updatedAt: timestamp, createdBy: command.actorId, updatedBy: command.actorId,
           supersedesVersionId: String(row.currentVersionId),
           ...(event.to === 'finalised' ? { finalisedAt: timestamp } : {}),
@@ -673,6 +642,12 @@ export class AppwriteReportAggregateStore implements ReportAggregateStore {
           createdAt: timestamp, updatedAt: timestamp, createdBy: command.actorId, updatedBy: command.actorId,
         },
       });
+      await this.services.tables.createRow({
+        databaseId: this.services.databaseId, tableId: 'integration_outbox', rowId: randomUUID(), transactionId, permissions: [],
+        data: { agencyId, eventType: event.to === 'finalisation_ready' ? 'pdf.requested' : 'notification.requested', entityType: 'report', entityId: command.reportId,
+          payload: JSON.stringify({ reportId: command.reportId, reportVersionId: versionId, eventType: 'report.lifecycle_transition', lifecycleStatus: event.to }),
+          deliveryStatus: 'pending', attempts: 0, availableAt: timestamp, status: 'active', createdAt: timestamp, updatedAt: timestamp, createdBy: command.actorId, updatedBy: command.actorId },
+      });
       await this.services.tables.updateTransaction({ transactionId, commit: true });
       return { transition: event, report: next.report, versionId };
     } catch (error) {
@@ -683,46 +658,29 @@ export class AppwriteReportAggregateStore implements ReportAggregateStore {
 }
 
 export class AppwriteIdempotencyStore implements IdempotencyStore {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
-  async execute(
-    agencyId: string,
-    operation: string,
-    key: string,
-    payloadHash: string,
-    action: () => Promise<IdempotencyResult>,
-  ): Promise<{ replayed: boolean; result: IdempotencyResult }> {
+  async execute(agencyId: string, operation: string, key: string, payloadHash: string, action: () => Promise<IdempotencyResult>): Promise<{ replayed: boolean; result: IdempotencyResult }> {
     const keyHash = createHash('sha256').update(key).digest('hex');
-    const rowId = createHash('sha256').update(`${agencyId}:${operation}:${keyHash}`).digest('hex').slice(0, 36);
-    const read = async () => this.services.tables.getRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId }) as unknown as Promise<Record<string, unknown>>;
-    let existing: Record<string, unknown> | undefined;
-    try { existing = await read(); } catch (error) { if (appwriteErrorCode(error) !== 404) throw error; }
-    if (existing) return this.replay(existing, operation, payloadHash);
-    const timestamp = new Date().toISOString();
-    try {
-      await this.services.tables.createRow({
-        databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId, permissions: [],
-        data: {
-          agencyId, operation, keyHash, payloadHash, executionState: 'processing', status: 'active',
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          createdAt: timestamp, updatedAt: timestamp, createdBy: 'proinspect_api', updatedBy: 'proinspect_api',
-        },
-      });
-    } catch (error) {
-      if (appwriteErrorCode(error) !== 409) throw error;
-      return this.replay(await read(), operation, payloadHash);
-    }
-    try {
+    const rowId = createHash('sha256').update(`${agencyId}:${operation}:${key}`).digest('hex').slice(0, 36);
+    return inAppwriteTransaction(this.services, async () => {
+      let existing: Record<string, unknown> | undefined;
+      try { existing = await this.services.tables.getRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId }); }
+      catch (error) { if (appwriteErrorCode(error) !== 404) throw error; }
+      if (existing) {
+        if (existing.agencyId !== agencyId) throw new IdempotencyConflictError('Idempotency agency mismatch');
+        return this.replay(existing, operation, payloadHash);
+      }
+      const timestamp = new Date().toISOString();
+      await this.services.tables.createRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId, permissions: [], data: {
+        agencyId, operation, keyHash, payloadHash, executionState: 'processing', status: 'active',
+        expiresAt: new Date(Date.now() + 86400000).toISOString(), createdAt: timestamp, updatedAt: timestamp,
+        createdBy: 'proinspect_api', updatedBy: 'proinspect_api',
+      } });
       const result = await action();
-      await this.services.tables.updateRow({
-        databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId,
-        data: { executionState: 'completed', responseStatus: result.status, responseBody: JSON.stringify(result.body), updatedAt: new Date().toISOString() },
-      });
+      await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId, data: { executionState: 'completed', responseStatus: result.status, responseBody: JSON.stringify(result.body), updatedAt: new Date().toISOString() } });
       return { replayed: false, result };
-    } catch (error) {
-      await this.services.tables.deleteRow({ databaseId: this.services.databaseId, tableId: 'idempotency_keys', rowId }).catch(() => undefined);
-      throw error;
-    }
+    });
   }
 
   private replay(row: Record<string, unknown>, operation: string, payloadHash: string): { replayed: boolean; result: IdempotencyResult } {
@@ -737,7 +695,7 @@ export class AppwriteIdempotencyStore implements IdempotencyStore {
 }
 
 export class AppwriteTaskOutbox implements TaskDispatcher {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
   async dispatch(kind: TaskKind, agencyId: string, taskId: string, payload: Record<string, unknown>): Promise<void> {
     const timestamp = new Date().toISOString();
     await this.services.tables.createRow({
@@ -752,7 +710,7 @@ export class AppwriteTaskOutbox implements TaskDispatcher {
 }
 
 export class AppwriteUploadSessionIssuer implements UploadSessionIssuer {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
   async create(agencyId: string, uploadId: string, input: Record<string, unknown>, principal: AuthenticatedPrincipal): Promise<Record<string, unknown>> {
     const timestamp = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -778,7 +736,7 @@ export class AppwriteUploadSessionIssuer implements UploadSessionIssuer {
 }
 
 export class AppwriteMembershipRepository implements MembershipRepository {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
   async getMembership(uid: string, agencyId: string): Promise<AgencyMembership | undefined> {
     const [agencyRows, siteRows, entitlementRows] = await Promise.all([
@@ -819,7 +777,7 @@ export class AppwriteMembershipRepository implements MembershipRepository {
 }
 
 export class AppwriteAuditWriter implements AuditWriter {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
   async append(event: SecurityAuditEvent): Promise<void> {
     const now = new Date().toISOString();
     await this.services.tables.createRow({

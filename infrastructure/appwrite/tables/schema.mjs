@@ -1,3 +1,4 @@
+import { workerRuntimeTables } from './worker-runtime.mjs';
 const str = (key, size = 255, required = false, format) => ({ key, type: 'string', size, required, ...(format ? { format } : {}) });
 const text = (key, required = false) => ({ key, type: 'longtext', required });
 const datetime = (key, required = false) => ({ key, type: 'datetime', required });
@@ -47,7 +48,7 @@ export const tables = [
   agencyEntity('inspection_sections', [str('inspectionId',36,true),str('areaId',36),str('canonicalAreaId',36),str('canonicalAreaVersionId',36),str('name',255,true),str('responsibility',64),integer('sequence',true),str('status',64)], [index('inspection_sequence',['inspectionId','sequence'])]),
   agencyEntity('observations', [str('inspectionId',36,true),str('sectionId',36,true),str('componentId',36),str('canonicalComponentId',36),str('canonicalComponentVersionId',36),str('condition',64),str('cleanliness',64),str('workingStatus',64),str('testingStatus',64),text('testRecord'),text('commentary'),boolean('maintenanceRequired'),str('responsibility',64)], [index('inspection_section',['inspectionId','sectionId']),index('component_condition',['componentId','condition'])]),
   agencyEntity('inspection_evidence', [str('inspectionId',36,true),str('observationId',36),str('evidenceFileId',36,true),str('category',64),integer('sequence')], [index('inspection_sequence',['inspectionId','sequence']),index('observation',['observationId'])]),
-  agencyEntity('reports', [str('inspectionJobId',36),str('propertyId',36,true),str('inspectorId',36),str('analystId',36),str('reviewerId',36),str('currentVersionId',36),str('lifecycleStatus',64,true),integer('version',true),datetime('finalisedAt'),str('finalisedBy',36)], [index('property_status',['propertyId','lifecycleStatus']),index('job_status',['inspectionJobId','lifecycleStatus']),index('analyst_status',['analystId','lifecycleStatus']),index('reviewer_status',['reviewerId','lifecycleStatus'])]),
+  agencyEntity('reports', [str('inspectionJobId',36),str('propertyId',36,true),str('inspectorId',36),str('analystId',36),str('reviewerId',36),str('currentVersionId',36),str('lifecycleStatus',64,true),integer('version',true),datetime('finalisedAt'),str('finalisedBy',36),str('supersededByReportId',36)], [index('property_status',['propertyId','lifecycleStatus']),index('job_status',['inspectionJobId','lifecycleStatus']),index('analyst_status',['analystId','lifecycleStatus']),index('reviewer_status',['reviewerId','lifecycleStatus'])]),
   agencyEntity('report_versions', [str('reportId',36,true),integer('version',true),str('contentHash',128,true),str('fileId',36),text('snapshot'),boolean('immutable',true),datetime('finalisedAt'),str('supersedesVersionId',36)], [unique('report_version',['reportId','version']),index('report_finalised',['reportId','finalisedAt'])]),
 
   agencyEntity('maintenance_candidates', [str('propertyId',36,true),str('inspectionJobId',36),str('reportId',36),str('observationId',36),str('canonicalAreaId',36),str('canonicalAreaVersionId',36),str('canonicalComponentId',36),str('canonicalComponentVersionId',36),str('title',255,true),text('description',true),str('category',64,true),str('priority',32,true),number('confidence'),str('confirmedItemId',36)], [index('property_status',['propertyId','status']),index('report_status',['reportId','status'])]),
@@ -135,5 +136,10 @@ export const tables = [
   agencyEntity('evidence_files', [str('bucketId',36,true),str('fileId',36,true),str('managedSiteId',36),str('propertyId',36),str('entityType',64,true),str('entityId',36,true),str('category',64),str('mimeType',255,true),str('originalFilename',512,true),integer('size',true),str('checksum',128,true),str('uploadedBy',36,true),datetime('capturedAt'),str('legacyFileId',255),str('storageVersion',128)], [unique('bucket_file',['bucketId','fileId']),index('entity_created',['entityType','entityId','createdAt']),index('property_created',['propertyId','createdAt'])]),
   table('migration_id_map', [str('sourceSystem',64,true),str('sourceEntity',128,true),str('sourceId',255,true),str('targetTable',36,true),str('targetId',36),str('sourceChecksum',128,true),str('migratedChecksum',128),str('migrationVersion',64,true),datetime('migratedAt'),str('status',32,true),text('error')], [unique('source_identity',['sourceSystem','sourceEntity','sourceId']),index('status_source',['status','sourceSystem']),index('target',['targetTable','targetId'])]),
 ];
+
+// Additional immutable artifact/delivery details are server-owned and retained losslessly.
+const workerStateTables = new Set(['reports', 'inspection_jobs', 'tenant_communications', 'tenancy_documents', 'communications', 'integration_outbox', 'integration_connections', 'clients', 'properties', 'tenants', 'tenancies']);
+for (const item of tables) if (workerStateTables.has(item.$id)) item.columns.push(text('workerState'));
+tables.push(...workerRuntimeTables);
 
 export const expectedTableIds = tables.map((item) => item.$id);

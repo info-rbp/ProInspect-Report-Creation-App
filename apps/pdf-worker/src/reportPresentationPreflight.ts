@@ -1,15 +1,11 @@
 import { createHash } from 'node:crypto';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import type { AgencyBrandingProfile, AgencyOrganisationSettings } from '@pcr/domain';
 import type { ReportBrandingSnapshot, ReportPresentationTemplate } from '@pcr/report-presentation';
 import { presentationTemplateForReportType } from '@pcr/report-presentation/presets';
-import { firestoreDb } from './firestoreDatabase.js';
+import { workerDatabase } from '@pcr/appwrite-server';
 import type { PdfGenerationTask } from './pdfGenerationService.js';
 import { PdfWorkerError } from './pdfGenerationService.js';
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -48,7 +44,7 @@ async function publishedTemplate(
   agencyId: string,
   reportType: string,
 ): Promise<{ recordId: string; template: ReportPresentationTemplate }> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const kind = inspectionType(reportType);
   const snapshot = await database.collection(`agencies/${agencyId}/reportPresentationTemplateVersions`).get();
   const candidates = snapshot.docs
@@ -95,7 +91,7 @@ async function brandingSnapshot(
   template: ReportPresentationTemplate,
   capturedAt: string,
 ): Promise<{ snapshot: ReportBrandingSnapshot; hash: string }> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const [profileSnapshot, organisationSnapshot] = await Promise.all([
     database.collection(`agencies/${agencyId}/brandingProfiles`).get(),
     database.doc(`agencies/${agencyId}/agencySettings/organisation`).get(),
@@ -105,7 +101,7 @@ async function brandingSnapshot(
     .filter((candidate) => candidate.status === 'active')
     .sort((left, right) => text(right.updatedAt).localeCompare(text(left.updatedAt)))[0];
   const organisation = organisationSnapshot.exists
-    ? organisationSnapshot.data() as AgencyOrganisationSettings
+    ? organisationSnapshot.data() as unknown as AgencyOrganisationSettings
     : undefined;
   const agencyName = organisation?.tradingName || organisation?.registeredName || profile?.name || 'ProInspect';
   const address = organisation?.businessAddress
@@ -144,7 +140,7 @@ async function brandingSnapshot(
 }
 
 export async function ensureReportPresentationIdentity(task: PdfGenerationTask): Promise<void> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const reportRef = database.doc(`agencies/${task.agencyId}/reports/${task.reportId}`);
   await database.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(reportRef);

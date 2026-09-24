@@ -3,7 +3,7 @@ import { extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { root, requireThat } from '../runtime.mjs';
 
-export const workerServices=['pdf-worker','notification-worker','dashboard-worker','document-worker','integration-worker'];
+export const workerServices=['pdf-worker','notification-worker','dashboard-worker','document-worker','integration-worker','ai-worker'];
 const forbiddenRuntimePackages=new Set(['firebase','firebase-admin','@google-cloud/firestore','@google-cloud/storage']);
 const forbiddenSource=[
   {id:'firebase-admin',pattern:/['"]firebase-admin(?:\/[^'"]*)?['"]/u},

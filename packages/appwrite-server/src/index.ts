@@ -6,3 +6,8 @@ export * from './repositories.js';
 export * from './foundationService.js';
 export * from './types.js';
 export * from './capabilities.js';
+export * from './workerRepository.js';
+export * from './collectionTables.js';
+export * from './workerStorage.js';
+export * from './transactions.js';
+export { workerSchema } from './workerSchema.js';

@@ -41,7 +41,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 export async function handlePdfWorkerRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/health') {
-    sendJson(res, 200, { status: 'ok', service: 'pcr-pdf-worker' });
+    sendJson(res, 200, { status: 'ok', authority: 'appwrite', version: process.env.APP_VERSION, service: 'pcr-pdf-worker' });
     return;
   }
 

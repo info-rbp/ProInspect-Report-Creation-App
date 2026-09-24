@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { firestoreDb } from './firestoreDatabase.js';
+import { workerDatabase } from '@pcr/appwrite-server';
 
 interface ProviderConfig {
   sendgridApiKey?: string;
@@ -54,9 +53,6 @@ interface ParticipantRecord {
   status?: string;
 }
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 async function metadataAccessToken(): Promise<string> {
   const response = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
@@ -159,7 +155,7 @@ function decodePubSub(input: unknown): Record<string, unknown> {
 
 async function updateCommunication(agencyId: string, communicationId: string | undefined, patch: Record<string, unknown>) {
   if (!communicationId) return;
-  await firestoreDb(adminApp()).doc(`agencies/${agencyId}/tenantCommunications/${communicationId}`).set({ ...patch, updatedAt: new Date().toISOString() }, { merge: true });
+  await workerDatabase().doc(`agencies/${agencyId}/tenantCommunications/${communicationId}`).set({ ...patch, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
 async function sendEmail(agencyId: string, notificationId: string, job: NotificationJob, provider: ProviderConfig) {
@@ -205,10 +201,10 @@ async function sendSms(agencyId: string, notificationId: string, job: Notificati
 }
 
 export async function deliverNotification(agencyId: string, notificationId: string, supplied?: NotificationJob): Promise<NotificationJob> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const reference = database.doc(`agencies/${agencyId}/notificationJobs/${notificationId}`);
   const snapshot = await reference.get();
-  const existing = snapshot.exists ? snapshot.data() as NotificationJob : supplied;
+  const existing = snapshot.exists ? snapshot.data() as unknown as NotificationJob : supplied;
   if (!existing) throw new Error(`Notification job not found: ${notificationId}`);
   if (['sent', 'delivered'].includes(String(existing.status))) return existing;
   const provider = await providerConfig();
@@ -283,7 +279,7 @@ async function emitAutomationNotification(input: {
   message: string;
   relatedEntityType: 'tenant_instruction' | 'tenancy_document' | 'general';
 }): Promise<boolean> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const eventKey = `${input.rule}:${input.entityId}:${input.tenantId}:${input.dateKey}`;
   const eventId = automationId(eventKey);
   const eventRef = database.doc(`agencies/${input.agencyId}/tenantAutomationEvents/${eventId}`);
@@ -308,7 +304,7 @@ async function emitAutomationNotification(input: {
 }
 
 async function runAgencyAutomation(agencyId: string, now: Date): Promise<number> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const [tenancySnap, participantSnap, tenantSnap, actionSnap, documentSnap] = await Promise.all([
     database.collection(`agencies/${agencyId}/tenancies`).get(),
     database.collection(`agencies/${agencyId}/tenancyParticipants`).get(),
@@ -361,7 +357,7 @@ async function runAgencyAutomation(agencyId: string, now: Date): Promise<number>
 }
 
 export async function runTenantAutomation(now = new Date()): Promise<{ agencies: number; emitted: number }> {
-  const agencySnapshot = await firestoreDb(adminApp()).collection('agencies').get();
+  const agencySnapshot = await workerDatabase().collection('agencies').get();
   let emitted = 0;
   for (const agency of agencySnapshot.docs) emitted += await runAgencyAutomation(agency.id, now);
   return { agencies: agencySnapshot.size, emitted };
@@ -370,7 +366,7 @@ export async function runTenantAutomation(now = new Date()): Promise<{ agencies:
 async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url || '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/health') {
-    json(res, 200, { status: 'ok', service: 'notification-worker' });
+    json(res, 200, { status: 'ok', authority: 'appwrite', version: process.env.APP_VERSION, service: 'notification-worker' });
     return;
   }
   if (req.method !== 'POST') {
@@ -400,6 +396,6 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 }
 
 const port = Number(process.env.PORT || 8080);
-createServer((req, res) => void handle(req, res)).listen(port, '0.0.0.0', () => {
+if (process.env.NODE_ENV !== 'test') createServer((req, res) => void handle(req, res)).listen(port, '0.0.0.0', () => {
   console.log(JSON.stringify({ level: 'info', message: 'notification-worker.listening', port }));
 });

@@ -1,14 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { FieldPath, type CollectionReference, type Query } from 'firebase-admin/firestore';
-import { firestoreDb } from './firestoreDatabase.js';
+import { type WorkerQuery, workerDatabase } from '@pcr/appwrite-server';
 
-function adminApp() { return getApps()[0] ?? initializeApp({ credential: applicationDefault() }); }
-function database() { return firestoreDb(adminApp()); }
+function database() { return workerDatabase(); }
 function json(res: ServerResponse, status: number, body: unknown): void { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); }
 function perthDateKey(now = new Date()): string { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Perth', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now); const value = (type: string) => parts.find((part) => part.type === type)?.value || ''; return `${value('year')}-${value('month')}-${value('day')}`; }
-async function count(query: Query): Promise<number> { const snapshot = await query.count().get(); return snapshot.data().count; }
-function collection(agencyId: string, name: string): CollectionReference { return database().collection(`agencies/${agencyId}/${name}`); }
+async function count(query: WorkerQuery): Promise<number> { const snapshot = await query.count().get(); return snapshot.data().count; }
+function collection(agencyId: string, name: string): WorkerQuery { return database().collection(`agencies/${agencyId}/${name}`); }
 
 async function metricsForAgency(agencyId: string, now = new Date()): Promise<Record<string, number>> {
   const today = perthDateKey(now); const tomorrow = perthDateKey(new Date(now.getTime() + 86_400_000)); const thirtyDays = new Date(now.getTime() + 30 * 86_400_000).toISOString(); const nowIso = now.toISOString();
@@ -71,7 +68,7 @@ async function metricsForAgency(agencyId: string, now = new Date()): Promise<Rec
 }
 
 export async function captureDailyDashboardSnapshots(now = new Date()): Promise<{ agencies: number; snapshots: number; failures: number }> {
-  const agencies = await database().collection('agencies').select(FieldPath.documentId()).get(); let snapshots = 0; let failures = 0;
+  const agencies = await database().collection('agencies').get(); let snapshots = 0; let failures = 0;
   for (const agency of agencies.docs) {
     try { const metrics = await metricsForAgency(agency.id, now); const dateKey = perthDateKey(now); await database().doc(`agencies/${agency.id}/dashboardMetricSnapshots/dashboard-${dateKey}`).set({ id: `dashboard-${dateKey}`, agencyId: agency.id, capturedAt: now.toISOString(), timezone: 'Australia/Perth', source: 'scheduled-count-aggregation-v2', metrics, createdBy: 'system:dashboard-worker', updatedAt: now.toISOString(), version: 2 }, { merge: true }); snapshots += 1; }
     catch (error) { failures += 1; console.error(JSON.stringify({ level: 'error', message: 'dashboard.snapshot.failed', agencyId: agency.id, error: error instanceof Error ? error.message : String(error) })); }
@@ -79,5 +76,5 @@ export async function captureDailyDashboardSnapshots(now = new Date()): Promise<
   return { agencies: agencies.size, snapshots, failures };
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> { const path = new URL(req.url || '/', 'http://localhost').pathname; if (req.method === 'GET' && path === '/health') { json(res, 200, { status: 'ok', service: 'dashboard-worker', aggregation: 'firestore-count-v2' }); return; } if (req.method === 'POST' && path === '/tasks/daily-snapshot') { const result = await captureDailyDashboardSnapshots(); json(res, result.failures ? 207 : 200, { status: result.failures ? 'partial' : 'completed', ...result }); return; } json(res, req.method === 'POST' ? 404 : 405, { error: req.method === 'POST' ? 'Route not found.' : 'Method not allowed.' }); }
-const port = Number(process.env.PORT || 8080); createServer((req, res) => void handle(req, res)).listen(port, '0.0.0.0', () => { console.log(JSON.stringify({ level: 'info', message: 'dashboard-worker.listening', port })); });
+async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> { const path = new URL(req.url || '/', 'http://localhost').pathname; if (req.method === 'GET' && path === '/health') { json(res, 200, { status: 'ok', authority: 'appwrite', version: process.env.APP_VERSION, service: 'dashboard-worker', aggregation: 'appwrite-agency-v1' }); return; } if (req.method === 'POST' && path === '/tasks/daily-snapshot') { const result = await captureDailyDashboardSnapshots(); json(res, result.failures ? 207 : 200, { status: result.failures ? 'partial' : 'completed', ...result }); return; } json(res, req.method === 'POST' ? 404 : 405, { error: req.method === 'POST' ? 'Route not found.' : 'Method not allowed.' }); }
+const port = Number(process.env.PORT || 8080); if (process.env.NODE_ENV !== 'test') createServer((req, res) => void handle(req, res)).listen(port, '0.0.0.0', () => { console.log(JSON.stringify({ level: 'info', message: 'dashboard-worker.listening', port })); });

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import {
   parseChangeRoleInput,
@@ -7,8 +7,15 @@ import {
 } from '@pcr/validation';
 import { authenticateAndAuthorise } from '../security/authoriseRequest.js';
 import { routeFirebasePeopleRequest } from './peopleLegacyAdapter.js';
-import type { ApiDependencies } from './types.js';
+import type { ApiDependencies, IdempotencyResult } from './types.js';
 import { ApiError, type ApiResponse } from './router.js';
+
+async function privilegedCommand(req: IncomingMessage, deps: ApiDependencies, agency: string, operation: string, input: unknown, action: () => Promise<IdempotencyResult>): Promise<ApiResponse> {
+  const key = req.headers['idempotency-key']?.toString().trim();
+  if (!key || key.length < 8 || key.length > 200) throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key is required for access changes.');
+  const result = await deps.idempotency.execute(agency, operation, key, createHash('sha256').update(JSON.stringify(input)).digest('hex'), action);
+  return { ...result.result, headers: { 'idempotency-replayed': String(result.replayed) } };
+}
 
 function agencyId(req: IncomingMessage): string {
   const value = req.headers['x-agency-id']?.toString().trim();
@@ -211,6 +218,7 @@ export async function routePeopleRequest(
     }
 
     const input = parseChangeRoleInput(await body(req), principal.role);
+    return privilegedCommand(req, deps, agency, `people:${uid}:role`, input, async () => {
     const result = await people.changeRole(agency, uid, input.role);
 
     await appendAudit(
@@ -231,6 +239,7 @@ export async function routePeopleRequest(
       status: 200,
       body: { data: { id: uid, role: result.after } },
     };
+    });
   }
 
   if (
@@ -261,6 +270,7 @@ export async function routePeopleRequest(
     }
 
     const input = parseMembershipActionInput(await body(req));
+    return privilegedCommand(req, deps, agency, `people:${uid}:${action}`, input, async () => {
     const result = await people.changeMembershipStatus(
       agency,
       uid,
@@ -294,6 +304,7 @@ export async function routePeopleRequest(
         },
       },
     };
+    });
   }
 
   if (req.method === 'POST' && action === 'reassign') {

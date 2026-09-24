@@ -1,9 +1,7 @@
 import { createDecipheriv, createHash, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import type { DocumentData } from 'firebase-admin/firestore';
 import type { CommunicationPolicy, CommunicationTemplate, NotificationRule } from '@pcr/domain';
-import { firestoreDb } from './firestoreDatabase.js';
+import { workerDatabase } from '@pcr/appwrite-server';
 
 interface ProviderConfig {
   sendgridApiKey?: string;
@@ -84,12 +82,9 @@ interface RecipientContext {
   variables: Record<string, string>;
 }
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function database() {
-  return firestoreDb(adminApp());
+  return workerDatabase();
 }
 
 function text(value: unknown): string {
@@ -161,7 +156,7 @@ async function integrationCredentials(agencyId: string, provider: 'sendgrid' | '
 
 async function communicationPolicy(agencyId: string): Promise<CommunicationPolicy | undefined> {
   const snapshot = await database().doc(`agencies/${agencyId}/agencySettings/communications`).get();
-  return snapshot.exists ? snapshot.data() as CommunicationPolicy : undefined;
+  return snapshot.exists ? snapshot.data() as unknown as CommunicationPolicy : undefined;
 }
 
 const providerCache = new Map<string, { value: ProviderConfig; expiresAt: number }>();
@@ -321,7 +316,7 @@ async function inspectionRecipients(agencyId: string, jobId: string): Promise<Re
     ]);
     const tenantMap = new Map(tenants.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() } as TenantRecord]));
     for (const participant of participants.docs) {
-      const data = participant.data() as ParticipantRecord;
+      const data = participant.data() as unknown as ParticipantRecord;
       if (data.status === 'ended' || !['primary_tenant', 'co_tenant'].includes(String(data.role))) continue;
       const tenant = tenantMap.get(data.tenantId);
       if (!tenant) continue;
@@ -416,7 +411,11 @@ async function queueEvent(
         ...(recipient.tenantId ? { tenantId: recipient.tenantId } : {}),
         ...context,
       };
-      await ref.set(job, { merge: true });
+      await database().runTransaction(async (tx) => {
+        const latest = await tx.get(ref);
+        if (latest.exists && ['queued', 'sent', 'delivered', 'running'].includes(String(latest.get('status')))) return;
+        tx.set(ref, { ...job, agencyId, id }, { merge: true });
+      });
       ids.push(id);
     }
   }
@@ -490,7 +489,7 @@ async function recordEscalation(agencyId: string, notificationId: string, job: N
 export async function deliverNotification(agencyId: string, notificationId: string, supplied?: NotificationJob): Promise<NotificationJob> {
   const ref = database().doc(`agencies/${agencyId}/notificationJobs/${notificationId}`);
   const snapshot = await ref.get();
-  const existing = snapshot.exists ? snapshot.data() as NotificationJob : supplied;
+  const existing = snapshot.exists ? snapshot.data() as unknown as NotificationJob : supplied;
   if (!existing || !existing.channel || !existing.recipient || !existing.message) {
     throw new Error(`Notification job is incomplete: ${notificationId}`);
   }
@@ -507,7 +506,13 @@ export async function deliverNotification(agencyId: string, notificationId: stri
   const provider = await providerConfig(agencyId);
   const now = new Date().toISOString();
   try {
-    await ref.set({ status: 'running', updatedAt: now }, { merge: true });
+    const claimed = await database().runTransaction(async (tx) => {
+      const latest = await tx.get(ref);
+      if (latest.exists && ['sent', 'delivered', 'running'].includes(String(latest.get('status')))) return false;
+      tx.set(ref, { ...existing, agencyId, status: 'running', updatedAt: now }, { merge: true });
+      return true;
+    });
+    if (!claimed) return { ...existing, id: notificationId, agencyId, status: 'running' };
     let providerMessageId: string | undefined;
     let status: 'sent' | 'delivered' = 'sent';
     if (existing.channel === 'email') providerMessageId = await sendEmail(agencyId, notificationId, existing, provider);
@@ -593,7 +598,7 @@ async function tenancyRecipients(agencyId: string, tenancyId: string): Promise<A
   ]);
   const tenants = new Map(tenantSnap.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() } as TenantRecord]));
   return participantSnap.docs.flatMap((doc) => {
-    const participant = doc.data() as ParticipantRecord;
+    const participant = doc.data() as unknown as ParticipantRecord;
     const tenant = tenants.get(participant.tenantId);
     if (!tenant?.email || participant.status === 'ended' || !['primary_tenant', 'co_tenant'].includes(String(participant.role))) return [];
     return [{ tenant, email: tenant.email.trim().toLowerCase() }];
@@ -758,7 +763,7 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url || '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/health') {
-    json(res, 200, { status: 'ok', service: 'notification-worker', runtime: 'settings-authoritative-v2' });
+    json(res, 200, { status: 'ok', authority: 'appwrite', version: process.env.APP_VERSION, service: 'notification-worker', runtime: 'settings-authoritative-v2' });
     return;
   }
   if (req.method !== 'POST') {
@@ -773,7 +778,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       if (!agencyId || !taskId) throw new Error('Notification payload requires agencyId and taskId.');
       const stored = await database().doc(`agencies/${agencyId}/notificationJobs/${taskId}`).get();
       if (stored.exists) {
-        await deliverNotification(agencyId, taskId, stored.data() as NotificationJob);
+        await deliverNotification(agencyId, taskId, stored.data() as unknown as NotificationJob);
         json(res, 200, { status: 'processed', notificationIds: [taskId] });
         return;
       }
@@ -796,6 +801,6 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 }
 
 const port = Number(process.env.PORT || 8080);
-createServer((req, res) => void handle(req, res)).listen(port, '0.0.0.0', () => {
+if (process.env.NODE_ENV !== 'test') createServer((req, res) => void handle(req, res)).listen(port, '0.0.0.0', () => {
   console.log(JSON.stringify({ level: 'info', message: 'notification-worker.listening', port, runtime: 'settings-authoritative-v2' }));
 });

@@ -1,3 +1,4 @@
+import { appwriteCollectionTableMap } from '../src/backend/appwriteAdapters.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -8,7 +9,7 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 describe('Stage 4 runtime parity boundary', () => {
   it('maps clientApprovals to a dedicated canonical Appwrite table', () => {
     const adapters = read('src/backend/appwriteAdapters.ts');
-    expect(adapters).toContain("clientApprovals: 'client_approvals'");
+    expect(appwriteCollectionTableMap().clientApprovals).toBe('client_approvals');
     expect(adapters).toContain('collectionWriteData');
     expect(adapters).toContain('collectionReadRecord');
   });

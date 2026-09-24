@@ -550,7 +550,9 @@ async function supersedeReport(
   const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
   if (!reason) throw new ApiError(400, 'CORRECTION_REASON_REQUIRED', 'A correction reason is required.');
   return idempotent(dependencies, req, agencyId, `report:${reportId}:supersede`, body, async () => {
-    const id = `${reportId}-superseding-${randomUUID().slice(0, 8)}`;
+    const latest = await dependencies.reports.load(agencyId, reportId);
+    if (!latest || latest.report.currentVersionId !== sourceVersionId || !['finalised', 'archived'].includes(latest.report.lifecycleStatus)) throw new ApiError(409, 'SUPERSESSION_CONFLICT', 'Only the current finalised version can be superseded.');
+    const id = randomUUID();
     const now = new Date().toISOString();
     const copy = structuredClone(context.aggregate);
     copy.report = {
@@ -587,7 +589,8 @@ async function supersedeReport(
     await dependencies.repository.update('reports', agencyId, reportId, { supersededByReportId: id }, context.aggregate.report.version ?? 1, principal.uid);
     const supersessionId = randomUUID();
     const supersession: Omit<ReportSupersession, 'version'> = { id: supersessionId, agencyId, sourceReportId: reportId, sourceReportVersionId: sourceVersionId, supersedingReportId: id, reason, createdBy: principal.uid, createdAt: now };
-    await dependencies.repository.create('reportSupersessions', agencyId, supersessionId, supersession as unknown as Record<string, unknown>, principal.uid);
+    await dependencies.repository.create('reportSupersessions', agencyId, supersessionId, { reportId, supersededVersionId: sourceVersionId, replacementVersionId: created.report.currentVersionId, reason, authorisedBy: principal.uid, supersededAt: now, status: 'recorded' }, principal.uid);
+    await dependencies.tasks.dispatch('notification', agencyId, randomUUID(), { eventType: 'report.superseded', reportId, supersedingReportId: id });
     await audit(dependencies, agencyId, principal.uid, principal.role, 'report.review', reportId, 'report.superseded', correlationId, { sourceVersionId, supersedingReportId: id, reason });
     return { status: 201, body: { data: { report: created, supersession }, meta: { correlationId } } };
   });

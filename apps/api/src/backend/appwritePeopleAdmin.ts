@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  Query,
+  Query, inAppwriteTransaction, transactionalAppwriteServices,
   type AppwriteServerServices,
 } from '@pcr/appwrite-server';
 import {
@@ -98,7 +98,7 @@ function activeAssignment(record: Row, userId: string): boolean {
 }
 
 export class AppwritePeopleAdminService implements PeopleAdminService {
-  constructor(private readonly services: AppwriteServerServices) {}
+  constructor(private readonly services: AppwriteServerServices) { this.services = transactionalAppwriteServices(services); }
 
   private async listRows(tableId: string, queries: string[] = []): Promise<Row[]> {
     const rows: Row[] = [];
@@ -521,10 +521,15 @@ export class AppwritePeopleAdminService implements PeopleAdminService {
     userId: string,
     role: SecurityRole,
   ): Promise<PeopleRoleChangeResult> {
+    return inAppwriteTransaction(this.services, async () => {
+    // Serialize changes to the administrator set, including concurrent demotions.
+    await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: 'agencies', rowId: agencyId, data: { updatedAt: new Date().toISOString() } });
     const membership = await this.membershipRow(agencyId, userId);
     if (!membership) fail('MEMBERSHIP_NOT_FOUND', 404, 'User membership was not found.');
 
     const before = text(membership.role) as SecurityRole;
+    if (['proinspect_admin', 'super_admin'].includes(before) && !['proinspect_admin', 'super_admin'].includes(role) && await this.countActiveAdmins(agencyId) <= 1) fail('LAST_ADMIN_REQUIRED', 409, 'The final administrator cannot be demoted.');
+    await this.services.users.deleteSessions({ userId });
     await this.services.tables.updateRow({
       databaseId: this.services.databaseId,
       tableId: 'agency_memberships',
@@ -537,8 +542,8 @@ export class AppwritePeopleAdminService implements PeopleAdminService {
       },
     });
 
-    await this.services.users.deleteSessions({ userId });
     return { id: userId, before, after: role };
+    });
   }
 
   async changeMembershipStatus(
@@ -546,6 +551,9 @@ export class AppwritePeopleAdminService implements PeopleAdminService {
     userId: string,
     action: MembershipLifecycleAction,
   ): Promise<PeopleMembershipActionResult> {
+    return inAppwriteTransaction(this.services, async () => {
+    // Serialize changes to the administrator set, including concurrent demotions.
+    await this.services.tables.updateRow({ databaseId: this.services.databaseId, tableId: 'agencies', rowId: agencyId, data: { updatedAt: new Date().toISOString() } });
     const membership = await this.membershipRow(agencyId, userId);
     if (!membership) fail('MEMBERSHIP_NOT_FOUND', 404, 'User membership was not found.');
 
@@ -574,6 +582,7 @@ export class AppwritePeopleAdminService implements PeopleAdminService {
         ? undefined
         : await this.impact(agencyId, userId);
 
+    if (action !== 'reactivate') await this.services.users.deleteSessions({ userId });
     await this.services.tables.updateRow({
       databaseId: this.services.databaseId,
       tableId: 'agency_memberships',
@@ -584,15 +593,14 @@ export class AppwritePeopleAdminService implements PeopleAdminService {
       },
     });
 
-    if (action !== 'reactivate') {
-      await this.services.users.deleteSessions({ userId });
-    }
+
 
     return {
       id: userId,
       status,
       ...(assignmentImpact ? { assignmentImpact } : {}),
     };
+    });
   }
 
   async reassign(

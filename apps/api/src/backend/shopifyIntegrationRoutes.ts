@@ -296,6 +296,7 @@ export async function routeShopifyIntegrationRequest(
     ) {
       throw new ApiError(403, 'SHOPIFY_STORE_MISMATCH', 'Webhook store does not match the connected Shopify store.');
     }
+    const execution = await dependencies.idempotency.execute(agencyId, 'shopify.webhook', deliveryId, payloadSha256(raw), async () => {
     const deliveryKey = `shopify-delivery-${createHash('sha256')
       .update(deliveryId)
       .digest('hex')
@@ -371,6 +372,8 @@ export async function routeShopifyIntegrationRequest(
       });
       throw error;
     }
+    });
+    return { ...execution.result, headers: { 'x-proinspect-webhook-replayed': String(execution.replayed) } };
   }
 
   const agencyId = agencyHeader(req);

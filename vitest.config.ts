@@ -25,6 +25,7 @@ export default defineConfig({
           environment: 'node',
           include: [
             'apps/api/tests/**/*.test.ts',
+            'apps/*-worker/src/**/*.test.ts',
             'packages/*/tests/**/*.test.ts',
             'scripts/**/*.test.mjs',
             'infrastructure/appwrite/**/*.test.mjs',

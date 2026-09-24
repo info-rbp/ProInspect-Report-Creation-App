@@ -167,3 +167,37 @@ resource "google_pubsub_subscription" "enhancement_worker" {
 output "enhancement_worker_uris" {
   value = { for name, service in google_cloud_run_v2_service.enhancement_worker : name => service.uri }
 }
+
+# Transactional Appwrite outbox is polled only after authoritative commit.
+resource "google_service_account_iam_member" "scheduler_outbox_token_creator" {
+  service_account_id = google_service_account.enhancement_worker["integration-worker"].name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_project_service_identity.scheduler_agent.email}"
+}
+
+resource "google_pubsub_topic_iam_member" "outbox_publisher" {
+  for_each = toset(["analysis-requests", "pdf-generation-requests", "notification-requests", "document-generation-requests", "integration-sync-requests"])
+  project  = var.project_id
+  topic    = each.value
+  role     = "roles/pubsub.publisher"
+  member   = "serviceAccount:${google_service_account.enhancement_worker["integration-worker"].email}"
+  depends_on = [google_pubsub_topic.enhancement_worker, google_pubsub_topic.notification_requests]
+}
+
+resource "google_cloud_scheduler_job" "appwrite_outbox" {
+  project          = var.project_id
+  region           = var.region
+  name             = "appwrite-outbox"
+  schedule         = "* * * * *"
+  time_zone        = "Australia/Perth"
+  attempt_deadline = "180s"
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.enhancement_worker["integration-worker"].uri}/tasks/outbox"
+    oidc_token {
+      service_account_email = google_service_account.enhancement_worker["integration-worker"].email
+      audience              = google_cloud_run_v2_service.enhancement_worker["integration-worker"].uri
+    }
+  }
+  depends_on = [google_service_account_iam_member.scheduler_outbox_token_creator, google_cloud_run_v2_service_iam_member.enhancement_worker_pubsub_invoker]
+}

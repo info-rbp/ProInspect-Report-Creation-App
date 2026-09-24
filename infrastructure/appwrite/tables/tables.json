@@ -596,6 +596,11 @@
         "key": "externalReferences",
         "type": "longtext",
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -913,6 +918,11 @@
       },
       {
         "key": "strataDetails",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "workerState",
         "type": "longtext",
         "required": false
       }
@@ -2102,6 +2112,11 @@
         "key": "propertySnapshot",
         "type": "longtext",
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -2971,6 +2986,17 @@
         "key": "finalisedBy",
         "type": "string",
         "size": 36,
+        "required": false
+      },
+      {
+        "key": "supersededByReportId",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
         "required": false
       }
     ],
@@ -7833,6 +7859,11 @@
         "key": "sentAt",
         "type": "datetime",
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -8839,6 +8870,11 @@
         "type": "string",
         "size": 64,
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -8969,6 +9005,11 @@
       },
       {
         "key": "terms",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "workerState",
         "type": "longtext",
         "required": false
       }
@@ -13125,6 +13166,11 @@
         "key": "deliveredAt",
         "type": "datetime",
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -13249,6 +13295,11 @@
       },
       {
         "key": "signers",
+        "type": "longtext",
+        "required": false
+      },
+      {
+        "key": "workerState",
         "type": "longtext",
         "required": false
       }
@@ -13860,6 +13911,11 @@
         "key": "lastError",
         "type": "longtext",
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -14376,6 +14432,11 @@
         "key": "lastAttemptedAt",
         "type": "datetime",
         "required": false
+      },
+      {
+        "key": "workerState",
+        "type": "longtext",
+        "required": false
       }
     ],
     "indexes": [
@@ -14681,6 +14742,1410 @@
         "columns": [
           "targetTable",
           "targetId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "notification_jobs",
+    "databaseId": "proinspect_core",
+    "name": "notification jobs",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "notification_rules",
+    "databaseId": "proinspect_core",
+    "name": "notification rules",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "communication_templates",
+    "databaseId": "proinspect_core",
+    "name": "communication templates",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "notification_escalations",
+    "databaseId": "proinspect_core",
+    "name": "notification escalations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "tenant_automation_events",
+    "databaseId": "proinspect_core",
+    "name": "tenant automation events",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "agency_settings",
+    "databaseId": "proinspect_core",
+    "name": "agency settings",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_credentials",
+    "databaseId": "proinspect_core",
+    "name": "integration credentials",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "integration_sync_runs",
+    "databaseId": "proinspect_core",
+    "name": "integration sync runs",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "external_references",
+    "databaseId": "proinspect_core",
+    "name": "external references",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "external_operational_statuses",
+    "databaseId": "proinspect_core",
+    "name": "external operational statuses",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "dashboard_metric_snapshots",
+    "databaseId": "proinspect_core",
+    "name": "dashboard metric snapshots",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "document_template_versions",
+    "databaseId": "proinspect_core",
+    "name": "document template versions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "document_packets",
+    "databaseId": "proinspect_core",
+    "name": "document packets",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "compliance_obligations",
+    "databaseId": "proinspect_core",
+    "name": "compliance obligations",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "report_presentation_versions",
+    "databaseId": "proinspect_core",
+    "name": "report presentation versions",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "branding_profiles",
+    "databaseId": "proinspect_core",
+    "name": "branding profiles",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "pdf_jobs",
+    "databaseId": "proinspect_core",
+    "name": "pdf jobs",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
+        ]
+      }
+    ]
+  },
+  {
+    "$id": "remote_inspection_assignments",
+    "databaseId": "proinspect_core",
+    "name": "remote inspection assignments",
+    "$permissions": [],
+    "rowSecurity": true,
+    "enabled": true,
+    "columns": [
+      {
+        "key": "agencyId",
+        "type": "string",
+        "size": 36,
+        "required": true
+      },
+      {
+        "key": "status",
+        "type": "string",
+        "size": 64,
+        "required": true
+      },
+      {
+        "key": "logicalId",
+        "type": "string",
+        "size": 255,
+        "required": true
+      },
+      {
+        "key": "payload",
+        "type": "longtext",
+        "required": true
+      },
+      {
+        "key": "version",
+        "type": "integer",
+        "required": true
+      },
+      {
+        "key": "createdAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "updatedAt",
+        "type": "datetime",
+        "required": true
+      },
+      {
+        "key": "createdBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      },
+      {
+        "key": "updatedBy",
+        "type": "string",
+        "size": 36,
+        "required": false
+      }
+    ],
+    "indexes": [
+      {
+        "key": "agency_status",
+        "type": "key",
+        "columns": [
+          "agencyId",
+          "status"
+        ]
+      },
+      {
+        "key": "agency_logical_id",
+        "type": "unique",
+        "columns": [
+          "agencyId",
+          "logicalId"
         ]
       }
     ]

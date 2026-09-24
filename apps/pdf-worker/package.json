@@ -16,7 +16,7 @@
     "@pcr/domain": "*",
     "@pcr/report-presentation": "*",
     "@pcr/validation": "*",
-    "firebase-admin": "^14.2.0",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "@pcr/appwrite-server": "*"
   }
 }

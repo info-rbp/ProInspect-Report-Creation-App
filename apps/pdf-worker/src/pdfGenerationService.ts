@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
-import { getStorage } from 'firebase-admin/storage';
 import type { ReportPhotoReference } from '@pcr/domain';
-import { firestoreDb } from './firestoreDatabase.js';
+import { downloadWorkerEvidence, saveWorkerArtifact, workerDatabase } from '@pcr/appwrite-server';
 import {
   buildRenderManifest,
   buildRenderPackage,
@@ -42,9 +40,6 @@ export class PdfWorkerError extends Error {
   }
 }
 
-function adminApp() {
-  return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -111,14 +106,14 @@ function tenantEvidenceIds(response: Record<string, unknown>): string[] {
   return [...ids].sort();
 }
 
-async function loadTenantResponses(agencyId: string, reportId: string): Promise<Array<Record<string, unknown>>> {
-  const database = firestoreDb(adminApp());
-  const nested = await database.collection(`agencies/${agencyId}/reports/${reportId}/tenantResponses`).get();
+async function loadTenantResponses(agencyId: string, reportId: string, reportVersionId: string): Promise<Array<Record<string, unknown>>> {
+  const database = workerDatabase();
   const agencyScoped = await database.collection(`agencies/${agencyId}/tenantResponses`)
     .where('reportId', '==', reportId)
+    .where('reportVersionId', '==', reportVersionId)
     .get();
   const combined = new Map<string, Record<string, unknown>>();
-  for (const document of [...nested.docs, ...agencyScoped.docs]) {
+  for (const document of agencyScoped.docs) {
     combined.set(document.id, { id: document.id, ...(document.data() as Record<string, unknown>) });
   }
   return [...combined.values()].sort((left, right) => text(left.id).localeCompare(text(right.id)));
@@ -136,7 +131,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     throw new PdfWorkerError('PROJECT_ID_REQUIRED', 'GOOGLE_CLOUD_PROJECT is required for PDF generation.');
   }
 
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const reportRef = database.doc(`agencies/${task.agencyId}/reports/${task.reportId}`);
   const reportSnapshot = await reportRef.get();
   if (!reportSnapshot.exists) {
@@ -155,34 +150,28 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     );
   }
 
-  const versionRef = reportRef.collection('versions').doc(reportVersionId);
+  const versionRef = database.doc(`agencies/${task.agencyId}/reportVersions/${reportVersionId}`);
   const versionSnapshot = await versionRef.get();
   if (!versionSnapshot.exists) {
     throw new PdfWorkerError('REPORT_VERSION_NOT_FOUND', 'The requested immutable report version does not exist.');
   }
   const version = versionSnapshot.data() as Record<string, unknown>;
+  if (version.reportId !== task.reportId) throw new PdfWorkerError('REPORT_VERSION_SCOPE_MISMATCH', 'Report version belongs to another report.');
   if (version.immutable !== true) {
     throw new PdfWorkerError('REPORT_VERSION_NOT_IMMUTABLE', 'Final PDFs can only be generated from immutable report versions.');
   }
 
-  const areaSnapshot = await versionRef.collection('areas').orderBy('sequence').get();
-  const areas: Array<Record<string, unknown>> = [];
-  for (const areaDocument of areaSnapshot.docs) {
-    const area = areaDocument.data() as Record<string, unknown>;
-    const componentSnapshot = await areaDocument.ref.collection('components').get();
-    areas.push({
-      ...area,
-      components: componentSnapshot.docs
-        .map((document) => document.data() as Record<string, unknown>)
-        .sort((left, right) => text(left.id).localeCompare(text(right.id))),
-    });
-  }
+  const aggregate = asRecord(version.snapshot);
+  const originalSnapshot = await database.services.tables.getRow({ databaseId: database.services.databaseId, tableId: 'report_versions', rowId: reportVersionId });
+  if (typeof originalSnapshot.snapshot !== 'string' || sha256(new TextEncoder().encode(originalSnapshot.snapshot)) !== version.contentHash) throw new PdfWorkerError('REPORT_SNAPSHOT_HASH_MISMATCH', 'Report snapshot hash does not match immutable version.');
+  const areas = Array.isArray(aggregate.areas) ? aggregate.areas.map(asRecord) : [];
+  const approvedReport = { ...asRecord(aggregate.report), ...report };
 
   if (!areas.length) {
     throw new PdfWorkerError('REPORT_VERSION_EMPTY', 'The immutable report version contains no inspection areas.');
   }
 
-  const tenantResponses = await loadTenantResponses(task.agencyId, task.reportId);
+  const tenantResponses = await loadTenantResponses(task.agencyId, task.reportId, reportVersionId);
   const photoIdSet = new Set(deduplicatePhotoIds(areas));
   for (const response of tenantResponses) {
     for (const photoId of tenantEvidenceIds(response)) photoIdSet.add(photoId);
@@ -190,8 +179,6 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
   const photoIds = [...photoIdSet].sort();
   const assets: RenderAsset[] = [];
   const imageBytes = new Map<string, Uint8Array>();
-  const uploadBucketName = process.env.UPLOAD_BUCKET?.trim() || `${projectId}-uploads`;
-  const uploadBucket = getStorage(adminApp()).bucket(uploadBucketName);
 
   for (const photoId of photoIds) {
     const evidenceSnapshot = await database.doc(`agencies/${task.agencyId}/photoEvidence/${photoId}`).get();
@@ -227,8 +214,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
 
     if (contentType === 'image/jpeg' || contentType === 'image/png') {
       try {
-        const evidenceFile = uploadBucket.file(objectPath, { generation });
-        const [bytes] = await evidenceFile.download({ validation: false });
+        const { bytes } = await downloadWorkerEvidence(task.agencyId, photoId, database.services);
         const actualHash = sha256(new Uint8Array(bytes));
         if (actualHash !== evidenceHash) {
           throw new PdfWorkerError(
@@ -284,11 +270,8 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
         { logoDocumentId, contentType },
       );
     }
-    const brandingBucketName = process.env.BRANDING_BUCKET?.trim() || uploadBucketName;
-    const brandingBucket = getStorage(adminApp()).bucket(brandingBucketName);
     try {
-      const logoFile = brandingBucket.file(objectPath, { generation });
-      const [bytes] = await logoFile.download({ validation: false });
+      const { bytes } = await downloadWorkerEvidence(task.agencyId, logoDocumentId, database.services);
       const actualHash = sha256(new Uint8Array(bytes));
       if (actualHash !== logoHash) {
         throw new PdfWorkerError(
@@ -325,7 +308,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
     templateVersion: positiveInteger(report.templateVersion ?? version.templateVersion),
     approvedAt: text(version.createdAt) || text(report.updatedAt) || new Date().toISOString(),
     approvedBy: text(version.createdBy) || task.requestedBy || 'system',
-    report: structuredClone(report),
+    report: structuredClone(approvedReport),
     areas: structuredClone(areas),
     assets,
     ...(tenantResponses.length ? { tenantResponses: structuredClone(tenantResponses) } : {}),
@@ -334,7 +317,7 @@ async function loadApprovedInput(task: PdfGenerationTask): Promise<{
   return {
     renderInput,
     imageBytes,
-    reportBucket: process.env.REPORT_BUCKET?.trim() || `${projectId}-reports`,
+    reportBucket: 'reports',
     reportRefPath: reportRef.path,
     ...(text(report.inspectionJobId) ? { inspectionJobId: text(report.inspectionJobId) } : {}),
   };
@@ -347,52 +330,12 @@ async function saveImmutableObject(input: {
   contentType: string;
   sha: string;
   metadata: Record<string, string>;
-}): Promise<{ generation: string }> {
-  const bucket = getStorage(adminApp()).bucket(input.bucketName);
-  const file = bucket.file(input.objectPath);
-
-  const verifyExisting = async (): Promise<{ generation: string }> => {
-    const [metadata] = await file.getMetadata();
-    const existingSha = metadata.metadata?.sha256;
-    if (existingSha !== input.sha) {
-      throw new PdfWorkerError(
-        'IMMUTABLE_ARTIFACT_CONFLICT',
-        `Immutable artifact ${input.objectPath} already exists with a different hash.`,
-      );
-    }
-    return { generation: String(metadata.generation ?? '') };
-  };
-
-  const [exists] = await file.exists();
-  if (exists) return verifyExisting();
-
-  try {
-    await file.save(Buffer.from(input.bytes), {
-      resumable: false,
-      validation: false,
-      metadata: {
-        contentType: input.contentType,
-        cacheControl: 'private, max-age=31536000, immutable',
-        metadata: { ...input.metadata, sha256: input.sha, immutable: 'true' },
-      },
-      preconditionOpts: { ifGenerationMatch: 0 },
-    });
-  } catch (error) {
-    const code = (error as { code?: number | string }).code;
-    if (code === 412 || code === '412') return verifyExisting();
-    throw new PdfWorkerError(
-      'ARTIFACT_STORAGE_FAILED',
-      `Failed to persist immutable artifact ${input.objectPath}.`,
-      true,
-      { cause: error instanceof Error ? error.message : String(error) },
-    );
-  }
-
-  return verifyExisting();
+}): Promise<{ fileId: string; generation: string }> {
+  return saveWorkerArtifact(workerDatabase().services, { bucketId: input.contentType.startsWith('application/json') ? 'report-artifacts' : input.bucketName, path: input.objectPath, bytes: input.bytes, sha256: input.sha, contentType: input.contentType });
 }
 
 async function markFailed(task: PdfGenerationTask, error: unknown): Promise<void> {
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const workerError = error instanceof PdfWorkerError ? error : undefined;
   await database.doc(`agencies/${task.agencyId}/pdfJobs/${task.taskId}`).set(
     {
@@ -412,7 +355,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
     throw new PdfWorkerError('INVALID_PDF_TASK', 'taskId, agencyId and reportId are required.');
   }
 
-  const database = firestoreDb(adminApp());
+  const database = workerDatabase();
   const pdfJobRef = database.doc(`agencies/${task.agencyId}/pdfJobs/${task.taskId}`);
   const existingJob = await pdfJobRef.get();
   if (existingJob.exists && existingJob.get('status') === 'completed') {
@@ -456,7 +399,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
       },
     });
 
-    const generatedAt = new Date().toISOString();
+    const generatedAt = approved.renderInput.approvedAt;
     const generatedBy = task.requestedBy || approved.renderInput.approvedBy;
     const manifest = buildRenderManifest({
       render,
@@ -511,7 +454,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
 
       const artifact = {
         finalPdfReportVersionId: approved.renderInput.reportVersionId,
-        finalPdfObjectPath: render.outputObjectPath,
+        finalPdfObjectPath: pdfStored.fileId,
         finalPdfSha256: pdfSha256,
         finalPdfGeneration: pdfStored.generation,
         renderManifestObjectPath: manifestObjectPath,
@@ -523,7 +466,7 @@ export async function processPdfGenerationTask(task: PdfGenerationTask): Promise
       if (approved.inspectionJobId) {
         transaction.update(database.doc(`agencies/${task.agencyId}/inspectionJobs/${approved.inspectionJobId}`), {
           ...artifact,
-          finalPdfUrl: `gs://${approved.reportBucket}/${render.outputObjectPath}`,
+          finalPdfUrl: `appwrite://${approved.reportBucket}/${pdfStored.fileId}`,
           updatedAt: generatedAt,
         });
       }

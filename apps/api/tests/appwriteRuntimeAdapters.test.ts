@@ -1,3 +1,4 @@
+import { transactionFixture } from '@pcr/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppwriteServerServices } from '@pcr/appwrite-server';
 import type { AuthenticatedPrincipal, ReportAggregate } from '@pcr/domain';
@@ -15,49 +16,15 @@ function services(input: { failTable?: string } = {}): {
   rollbacks: ReturnType<typeof vi.fn>;
   deleted: ReturnType<typeof vi.fn>;
 } {
-  const rows = new Map<string, Record<string, unknown>>();
-  const commits = vi.fn();
-  const rollbacks = vi.fn();
-  const deleted = vi.fn();
-  const tables = {
-    getRow: vi.fn(async ({ tableId, rowId }: { tableId: string; rowId: string }) => {
-      const row = rows.get(`${tableId}:${rowId}`);
-      if (!row) throw Object.assign(new Error('not found'), { code: 404 });
-      return row;
-    }),
-    createRow: vi.fn(async ({ tableId, rowId, data }: { tableId: string; rowId: string; data: Record<string, unknown> }) => {
-      if (tableId === input.failTable) throw new Error(`injected ${tableId} failure`);
-      const key = `${tableId}:${rowId}`;
-      if (rows.has(key)) throw Object.assign(new Error('duplicate'), { code: 409 });
-      const row = { $id: rowId, ...data };
-      rows.set(key, row);
-      return row;
-    }),
-    updateRow: vi.fn(async ({ tableId, rowId, data }: { tableId: string; rowId: string; data: Record<string, unknown> }) => {
-      const key = `${tableId}:${rowId}`;
-      const row = { ...rows.get(key), ...data };
-      rows.set(key, row);
-      return row;
-    }),
-    deleteRow: vi.fn(async ({ tableId, rowId }: { tableId: string; rowId: string }) => {
-      deleted(tableId, rowId);
-      rows.delete(`${tableId}:${rowId}`);
-      return {};
-    }),
-    createTransaction: vi.fn(async () => ({ $id: 'transaction-1' })),
-    updateTransaction: vi.fn(async ({ commit, rollback }: { commit?: boolean; rollback?: boolean }) => {
-      if (commit) commits();
-      if (rollback) rollbacks();
-      return {};
-    }),
-  };
-  return {
-    value: { tables, databaseId: 'proinspect_core' } as unknown as AppwriteServerServices,
-    rows,
-    commits,
-    rollbacks,
-    deleted,
-  };
+  const f = transactionFixture(); f.fault(input.failTable);
+  const commits = vi.fn(); const rollbacks = vi.fn(); const deleted = vi.fn();
+  const original = f.services.tables.updateTransaction.bind(f.services.tables);
+  f.services.tables.updateTransaction = vi.fn(async (args: { transactionId: string; commit?: boolean; rollback?: boolean }) => {
+    const result = await original(args);
+    if (args.commit) commits(); if (args.rollback) rollbacks(); return result;
+  }) as unknown as typeof f.services.tables.updateTransaction;
+  return { value: f.services as unknown as AppwriteServerServices, rows: f.rows, commits, rollbacks, deleted };
+
 }
 
 describe('Appwrite runtime adapters', () => {
@@ -73,13 +40,14 @@ describe('Appwrite runtime adapters', () => {
     expect(action).toHaveBeenCalledTimes(1);
   });
 
-  it('removes an idempotency reservation when the governed action fails', async () => {
+  it('rolls back an idempotency reservation when the governed action fails', async () => {
     const fixture = services();
     const store = new AppwriteIdempotencyStore(fixture.value);
     await expect(store.execute('agency-a', 'request.create', 'failed-key', 'payload-a', async () => {
       throw new Error('injected action failure');
     })).rejects.toThrow('injected action failure');
-    expect(fixture.deleted).toHaveBeenCalledOnce();
+    expect(fixture.deleted).not.toHaveBeenCalled();
+    expect(fixture.rollbacks).toHaveBeenCalledOnce();
     expect([...fixture.rows.keys()].filter((key) => key.startsWith('idempotency_keys:'))).toHaveLength(0);
   });
 
@@ -113,7 +81,7 @@ describe('Appwrite runtime adapters', () => {
       areas: [],
     } satisfies ReportAggregate;
     await expect(new AppwriteReportAggregateStore(fixture.value).saveDraft(aggregate, undefined, 'user-a'))
-      .rejects.toThrow('injected reports failure');
+      .rejects.toThrow('injected 500');
     expect(fixture.commits).not.toHaveBeenCalled();
     expect(fixture.rollbacks).toHaveBeenCalledOnce();
   });
