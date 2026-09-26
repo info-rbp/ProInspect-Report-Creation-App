@@ -10,7 +10,15 @@ import type { ApiDependencies } from '../src/backend/types.js';
 function fixture() {
   const f = transactionFixture(workerSchema); const services = f.services as unknown as AppwriteServerServices;
   const repository = new AppwriteOperationalRepository(services);
-  const deps = { requireAppCheck: false, identityVerifier: { verifyIdentityToken: async () => ({ uid: 'admin-a', agencyId: 'a', authTime: 1, issuedAt: 1, mfaVerified: true }), verifyAppCheckToken: async () => undefined }, memberships: { getMembership: async () => ({ uid: 'admin-a', agencyId: 'a', role: 'proinspect_admin', status: 'active', mfaRequired: true, updatedAt: '2026-01-01T00:00:00Z' }) }, repository, audit: new AppwriteAuditWriter(services), idempotency: new AppwriteIdempotencyStore(services), tasks: new AppwriteTaskOutbox(services) } as ApiDependencies;
+  const reports: ApiDependencies['reports'] = {
+    load: async () => undefined,
+    saveDraft: async (aggregate) => aggregate,
+    transition: async () => ({}),
+  };
+  const uploads: ApiDependencies['uploads'] = {
+    create: async () => ({}),
+  };
+  const deps = { requireAppCheck: false, identityVerifier: { verifyIdentityToken: async () => ({ uid: 'admin-a', agencyId: 'a', authTime: 1, issuedAt: 1, mfaVerified: true }), verifyAppCheckToken: async () => undefined }, memberships: { getMembership: async () => ({ uid: 'admin-a', agencyId: 'a', role: 'proinspect_admin', status: 'active', mfaRequired: true, updatedAt: '2026-01-01T00:00:00Z' }) }, repository, reports, uploads, audit: new AppwriteAuditWriter(services), idempotency: new AppwriteIdempotencyStore(services), tasks: new AppwriteTaskOutbox(services) } as ApiDependencies;
   const seed = (table: string, id: string, data: Record<string, unknown>) => f.rows.set(`${table}:${id}`, { $id: id, agencyId: 'a', status: 'active', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', ...data });
   const request = (command: string, body: Record<string, unknown>, key = 'stable-command-key') => {
     const req = Object.assign(Readable.from([JSON.stringify({ expectedVersion: Date.parse('2026-01-01T00:00:00Z'), ...body })]), { url: `/api/v1/commands/${command}`, method: 'POST', socket: { remoteAddress: '127.0.0.1' }, headers: { authorization: 'Bearer synthetic', 'x-agency-id': 'a', 'idempotency-key': key } });

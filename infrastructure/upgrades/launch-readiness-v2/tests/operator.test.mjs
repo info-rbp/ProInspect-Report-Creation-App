@@ -50,8 +50,9 @@ test('Shopify replay is deterministic, tracked and bound to the acceptance secre
 
 test('Appwrite API exposes Shopify aliases and collection transforms',()=>{
   const adapter=readFileSync(resolve(root,'apps/api/src/backend/appwriteAdapters.ts'),'utf8');
-  assert.match(adapter,/inspectionServiceMappings:\s*'shopify_service_mappings'/u);
-  assert.match(adapter,/integrationSyncExceptions:\s*'integration_exceptions'/u);
+  const tables=readFileSync(resolve(root,'packages/appwrite-server/src/collectionTables.ts'),'utf8');
+  assert.match(tables,/inspectionServiceMappings:\s*'shopify_service_mappings'/u);
+  assert.match(tables,/integrationSyncExceptions:\s*'integration_exceptions'/u);
   assert.match(adapter,/appwriteCollectionWriteData/u);
   assert.match(adapter,/appwriteCollectionReadData/u);
 });
